@@ -1,0 +1,43 @@
+{
+  "name": "penguin",
+  "version": "0.1.0",
+  "description": "Penguin: an AI standup assistant that joins Zoom, Google Meet and Teams calls and gives your update in your place.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:api": "tsx watch src/api/main.ts",
+    "dev:realtime": "tsx watch src/realtime/main.ts",
+    "dev:worker": "tsx watch src/worker/main.ts",
+    "migrate": "tsx src/core/migrate.ts",
+    "build": "tsc -p tsconfig.json",
+    "start:api": "node dist/api/main.js",
+    "start:realtime": "node dist/realtime/main.js",
+    "start:worker": "node dist/worker/main.js",
+    "start:migrate": "node dist/core/migrate.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "bullmq": "^6.3.11",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "ioredis": "^6.0.0",
+    "pg": "^8.23.1",
+    "pino": "^10.4.0",
+    "ws": "^8.22.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

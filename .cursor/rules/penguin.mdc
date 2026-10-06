@@ -1,0 +1,5 @@
+---
+description: Penguin project context and conventions
+alwaysApply: true
+---
+Read and follow `AGENTS.md` at the repo root. It is the single source of truth for this project's context, conventions and rules. Background is in `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` and `docs/STATUS.md`.

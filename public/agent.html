@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penguin</title>
+<style>
+  /* This page is the bot's camera feed (rendered ~1280x720 inside the call). */
+  :root { --bg:#0f1720; --panel:#16212d; --ink:#eef3f7; --muted:#8fa3b5; --accent:#f2a93b; --live:#5ad1a0; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; overflow:hidden; }
+  .stage { height:100%; display:grid; grid-template-rows: 1fr auto; padding: 5vh 6vw; gap: 4vh; }
+  .center { display:grid; place-items:center; gap: 3vh; align-content:center; }
+  .avatar { width: 28vh; height: 28vh; border-radius: 50%; display:grid; place-items:center; position:relative;
+    background: radial-gradient(circle at 50% 38%, #1f2f3f, var(--panel) 70%); }
+  .ring { position:absolute; inset:-1.4vh; border-radius:50%; border: .6vh solid transparent; transition: border-color .3s; }
+  .speaking .ring { border-color: var(--accent); animation: pulse 1.1s ease-in-out infinite; }
+  .listening .ring { border-color: rgba(90,209,160,.45); }
+  .thinking .ring { border-color: rgba(242,169,59,.5); border-style: dashed; animation: spin 2.4s linear infinite; }
+  @keyframes pulse { 50% { transform: scale(1.05); opacity:.7; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  /* Simple original penguin mark */
+  .bird { width: 15vh; height: 19vh; border-radius: 50% 50% 46% 46%; background:#0b1118; position:relative; }
+  .belly { position:absolute; left:18%; right:18%; top:26%; bottom:6%; border-radius:50%; background:#f4f1ea; }
+  .eye { position:absolute; top:22%; width:2vh; height:2vh; border-radius:50%; background:#fff; }
+  .eye::after { content:""; position:absolute; inset:28%; border-radius:50%; background:#0b1118; }
+  .eye.l { left:30%; } .eye.r { right:30%; }
+  .beak { position:absolute; top:33%; left:50%; width:4vh; height:2.2vh; transform:translateX(-50%);
+    background:var(--accent); border-radius: 50% 50% 60% 60% / 40% 40% 80% 80%; }
+  h1 { margin:0; font-size: 5vh; font-weight: 700; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 2.6vh; letter-spacing:.06em; text-transform: uppercase; display:flex; gap:1.2vh; align-items:center; }
+  .dot { width:1.4vh; height:1.4vh; border-radius:50%; background:var(--muted); }
+  .listening .dot { background: var(--live); } .speaking .dot { background: var(--accent); }
+  .caption { min-height: 9vh; max-width: 80ch; margin: 0 auto; text-align:center; font-size: 3vh; line-height:1.35;
+    color: var(--ink); opacity:.92; }
+  .caption.interim { color: var(--muted); }
+  .badge { position:fixed; top:3vh; right:3vw; font-size:2vh; color:var(--muted); border:1px solid #2a3a4a; padding:.6vh 1.4vh; border-radius:999px; }
+</style>
+</head>
+<body>
+<div class="stage connecting" id="stage">
+  <div class="center">
+    <div class="avatar"><div class="ring"></div>
+      <div class="bird"><div class="belly"></div><div class="eye l"></div><div class="eye r"></div><div class="beak"></div></div>
+    </div>
+    <h1 id="label">Penguin</h1>
+    <div class="sub"><span class="dot"></span><span id="status">Connecting</span></div>
+  </div>
+  <div class="caption" id="caption"></div>
+</div>
+<div class="badge">AI assistant</div>
+
+<script>
+(() => {
+  const qs = new URLSearchParams(location.search);
+  const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?m=${encodeURIComponent(qs.get("m") || "")}&t=${encodeURIComponent(qs.get("t") || "")}`;
+  const $ = (id) => document.getElementById(id);
+  const STATUS = { listening: "Listening", speaking: "Speaking", thinking: "Thinking", connecting: "Connecting" };
+
+  let ws, ctx, source, retry = 0, micStarted = false;
+  const setState = (s) => { $("stage").className = "stage " + s; $("status").textContent = STATUS[s] || s; };
+
+  // Worklet: downsample whatever the browser gives us to 16 kHz mono PCM16.
+  const worklet = `
+    class Down extends AudioWorkletProcessor {
+      constructor() { super(); this.ratio = sampleRate / 16000; this.acc = 0; this.buf = []; }
+      process(inputs) {
+        const ch = inputs[0] && inputs[0][0]; if (!ch) return true;
+        for (let i = 0; i < ch.length; i++) {
+          this.acc += 1;
+          if (this.acc >= this.ratio) { this.acc -= this.ratio; this.buf.push(Math.max(-1, Math.min(1, ch[i]))); }
+        }
+        if (this.buf.length >= 1600) { // 100 ms
+          const out = new Int16Array(this.buf.length);
+          for (let i = 0; i < out.length; i++) out[i] = this.buf[i] * 0x7fff;
+          this.port.postMessage(out.buffer, [out.buffer]); this.buf = [];
+        }
+        return true;
+      }
+    }
+    registerProcessor("down", Down);`;
+
+  async function startMic() {
+    if (micStarted) return; micStarted = true;
+    ctx = new AudioContext();
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([worklet], { type: "text/javascript" })));
+    // The meeting bot feeds the call's audio in as this page's microphone.
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } });
+    const node = new AudioWorkletNode(ctx, "down");
+    node.port.onmessage = (e) => { if (ws && ws.readyState === 1) ws.send(e.data); };
+    ctx.createMediaStreamSource(stream).connect(node);
+  }
+
+  async function play(buf) {
+    try {
+      if (ctx.state === "suspended") await ctx.resume();
+      const audio = await ctx.decodeAudioData(buf);
+      if (source) try { source.stop(); } catch {}
+      source = ctx.createBufferSource();
+      source.buffer = audio;
+      source.connect(ctx.destination); // page audio = the bot's voice in the call
+      source.onended = () => ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "playback_ended" }));
+      source.start();
+    } catch (e) {
+      console.error("playback failed", e);
+      ws && ws.send(JSON.stringify({ type: "playback_ended" }));
+    }
+  }
+
+  function connect() {
+    setState("connecting");
+    ws = new WebSocket(wsUrl);
+    ws.binaryType = "arraybuffer";
+    ws.onopen = async () => { retry = 0; try { await startMic(); } catch (e) { console.error("mic failed", e); } };
+    ws.onmessage = (e) => {
+      if (typeof e.data !== "string") return play(e.data);
+      const m = JSON.parse(e.data);
+      if (m.type === "state") { setState(m.state); if (m.label) $("label").textContent = m.label; if (m.text) $("caption").textContent = m.text; }
+      if (m.type === "caption" && !$("stage").classList.contains("speaking")) {
+        $("caption").textContent = m.text; $("caption").className = "caption" + (m.interim ? " interim" : "");
+      }
+    };
+    ws.onclose = (e) => {
+      if (e.code === 1000 || retry > 8) return setState("connecting");
+      setTimeout(connect, Math.min(8000, 500 * 2 ** retry++)); // reconnect, possibly to another node
+    };
+  }
+  connect();
+})();
+</script>
+</body>
+</html>

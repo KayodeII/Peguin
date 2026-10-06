@@ -1,0 +1,47 @@
+# Local stack. In production, run the same image on your platform of choice
+# (ECS, Fly, Kubernetes) and scale each service independently.
+services:
+  postgres:
+    image: postgres:16
+    environment: { POSTGRES_USER: penguin, POSTGRES_PASSWORD: penguin, POSTGRES_DB: penguin }
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD", "pg_isready", "-U", "penguin"], interval: 3s, retries: 20 }
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+
+  migrate:
+    build: .
+    command: ["node", "dist/core/migrate.js"]
+    env_file: .env
+    environment: &internal
+      DATABASE_URL: postgres://penguin:penguin@postgres:5432/penguin
+      REDIS_URL: redis://redis:6379
+    depends_on: { postgres: { condition: service_healthy } }
+
+  api:
+    build: .
+    command: ["node", "dist/api/main.js"]
+    env_file: .env
+    environment: *internal
+    ports: ["8080:8080"]
+    depends_on: { migrate: { condition: service_completed_successfully }, redis: { condition: service_started } }
+
+  realtime:
+    build: .
+    command: ["node", "dist/realtime/main.js"]
+    env_file: .env
+    environment: *internal
+    ports: ["8081:8081"]
+    stop_grace_period: 20m   # let live standups finish during deploys
+    depends_on: { migrate: { condition: service_completed_successfully }, redis: { condition: service_started } }
+
+  worker:
+    build: .
+    command: ["node", "dist/worker/main.js"]
+    env_file: .env
+    environment: *internal
+    depends_on: { migrate: { condition: service_completed_successfully }, redis: { condition: service_started } }
+
+volumes: { pgdata: {} }
