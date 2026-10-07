@@ -2,8 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, getMe, type Me } from "./api";
 import { Link, Logo, navigate } from "./ui";
 
-// Placeholder until the Stripe price is final. Keep in sync with STRIPE_PRICE_ID.
-const PRICE = { amount: "$12", period: "month", trialDays: 14 };
+// Keep in sync with the Stripe price (STRIPE_PRICE_ID) and TRIAL_DAYS in cloud/wrangler.jsonc.
+const PRICE = { amount: "$5", period: "month", trialDays: 14 };
 
 export function Home() {
   return (

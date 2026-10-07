@@ -12,11 +12,12 @@
   // The website (../web) is served from the same Worker and origin as the API.
   "assets": {
     "directory": "../web/dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/auth/*", "/app/*", "/webhooks/*"]
+    "run_worker_first": true // every request, so the bare-domain redirect also covers pages
   },
   "d1_databases": [
-    { "binding": "DB", "database_name": "penguin", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "penguin", "database_id": "a5e4b7ba-257f-4e3b-9c11-3a214c2155bb", "migrations_dir": "migrations" }
   ],
   "vars": {
     "APP_ORIGIN": "https://www.peguin.co", // .dev.vars overrides this to http://localhost:8787

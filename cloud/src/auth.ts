@@ -78,8 +78,11 @@ export async function emailStart(env: Env, req: Request): Promise<Response> {
   const link = `${env.APP_ORIGIN}/auth/email/verify?token=${token}`;
   const sent = await sendEmail(env, email, "Sign in to Peguin",
     `Sign in to Peguin:\n\n${link}\n\nThe link works once and expires in ${LINK_MINUTES} minutes. If you didn't ask for it, ignore this email.`);
-  if (!sent) console.log(`[dev] sign-in link for ${email}: ${link}`);
-  return json({ ok: true, ...(sent ? {} : { devLink: env.APP_ORIGIN.startsWith("http://localhost") ? link : undefined }) });
+  if (sent) return json({ ok: true });
+  // Without an email provider only local development can sign in (the link comes back in the response).
+  if (!env.APP_ORIGIN.startsWith("http://localhost")) throw new HttpError(503, "Email sign-in isn't set up yet. Use Continue with Google.");
+  console.log(`[dev] sign-in link for ${email}: ${link}`);
+  return json({ ok: true, devLink: link });
 }
 
 export async function emailVerify(env: Env, url: URL): Promise<Response> {

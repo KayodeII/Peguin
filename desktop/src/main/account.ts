@@ -10,8 +10,10 @@ import type { PromptActivity } from "../../../src/core/brain/prompts.js";
 /** Production for installed builds; the local Worker (cd cloud && npm run dev) when running from source. */
 export const CLOUD_URL = (process.env.PENGUIN_CLOUD_URL ?? (app.isPackaged ? "https://www.peguin.co" : "http://localhost:8787")).replace(/\/$/, "");
 
-/** Public half of the licence key (cloud: npm run keys:license). Replace with the production key at deploy. */
-const LICENSE_PUBLIC_JWK: JsonWebKey = { kty: "OKP", crv: "Ed25519", x: "9zqCksjEbfm0DIFzx5hv9P7iZuYsz5iQEi5kgFAEmTs" };
+/** Public halves of the licence keys. Production's private key is the Worker secret LICENSE_PRIVATE_JWK; dev's is in cloud/.dev.vars. */
+const LICENSE_PUBLIC_JWK: JsonWebKey = CLOUD_URL === "https://www.peguin.co"
+  ? { kty: "OKP", crv: "Ed25519", x: "veOVebzrrsqQu5EhGWAV326XeF53puDM6EDlFwUuZuA" }
+  : { kty: "OKP", crv: "Ed25519", x: "9zqCksjEbfm0DIFzx5hv9P7iZuYsz5iQEi5kgFAEmTs" };
 
 export type Account = { email: string; status: string | null; entitled: boolean; licenseUntil: number | null };
 type License = { sub: string; email: string; status: string; exp: number };
