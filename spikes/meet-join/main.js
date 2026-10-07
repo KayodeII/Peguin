@@ -84,6 +84,7 @@ const updateLine = `Hi everyone, I'm Penguin, ${first}'s AI assistant. ${first} 
   + (typeof args.update === "string" ? args.update : "This is a test update, so there's nothing real to report yet.")
   + ` ${first} can follow up on anything after the call.`;
 const deferLine = `Good question. I'll get ${first} to follow up on that after the call.`;
+const ackLine = "Yes, I'm here. Go ahead.";
 
 /** macOS `say` stands in for Piper in this spike. */
 async function synthesize(text) {
@@ -99,7 +100,13 @@ const inject = readFileSync(path.join(here, "inject.js"), "utf8");
 const audio = synthesize(line);
 const updateAudio = synthesize(updateLine);
 const deferAudio = synthesize(deferLine);
-for (const a of [audio, updateAudio, deferAudio]) a.catch((e) => log(`TTS failed: ${e}`));
+const ackAudio = synthesize(ackLine);
+for (const a of [audio, updateAudio, deferAudio, ackAudio]) a.catch((e) => log(`TTS failed: ${e}`));
+
+// The window is usually hidden: don't let Chromium pause it.
+app.commandLine.appendSwitch("disable-renderer-backgrounding");
+app.commandLine.appendSwitch("disable-background-timer-throttling");
+app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 
 // Meet rejects unknown browsers; present as plain Chrome.
 app.userAgentFallback = app.userAgentFallback.replace(/ (Electron|penguin-meet-spike)\/\S+/g, "");
@@ -145,7 +152,12 @@ app.whenReady().then(async () => {
   ipcMain.on("config", (e) => { e.returnValue = { name, platform, debug: !!args.verbose }; });
   ipcMain.on("inject-code", (e) => { e.returnValue = inject; });
   ipcMain.on("log", (_e, msg) => log(msg));
-  ipcMain.on("type", (e, text) => e.sender.insertText(text)); // into the focused field
+  // Type into the focused field through the DevTools protocol, like a headless
+  // browser does. webContents.insertText freezes the page when the window is hidden.
+  win.webContents.debugger.attach("1.3");
+  ipcMain.on("type", (_e, text) => {
+    win.webContents.debugger.sendCommand("Input.insertText", { text }).catch((err) => log(`typing failed: ${err.message}`));
+  });
   const turn = new TurnDetector({ names });
   const speak = async (what, label) => {
     turn.setSpeaking(true, Date.now());
@@ -165,6 +177,8 @@ app.whenReady().then(async () => {
         speak(updateAudio, "update").then(() => log(`reply started ${Date.now() - endedAt} ms after they stopped talking`));
       } else if (d.action === "answer") {
         speak(deferAudio, "follow-up: deferring to the owner");
+      } else if (d.action === "acknowledge") {
+        speak(ackAudio, "acknowledging: listening for the question");
       }
     },
   });
@@ -189,6 +203,8 @@ app.whenReady().then(async () => {
 
   // --verbose: snapshot the window every 10 s so a failed join can be seen.
   if (args.verbose) {
+    win.webContents.on("did-navigate", (_e, u) => log(`navigated: ${u}`));
+    win.webContents.on("console-message", (e) => { if (e.level === "error") log(`page error: ${String(e.message).slice(0, 200)}`); });
     const dir = path.join(tmpdir(), "penguin-shots");
     mkdirSync(dir, { recursive: true });
     log(`screenshots: ${dir}`);

@@ -4,7 +4,8 @@
 //  2. Everyone else's audio is tapped: from WebRTC tracks (Meet, Teams) or,
 //     as a fallback, from whatever the page plays through Web Audio (Zoom's
 //     browser client may decode audio itself). Same for every platform.
-//  3. A per-platform driver fills in the name, joins and keeps our mic on.
+//  3. A per-platform driver fills in the name and joins with the camera off
+//     and the mic muted; Penguin unmutes only while it speaks.
 (() => {
   const bridge = window.__penguin;
   if (!bridge || window.__penguinInjected) return;
@@ -13,6 +14,13 @@
   const frame = window === window.top ? "top" : `frame:${location.hostname}`;
   const log = (msg) => bridge.log(frame === "top" ? msg : `[${frame}] ${msg}`);
   const ctx = new AudioContext({ sampleRate: 48000 });
+
+  // Penguin's window is hidden, and Meet pauses joining on hidden pages.
+  // Report the page as visible and swallow visibility changes.
+  Object.defineProperty(Document.prototype, "visibilityState", { get: () => "visible", configurable: true });
+  Object.defineProperty(Document.prototype, "hidden", { get: () => false, configurable: true });
+  Document.prototype.hasFocus = () => true;
+  document.addEventListener("visibilitychange", (e) => e.stopImmediatePropagation(), true);
 
   // 1. Fake mic + camera ------------------------------------------------------
   const voice = ctx.createMediaStreamDestination();
@@ -157,7 +165,14 @@
   };
 
   // 3. Platform drivers ---------------------------------------------------------
+  // Penguin joins with the camera off and the mic muted, unmutes only while
+  // it speaks, then mutes again. Every control is found by its label, so each
+  // call is idempotent: "mic on" does nothing if the mic is already on.
   // state(): "in_call" | "waiting" | "blocked" | null (still joining)
+  const switchFor = (re, checked) => [...document.querySelectorAll('[role=switch], input[type=checkbox]')]
+    .find((el) => re.test(label(el)) && (el.getAttribute("aria-checked") === String(checked) || el.checked === checked));
+  const flip = (el, what) => { if (!el) return false; el.click(); log(what); return true; };
+
   const drivers = {
     google_meet: {
       state: () => document.querySelector('[aria-label*="Leave call" i]') ? "in_call"
@@ -168,6 +183,8 @@
         return (hasName || !document.querySelector("input[type=text]")) && clickIf(/^(ask to join|join now|join anyway)$/i);
       },
       micOn: () => clickIf(/^turn on microphone/i, "[aria-label]"),
+      micOff: () => clickIf(/^turn off microphone/i, "[aria-label]"),
+      camOff: () => clickIf(/^turn off camera/i, "[aria-label]"),
     },
 
     teams: {
@@ -180,13 +197,10 @@
         const hasName = fill('input[data-tid="prejoin-display-name-input"], input[placeholder*="name" i]', name);
         return hasName && clickIf(/^join now$/i);
       },
-      micOn() {
-        // Pre-join: a switch that's unchecked when the mic is off. In call: "Unmute".
-        const sw = [...document.querySelectorAll('[role=switch], input[type=checkbox]')]
-          .find((el) => /mic/i.test(label(el)) && (el.getAttribute("aria-checked") === "false" || el.checked === false));
-        if (sw) { sw.click(); log("Teams had our mic off (pre-join); turned it on"); return true; }
-        return clickIf(/^unmute/i, "button, [role=button]");
-      },
+      // Pre-join uses switches; in the call, buttons.
+      micOn: () => flip(switchFor(/mic/i, false), "mic on (pre-join switch)") || clickIf(/^unmute/i, "button, [role=button]"),
+      micOff: () => flip(switchFor(/mic/i, true), "mic off (pre-join switch)") || clickIf(/^mute\b/i, "button, [role=button]"),
+      camOff: () => flip(switchFor(/camera|video/i, true), "camera off (pre-join switch)") || clickIf(/^turn camera off/i, "button, [role=button]"),
     },
 
     zoom: {
@@ -198,13 +212,12 @@
         const hasName = fill('#input-for-name, input[placeholder*="name" i]', name);
         return hasName && clickIf(/^join$/i, "button");
       },
-      micOn() {
-        clickIf(/^got it$/i, "button"); // feature pop-ups cover the toolbar
-        // Zoom's browser client may need "Join Audio" before the mic exists.
-        if (clickIf(/^join audio( by computer)?$/i, "button")) return true;
-        clickIf(/^start video$/i, "button"); // show Penguin's avatar card
-        return clickIf(/^unmute/i, "button, [role=button]");
-      },
+      // In the call Zoom needs "Join Audio" before we can hear or speak, and
+      // its feature pop-ups ("Got it") cover the toolbar.
+      tidy: () => clickIf(/^got it$/i, "button") || clickIf(/^join audio( by computer)?$/i, "button"),
+      micOn: () => clickIf(/^unmute/i, "button, [role=button]"),
+      micOff: () => clickIf(/^mute\b/i, "button, [role=button]"),
+      camOff: () => clickIf(/^stop video/i, "button, [role=button]"),
     },
   };
   const driver = drivers[platform];
@@ -220,8 +233,8 @@
     const now = Date.now();
     const s = driver.state();
     if (s === "in_call") {
-      if (state !== "in_call") { state = "in_call"; log("in the call"); bridge.inCall(); }
-      if (now - lastMicTry > 3000) { lastMicTry = now; driver.micOn(); }
+      if (state !== "in_call") { state = "in_call"; log("in the call (camera off, muted until it speaks)"); bridge.inCall(); }
+      if (now - lastMicTry > 3000 && !speaking) { lastMicTry = now; driver.tidy?.(); driver.camOff(); driver.micOff(); }
       return;
     }
     if (state === "in_call") { state = "ended"; bridge.ended(); return; }
@@ -235,7 +248,7 @@
     }
     if (s === "waiting") { if (state !== "waiting") { state = "waiting"; log("in the waiting room; someone needs to admit us"); } return; }
     if (now - lastMicTry > 3000) {
-      lastMicTry = now; driver.micOn();
+      lastMicTry = now; driver.camOff(); driver.micOff();
       if (debug) {
         const seenButtons = [...document.querySelectorAll("button, [role=button], [role=switch]")]
           .filter((b) => b.offsetParent).map((b) => `${label(b).slice(0, 40)}${b.disabled ? " (disabled)" : ""}`).filter(Boolean);
@@ -259,14 +272,14 @@
 
   bridge.onSpeak(async (bytes) => {
     if (state !== "in_call") return; // only the frame that's in the meeting speaks
+    speaking = true; // also stops the housekeeping loop from muting us mid-sentence
     try {
-      driver.micOn();
+      if (driver.micOn()) await new Promise((r) => setTimeout(r, 600)); // let the unmute land
       if (ctx.state === "suspended") await ctx.resume();
       log(`audio context: ${ctx.state}; outgoing WebRTC audio senders: ${senders().join(", ") || "none (may be non-WebRTC)"}`);
       const buf = await ctx.decodeAudioData(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
       const src = ctx.createBufferSource();
       src.buffer = buf; src.connect(voice); src.connect(voiceMeter);
-      speaking = true;
       let peak = 0;
       const meter = new Float32Array(voiceMeter.fftSize);
       const sample = setInterval(() => {
@@ -274,11 +287,11 @@
         for (const v of meter) peak = Math.max(peak, Math.abs(v));
       }, 100);
       src.onended = () => {
-        clearInterval(sample); speaking = false;
-        log(`our voice peak level was ${peak.toFixed(3)} (0 means silence went out)`);
+        clearInterval(sample); speaking = false; driver.micOff();
+        log(`our voice peak level was ${peak.toFixed(3)} (0 means silence went out); muted again`);
         bridge.playbackEnded();
       };
       src.start();
-    } catch (e) { log(`playback failed: ${e}`); bridge.playbackEnded(); }
+    } catch (e) { speaking = false; driver.micOff(); log(`playback failed: ${e}`); bridge.playbackEnded(); }
   });
 })();

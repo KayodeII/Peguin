@@ -4,9 +4,12 @@
  * Inputs are finalised utterances from speech-to-text. Penguin speaks when:
  *  1. someone hands the floor to the user by name ("Mujeeb, you're up",
  *     "Mujeeb?", "what about Mujeeb") and the update hasn't been given; or
- *  2. after the update, someone asks a question that names the user (always
- *     answered: going silent when addressed is worse than deferring), or asks
- *     an unnamed question within the follow-up window right after Penguin
+ *  2. after the update, every time the user is called by name: a question
+ *     ("Mujeeb, any blockers?") is answered, a fresh handoff ("Mujeeb, you're
+ *     up") repeats the update, and a bare call ("Hey Mujeeb.") is acknowledged
+ *     so the next question comes to Penguin. Being talked about ("Mujeeb did
+ *     great", "Thanks Mujeeb") is not being called.
+ *  3. an unnamed question within the follow-up window right after Penguin
  *     finished (capped by maxFollowUps, since those are guesses).
  * It stays silent while it is talking and for a short tail after, so it never
  * reacts to its own voice echoing back from the call.
@@ -15,7 +18,8 @@
 export type Decision =
   | { action: "none" }
   | { action: "give_update" }
-  | { action: "answer"; question: string };
+  | { action: "answer"; question: string }
+  | { action: "acknowledge" };   // called by name, no question yet: "Yes, I'm here."
 
 export type TurnOptions = {
   names: string[];              // the user's name plus aliases
@@ -29,6 +33,8 @@ const HANDOFF = [
   /\bupdate\b/, /\bnext\b/, /\bcan you\b/, /\bwant to go\b/, /\bdo you want\b/, /\bfloor\b/, /\byou next\b/,
   /\banything from\b/, /\bwhat'?s new\b/, /\bwhat do you have\b/, /\bkick us off\b/, /\bstart us\b/,
 ];
+const GREETING = /^(hey|hi|hello|yo|okay|ok|so|and|right|alright|um|uh)$/;
+const THANKS = /^(thanks|thank you|cheers|great|nice|perfect|awesome|cool|well done|good job)\b/;
 const QUESTION_START = /^(what|when|why|how|who|where|which|is|are|was|were|do|does|did|can|could|will|would|should|have|has|any)\b/;
 
 export function normalize(s: string): string {
@@ -84,6 +90,34 @@ export function isQuestion(text: string): boolean {
   return t.endsWith("?") || QUESTION_START.test(t);
 }
 
+/** A question in any clause: "Hey Mujeeb, can you explain the migration." */
+function asksSomething(text: string): boolean {
+  return isQuestion(text) || text.split(/[,.;!]/).some((c) => c.trim() && isQuestion(c));
+}
+
+/**
+ * Called by name rather than talked about. Speech-to-text marks a call with
+ * punctuation after the name or a greeting before it, near the start:
+ * "Hey Mujeeb.", "Mujib, Mujib.", "Mujeeb, quick one" vs "Mujeeb did great".
+ */
+export function addressesUser(text: string, names: string[]): boolean {
+  if (THANKS.test(normalize(text))) return false;
+  const all = text.trim().split(/\s+/);
+  const tokens = all.slice(0, 5);
+  for (let i = 0; i < tokens.length && i <= 3; i++) {
+    const word = normalize(tokens[i]!).replace(/\?/g, "");
+    const next = tokens[i + 1];
+    // Split names ("Moo jeeb") need both halves; a full name in the next word is handled at i + 1.
+    const two = next !== undefined && !mentionsName(word, names) && !mentionsName(normalize(next), names)
+      && mentionsName(`${word} ${normalize(next)}`, names);
+    if (!two && !mentionsName(word, names)) continue;
+    const last = two ? next! : tokens[i]!;
+    const prev = i > 0 ? normalize(tokens[i - 1]!).replace(/\?/g, "") : "";
+    if (/[,.!?]$/.test(last) || GREETING.test(prev) || all.length <= 2) return true;
+  }
+  return false;
+}
+
 export function isHandoff(text: string, names: string[]): boolean {
   if (!mentionsName(text, names)) return false;
   const t = normalize(text);
@@ -124,9 +158,14 @@ export class TurnDetector {
       return isHandoff(t, this.o.names) ? { action: "give_update" } : { action: "none" };
     }
 
-    if (!isQuestion(t)) return { action: "none" };
-    if (mentionsName(t, this.o.names)) return { action: "answer", question: t };
-    if (this.followUps >= this.o.maxFollowUps) return { action: "none" };
+    const named = mentionsName(t, this.o.names);
+    if (named && asksSomething(t)) { this.followUps = 0; return { action: "answer", question: t }; }
+    if (named && !THANKS.test(normalize(t)) && isHandoff(t, this.o.names) && HANDOFF.some((r) => r.test(normalize(t)))) {
+      return { action: "give_update" }; // asked again, e.g. "Mujeeb, you're up"
+    }
+    if (named && addressesUser(t, this.o.names)) { this.followUps = 0; return { action: "acknowledge" }; }
+
+    if (!isQuestion(t) || this.followUps >= this.o.maxFollowUps) return { action: "none" };
     const inWindow = now - this.lastSpokeEndedAt <= this.o.followUpWindowMs;
     // "Sarah, what about you?" right after Penguin finishes is the floor moving
     // on, not a follow-up for us.
