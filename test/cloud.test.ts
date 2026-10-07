@@ -4,6 +4,7 @@ import { isEntitled, normaliseStatus, verifyPaystackSignature } from "../cloud/s
 import { signEd25519, verifyEd25519 } from "../cloud/src/crypto.js";
 import { escapeHtml, signInEmail, supportInboxEmail } from "../cloud/src/email.js";
 import { safeNext } from "../cloud/src/http.js";
+import { DMG_ASSET, fromGithub } from "../cloud/src/release.js";
 import { HANDOFF, parseReply, supportSystem } from "../cloud/src/support.js";
 import { compareVersions, isNewer } from "../src/core/version.js";
 
@@ -112,5 +113,18 @@ describe("versions", () => {
     expect(isNewer("0.1.0", "0.1.0")).toBe(false);
     expect(isNewer("0.1.0", "0.2.0")).toBe(false);
     expect(compareVersions("1.0.0", "1.0")).toBe(0);
+  });
+});
+
+describe("releases", () => {
+  const asset = { name: DMG_ASSET, browser_download_url: "https://github.com/KayodeII/Peguin/releases/download/v0.2.0/Peguin-mac-arm64.dmg" };
+  it("takes the version and .dmg from a published GitHub release", () => {
+    expect(fromGithub({ tag_name: "v0.2.0", assets: [asset] })).toEqual({ version: "0.2.0", available: true, url: asset.browser_download_url });
+  });
+  it("ignores drafts, prereleases, odd tags and releases without the .dmg", () => {
+    expect(fromGithub({ tag_name: "v0.2.0", draft: true, assets: [asset] })).toBeNull();
+    expect(fromGithub({ tag_name: "v0.2.0", prerelease: true, assets: [asset] })).toBeNull();
+    expect(fromGithub({ tag_name: "nightly", assets: [asset] })).toBeNull();
+    expect(fromGithub({ tag_name: "v0.2.0", assets: [] })).toBeNull();
   });
 });

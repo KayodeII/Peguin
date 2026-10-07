@@ -1,0 +1,56 @@
+name: Release Mac app
+
+# Push a tag like v0.2.0 (matching desktop/package.json) to build the .dmg and
+# publish it as a GitHub Release. The website and the app read the latest
+# release from GitHub, so nothing else needs changing.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+env:
+  WHISPER_COMMIT: d1be6fde11ac6e0407606b4e42fe72d34add8037 # whisper.cpp v1.9.5
+
+jobs:
+  mac:
+    runs-on: macos-14 # Apple silicon
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false" # ad-hoc signed until we have an Apple Developer ID
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches the app version
+        run: |
+          v=$(node -p "require('./desktop/package.json').version")
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME doesn't match desktop/package.json version $v"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: desktop
+      - name: Fetch whisper.cpp
+        run: |
+          git init -q desktop/vendor/whisper.cpp
+          cd desktop/vendor/whisper.cpp
+          git remote add origin https://github.com/ggml-org/whisper.cpp
+          git fetch -q --depth 1 origin "$WHISPER_COMMIT"
+          git checkout -q FETCH_HEAD
+      - name: Build the .dmg
+        run: npm run dist:mac
+        working-directory: desktop
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd desktop/release
+          dmg=$(ls Peguin-*-mac-arm64.dmg)
+          cp "$dmg" Peguin-mac-arm64.dmg # stable name for /releases/latest/download/
+          shasum -a 256 "$dmg" Peguin-mac-arm64.dmg > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" "$dmg" Peguin-mac-arm64.dmg SHA256SUMS.txt \
+            --title "Peguin $GITHUB_REF_NAME" --generate-notes

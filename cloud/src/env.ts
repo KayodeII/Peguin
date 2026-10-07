@@ -16,7 +16,9 @@ export interface Env {
   LICENSE_PRIVATE_JWK?: string;
   /** Where help-chat messages are emailed. Without it they are only stored in D1. */
   SUPPORT_INBOX?: string;
-  /** Latest desktop release, e.g. "0.2.0", and where its .dmg downloads from. */
+  /** GitHub "owner/repo" whose releases carry the .dmg. */
+  RELEASES_REPO?: string;
+  /** Fallback when there's no GitHub release: latest version, e.g. "0.2.0", and where its .dmg downloads from. */
   APP_LATEST_VERSION?: string;
   APP_DOWNLOAD_URL?: string;
 }

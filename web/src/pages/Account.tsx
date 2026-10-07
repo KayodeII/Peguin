@@ -142,7 +142,9 @@ function DesktopCard({ app, release }: Pick<Me, "app" | "release">) {
     line = `Installed${app.version ? `, version ${app.version}` : ""}. Last used ${app.last_seen ? ago(app.last_seen) : "recently"}.`;
     action = null;
   } else {
-    line = release.available ? "Install it, then sign in from Settings in the app." : "The download opens here with the first public release.";
+    line = release.available
+      ? "Install it, then sign in from Settings in the app. The first time, macOS asks you to allow it: System Settings, Privacy & Security, Open Anyway."
+      : "The download opens here with the first public release.";
     action = release.available ? download : <button className="btn ghost" disabled><Icon name="laptop" size={16} />Download for Mac</button>;
   }
   return (

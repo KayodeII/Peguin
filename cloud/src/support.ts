@@ -4,6 +4,7 @@ import { faq } from "../../web/src/faq.js";
 import { sessionUser } from "./auth.js";
 import { currentPlan } from "./billing.js";
 import { ask, type Turn } from "./claude.js";
+import { latestRelease } from "./release.js";
 import { sha256 } from "./crypto.js";
 import { sendEmail, supportInboxEmail } from "./email.js";
 import { HttpError, type Env } from "./env.js";
@@ -78,7 +79,7 @@ export async function supportChat(env: Env, req: Request): Promise<Response> {
   const { messages } = await body<{ messages?: unknown }>(req);
   const turns = cleanTurns(messages);
   await limit(env, req, "chat", CHATS_PER_DAY);
-  const reply = await ask(env, supportSystem(Number(env.TRIAL_DAYS), await priceLine(env), !!env.APP_DOWNLOAD_URL), turns, "low", 1024);
+  const reply = await ask(env, supportSystem(Number(env.TRIAL_DAYS), await priceLine(env), (await latestRelease(env)).available), turns, "low", 1024);
   return json(parseReply(reply));
 }
 
