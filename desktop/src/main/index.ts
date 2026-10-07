@@ -17,6 +17,7 @@ app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 // Meeting sites reject unknown browsers; present as plain Chrome.
 app.userAgentFallback = app.userAgentFallback.replace(/ (Electron|penguin-desktop)\/\S+/g, "");
 
+app.setName("Penguin"); // before ready: menu name and app-data folder
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let prefs: BrowserWindow | null = null;
@@ -27,12 +28,14 @@ let meeting: MeetingRunner | null = null;
 function openPreferences() {
   if (prefs && !prefs.isDestroyed()) { prefs.show(); prefs.focus(); return; }
   prefs = new BrowserWindow({
-    width: 900, height: 760, minWidth: 720, minHeight: 560, title: "Penguin",
+    width: 900, height: 760, minWidth: 720, minHeight: 560, title: "Penguin", show: false,
     backgroundColor: "#0f1720",
     webPreferences: { preload: path.join(outDir, "preload/app.cjs"), sandbox: true, contextIsolation: true },
   });
   if (rendererUrl) void prefs.loadURL(rendererUrl);
   else void prefs.loadFile(path.join(outDir, "renderer/index.html"));
+  // Come to the front on launch, even when started from a terminal.
+  prefs.once("ready-to-show", () => { prefs?.show(); app.focus({ steal: true }); });
   prefs.on("closed", () => { prefs = null; });
   // Dev aid: PENGUIN_SNAPSHOT=out.png saves a picture of this window, then quits.
   const snap = process.env.PENGUIN_SNAPSHOT;
