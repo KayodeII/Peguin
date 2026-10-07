@@ -22,9 +22,12 @@ app.userAgentFallback = app.userAgentFallback.replace(/ (Electron|penguin-deskto
 
 // Before ready: sets the menu name and the app-data folder. Settings from
 // before the rename (folder "Penguin") move over once.
-const legacyData = app.getPath("userData").replace(/[^/\\]+$/, "Penguin");
+// (Electron fixes userData the first time it's read, so set it explicitly.)
 app.setName("Peguin");
-if (!process.env.PENGUIN_USER_DATA && existsSync(legacyData) && !existsSync(app.getPath("userData"))) renameSync(legacyData, app.getPath("userData"));
+const dataDir = path.join(app.getPath("appData"), "Peguin");
+const legacyData = path.join(app.getPath("appData"), "Penguin");
+if (!process.env.PENGUIN_USER_DATA && existsSync(legacyData) && !existsSync(dataDir)) renameSync(legacyData, dataDir);
+app.setPath("userData", dataDir);
 if (process.env.PENGUIN_USER_DATA) app.setPath("userData", process.env.PENGUIN_USER_DATA); // dev: separate profile
 if (!app.requestSingleInstanceLock()) app.quit();
 
