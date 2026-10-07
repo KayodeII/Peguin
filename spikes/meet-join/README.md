@@ -1,24 +1,30 @@
-# Spike: Electron joins Google Meet, Teams and Zoom
+# Spike: Electron joins Google Meet, Teams and Zoom, and responds
 
-Proves the riskiest part of the desktop direction: a local Electron window can join a Meet as a guest, speak into the call, and hear the other participants. Throwaway code, not part of the build.
+Proves the desktop direction: a local Electron window joins a call as a guest, listens with local whisper.cpp, and gives the owner's update when someone hands them the floor. Throwaway code, not part of the build.
 
 ```bash
 cd spikes/meet-join
 npm install
-npm start -- --name "Mujeeb (AI)"          # finds the Meet open in your Chrome (macOS)
-npm start -- --url https://meet.google.com/abc-defg-hij --name "Mujeeb (AI)"
-# works with Meet, Teams (teams.microsoft.com / teams.live.com) and Zoom links; Zoom opens its browser client
-# options: --say "custom line"  --delay 5  --hidden  --audible (play call audio)  --verbose (log buttons, screenshot every 10 s)
+./setup-whisper.sh                 # once: builds whisper.cpp + model into ./vendor (nothing system-wide)
+npm start -- --url "<meeting link>" --name "Mujeeb" --aliases "Mujib"
+# no --url: uses the Meet/Teams/Zoom link open in your Chrome (macOS)
+# options: --update "what to say"  --greet (speak on joining)  --hidden  --audible (play call audio)  --verbose (buttons, levels, screenshots)
 ```
+
+How it responds:
+- Someone hands the owner the floor ("Mujeeb, you're up", "Mujeeb?") → Penguin discloses it's an AI and gives the update (`--update`, or a clearly labelled test update).
+- A question for the owner afterwards → "I'll get Mujeeb to follow up on that" (free mode never answers live).
+- Everything else → silent. Turn logic is `src/realtime/turn.ts`, bundled at start (`prestart`), so there's one copy of it.
 
 Penguin always joins from its own window, as a separate guest. Running inside your Chrome tab would make it you (your account and mic, no "(AI)" name). Test with two participants: be in the Meet in Chrome as yourself, run the spike, admit "Mujeeb (AI)" from the lobby, then talk.
 
-Pass criteria, all visible in the terminal log:
-1. `clicked "Ask to join"`, then `in the call` after you admit it
-2. `speaking: ...` and you hear the line in your browser, then `finished speaking`
-3. `tapped remote audio track #N`, and `hearing: SPEECH` lines while you talk
+Pass criteria, in the terminal log:
+1. `in the call; waiting for someone to hand Mujeeb the floor`
+2. Say "Mujeeb, you're up": `heard: "..." -> give_update`, then you hear the update and `reply started N ms after they stopped talking`
+3. Ask "Mujeeb, any blockers?": `-> answer`, and Penguin defers to you
+4. Talk to someone else: `-> none`, Penguin stays quiet
 
-TTS uses macOS `say` as a stand-in for Piper. Name ends in "(AI)" and the default line discloses it's an AI (non-negotiable).
+TTS uses macOS `say` as a stand-in for Piper. Speech-to-text: `listen.js` (energy gate, 700 ms pause ends an utterance, whisper-server with names as a prompt). Name ends in "(AI)" and the default line discloses it's an AI (non-negotiable).
 
 Per-platform notes:
 - Teams: guest names can't contain parentheses, so the name is "<name> - AI". The name is typed through Electron (`insertText`) because Teams ignores values set from script.

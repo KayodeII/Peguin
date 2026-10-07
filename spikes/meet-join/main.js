@@ -1,6 +1,7 @@
 // Spike: join a Google Meet, Teams or Zoom call from an Electron window,
-// speak one line, and report whether we can hear the other participants. Throwaway code: the
-// real desktop app will be TypeScript built on the ports refactor.
+// listen with local whisper.cpp, and give the owner's update when someone
+// hands them the floor. Throwaway code: the real desktop app will be
+// TypeScript built on the ports refactor.
 import { app, BrowserWindow, ipcMain } from "electron";
 import { execFile, execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -9,6 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, promisify } from "node:util";
+import { TurnDetector } from "./gen/turn.js"; // bundled from src/realtime/turn.ts by `prestart`
+import { createListener, startWhisper } from "./listen.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const { values: args } = parseArgs({
@@ -16,6 +19,9 @@ const { values: args } = parseArgs({
   options: {
     url: { type: "string" },
     name: { type: "string", default: "Penguin (AI)" },
+    aliases: { type: "string", default: "" },   // comma-separated, e.g. "Mujib,MJ"
+    update: { type: "string" },                 // what to say when handed the floor
+    greet: { type: "boolean", default: false }, // old spike behaviour: say a line on joining
     say: { type: "string" },
     delay: { type: "string", default: "5" },
     hidden: { type: "boolean", default: false },
@@ -61,15 +67,23 @@ if (typeof args.url !== "string") {
 const platform = typeof args.url === "string" ? detectPlatform(args.url) : "unknown";
 if (platform === "unknown") {
   console.error("No Google Meet, Teams or Zoom link found. Open one in Chrome, or pass it explicitly.");
-  console.error('Usage: npm start -- [--url <meeting link>] [--name "Mujeeb (AI)"] [--say "..."] [--delay 5] [--hidden] [--audible] [--verbose]');
+  console.error('Usage: npm start -- [--url <meeting link>] [--name "Mujeeb"] [--aliases "Mujib,MJ"] [--update "..."] [--greet] [--hidden] [--audible] [--verbose]');
   process.exit(1);
 }
 // Non-negotiable: the bot's name always says it's an AI. Teams only allows
 // letters, numbers, spaces and - ' . _ @ in guest names, so no parentheses.
 const base = String(args.name).replace(/\s*(\(AI\)|- AI)\s*$/i, "");
 const name = platform === "teams" ? `${base} - AI` : `${base} (AI)`;
+const first = base.split(/\s+/)[0];
+const names = [...new Set([base, first, ...String(args.aliases).split(",").map((a) => a.trim())].filter(Boolean))];
 const line = typeof args.say === "string" ? args.say
   : `Hi everyone, I'm ${base}, an AI assistant. This is a quick test of Penguin speaking into the call.`;
+// Non-negotiables: disclose first; never invent facts. Without --update it's
+// plainly labelled a test. Follow-ups always defer to the owner in free mode.
+const updateLine = `Hi everyone, I'm Penguin, ${first}'s AI assistant. ${first} is in another meeting, so I'm covering the update. `
+  + (typeof args.update === "string" ? args.update : "This is a test update, so there's nothing real to report yet.")
+  + ` ${first} can follow up on anything after the call.`;
+const deferLine = `Good question. I'll get ${first} to follow up on that after the call.`;
 
 /** macOS `say` stands in for Piper in this spike. */
 async function synthesize(text) {
@@ -81,13 +95,21 @@ async function synthesize(text) {
 const t0 = Date.now();
 const log = (msg) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s] ${msg}`);
 const inject = readFileSync(path.join(here, "inject.js"), "utf8");
-const audio = synthesize(line); // pre-synthesize so speaking is instant
-audio.catch((e) => log(`TTS failed: ${e}`));
+// Pre-synthesize so Penguin answers instantly when called on.
+const audio = synthesize(line);
+const updateAudio = synthesize(updateLine);
+const deferAudio = synthesize(deferLine);
+for (const a of [audio, updateAudio, deferAudio]) a.catch((e) => log(`TTS failed: ${e}`));
 
 // Meet rejects unknown browsers; present as plain Chrome.
 app.userAgentFallback = app.userAgentFallback.replace(/ (Electron|penguin-meet-spike)\/\S+/g, "");
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  let whisper;
+  try { whisper = await startWhisper(here); log(`whisper.cpp ready; listening for: ${names.join(", ")}`); }
+  catch (e) { log(`${e.message}`); app.quit(); return; }
+  app.on("will-quit", () => whisper.stop());
+
   const win = new BrowserWindow({
     width: 1280, height: 800, show: !args.hidden, title: name,
     webPreferences: {
@@ -124,19 +146,39 @@ app.whenReady().then(() => {
   ipcMain.on("inject-code", (e) => { e.returnValue = inject; });
   ipcMain.on("log", (_e, msg) => log(msg));
   ipcMain.on("type", (e, text) => e.sender.insertText(text)); // into the focused field
+  const turn = new TurnDetector({ names });
+  const speak = async (what, label) => {
+    turn.setSpeaking(true, Date.now());
+    log(`speaking (${label})`);
+    const buf = await what;
+    // Every frame gets it; only the one that's in the meeting plays it.
+    for (const f of win.webContents.mainFrame.framesInSubtree) f.send("speak", buf);
+  };
+  const onPcm = createListener({
+    whisperUrl: whisper.url, names,
+    onError: (e) => log(`speech-to-text error: ${e}`),
+    onUtterance(text, { sttMs, endedAt }) {
+      const d = turn.onUtterance(text, Date.now());
+      log(`heard: "${text}"  (stt ${sttMs} ms) -> ${d.action}`);
+      if (d.action === "give_update") {
+        turn.markUpdateGiven();
+        speak(updateAudio, "update").then(() => log(`reply started ${Date.now() - endedAt} ms after they stopped talking`));
+      } else if (d.action === "answer") {
+        speak(deferAudio, "follow-up: deferring to the owner");
+      }
+    },
+  });
+  ipcMain.on("pcm", (_e, buf) => onPcm(buf));
+
   ipcMain.on("in-call", async () => {
     if (inCall) return;
     inCall = true;
-    log(`in the call; speaking in ${args.delay}s`);
-    setTimeout(async () => {
-      const buf = await audio;
-      log(`speaking: "${line}"`);
-      // Every frame gets it; only the one that's in the meeting plays it.
-      for (const f of win.webContents.mainFrame.framesInSubtree) f.send("speak", buf);
-    }, Number(args.delay) * 1000);
+    log(`in the call; waiting for someone to hand ${first} the floor`);
+    if (args.greet) setTimeout(() => speak(audio, "greeting"), Number(args.delay) * 1000);
   });
-  ipcMain.on("playback-ended", () => log("finished speaking"));
+  ipcMain.on("playback-ended", () => { turn.setSpeaking(false, Date.now()); log("finished speaking"); });
   ipcMain.on("level", (_e, { rms, tracks, frame }) => {
+    if (!args.verbose) return;
     const talking = rms > 0.01;
     if (talking || (tracks > 0 && Date.now() - lastLevelLog > 10000)) {
       lastLevelLog = Date.now();

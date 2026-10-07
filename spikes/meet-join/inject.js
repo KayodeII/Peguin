@@ -93,6 +93,24 @@
     return out;
   };
 
+  // Stream the mix to the main process as 16 kHz mono PCM16 for speech-to-text.
+  // ScriptProcessor rather than an AudioWorklet: worklets load from a blob URL,
+  // which meeting pages' CSP can block.
+  const proc = ctx.createScriptProcessor(4096, 1, 1);
+  const sink = ctx.createGain();
+  sink.gain.value = 0;
+  mix.connect(proc); proc.connect(sink); sink.connect(ctx.destination); // must reach a destination to run
+  proc.onaudioprocess = (e) => {
+    if (state !== "in_call") return;
+    const ch = e.inputBuffer.getChannelData(0); // 48 kHz: average every 3 samples
+    const out = new Int16Array(Math.floor(ch.length / 3));
+    for (let i = 0; i < out.length; i++) {
+      const v = (ch[3 * i] + ch[3 * i + 1] + ch[3 * i + 2]) / 3;
+      out[i] = Math.max(-1, Math.min(1, v)) * 0x7fff;
+    }
+    bridge.pcm(out.buffer);
+  };
+
   const samples = new Float32Array(analyser.fftSize);
   setInterval(() => {
     analyser.getFloatTimeDomainData(samples);

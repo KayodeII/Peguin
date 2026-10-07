@@ -33,10 +33,12 @@ Moving to desktop-first (see `docs/DECISIONS.md`). Spike in `spikes/meet-join/` 
 
 Teams and Zoom drivers added to the spike. Teams (browser guest join) reaches the meeting lookup on a fake link, but **browser automation for Teams is dropped** after the owner's Microsoft account was locked during testing. Teams moves to Azure Communication Services (see DECISIONS). Zoom browser client **passed in a real meeting** (owner hosting on phone): fills "Your Name" itself (found by label; the field has no placeholder), joins as "Mujeeb (AI)", turns on audio and video, and speaks. Zoom feature pop-ups ("Got it") have to be dismissed.
 
+Respond loop built in the spike: page audio → 16 kHz PCM → energy-gated utterances → local whisper.cpp (`base.en`, Metal; built by `setup-whisper.sh` into the spike's gitignored `vendor/`) → `TurnDetector` (bundled from `src/realtime/turn.ts`) → pre-synthesized update or a deferral. Verified offline with synthesized speech: handoff, follow-up and "floor moved on" all decided correctly, about 50 ms per transcription. Seen: "auth" heard as "Earth"; the real app should prompt Whisper with ticket and project names.
+
 ## Next (desktop)
 
 1. Teams: ACS prototype (needs an Azure account)
-2. Respond loop in the spike: remote audio → 16 kHz utterances → whisper.cpp → `TurnDetector` → spoken update or deferral
+2. Respond loop: test in a real call (owner on phone says "Mujeeb, you're up")
 3. Ports refactor: `domain/`, `application/`, `ports/`, `adapters/`
 4. Electron app skeleton (TypeScript), whisper.cpp + Piper adapters, SQLite
 5. License Worker on Cloudflare (Stripe, Ed25519 tokens, server-side Claude, ACS tokens for Teams)

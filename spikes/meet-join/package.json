@@ -6,9 +6,11 @@
   "type": "module",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "prestart": "esbuild ../../src/realtime/turn.ts --format=esm --platform=node --outfile=gen/turn.js --log-level=warning"
   },
   "devDependencies": {
-    "electron": "^44.5.1"
+    "electron": "^44.5.1",
+    "esbuild": "^0.28.2"
   }
 }

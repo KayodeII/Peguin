@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("__penguin", {
   inCall: () => ipcRenderer.send("in-call"),
   ended: () => ipcRenderer.send("ended"),
   level: (rms, tracks, frame) => ipcRenderer.send("level", { rms, tracks, frame }),
+  pcm: (buf) => ipcRenderer.send("pcm", buf),
   type: (text) => ipcRenderer.send("type", String(text)),
   playbackEnded: () => ipcRenderer.send("playback-ended"),
   onSpeak: (cb) => ipcRenderer.on("speak", (_e, buf) => cb(buf)),
