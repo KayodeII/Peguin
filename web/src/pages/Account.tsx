@@ -1,13 +1,14 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, formatPrice, getMe, type Me } from "../api";
 import { Faq, PricingCard, TRIAL_DAYS, usePlan } from "../components/Sections";
-import { Icon, Logo, navigate, Title } from "../ui";
+import { Perched } from "../components/Perched";
+import { Icon, Link, Logo, navigate, Title } from "../ui";
 
 export function Pricing() {
   return (
     <section className="page narrow-section">
-      <Title as="h1" em="everything in it.">One plan,</Title>
-      <p className="section-lead">Start with {TRIAL_DAYS} days free. No card until you decide to stay.</p>
+      <Title as="h1">One plan</Title>
+      <p className="section-lead">{TRIAL_DAYS} days free, without a card. Then one monthly price.</p>
       <PricingCard />
       <h2 className="sub">Questions</h2>
       <Faq />
@@ -38,8 +39,9 @@ export function SignIn() {
 
   return (
     <section className="page auth">
+      <Link to="/" className="auth-home"><Logo size={22} />Peguin</Link>
       <div className="auth-card">
-        <Logo size={44} />
+        <Perched />
         {sent ? (
           <>
             <h1>Check your email</h1>
@@ -139,6 +141,7 @@ export function Connected() {
   useEffect(() => { if (valid) location.href = to; }, [to, valid]);
   return (
     <section className="page auth">
+      <Link to="/" className="auth-home"><Logo size={22} />Peguin</Link>
       <div className="auth-card">
         <Logo size={44} />
         <h1>{valid ? "You're signed in" : "Something's off"}</h1>

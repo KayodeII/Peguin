@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatPrice, getPlan, type Plan } from "../api";
 import { Icon, Link, Logo } from "../ui";
+import { Perched } from "./Perched";
 
 export const TRIAL_DAYS = 14; // matches TRIAL_DAYS in cloud/wrangler.jsonc
 
@@ -23,6 +24,7 @@ export function PricingCard() {
   const [amount, period] = plan ? formatPrice(plan).split("/") : [];
   return (
     <div className="plan">
+      <Perched />
       <div className="plan-head">
         <span className="plan-name">Peguin</span>
         <span className="pill">{TRIAL_DAYS} days free</span>

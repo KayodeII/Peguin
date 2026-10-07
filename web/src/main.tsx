@@ -34,7 +34,7 @@ function App() {
   const bare = path === "/signin" || path === "/connected";
   return (
     <>
-      <Nav />
+      {!bare && <Nav />}
       <main className={bare ? "bare" : ""}><Page /></main>
       {!bare && <Footer />}
     </>
