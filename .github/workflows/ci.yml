@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main, desktop-spike]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1" # typechecking the desktop app doesn't need Electron itself
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            cloud/package-lock.json
+            web/package-lock.json
+            desktop/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: cloud
+      - run: npm ci
+        working-directory: web
+      - run: npm ci
+        working-directory: desktop
+      - name: Typecheck
+        run: |
+          npm run typecheck
+          (cd cloud && npx tsc --noEmit -p .)
+          (cd web && npx tsc --noEmit -p .)
+          (cd desktop && npx tsc --noEmit -p .)
+      - name: Test
+        run: npm test
+      - name: Build website
+        run: npm run build
+        working-directory: web
