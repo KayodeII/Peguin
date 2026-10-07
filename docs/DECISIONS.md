@@ -2,6 +2,17 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: Product shape: desktop app first, then website and payments
+
+- **Build order:** the real desktop app (Electron + React) with a preferences window first, then the website, sign-up and Stripe on Cloudflare, then opt-in voice cloning.
+- **Sign-in:** Google plus a passwordless email link, handled by the Cloudflare Worker. The desktop app signs in by opening the browser and returning through a `penguin://` link.
+- **Web stack:** React + Vite on Cloudflare Pages; the Worker serves the API. The desktop app's UI uses the same React.
+- **Desktop build:** Vite for the React window, esbuild for the main process and preloads (electron-vite doesn't support Vite 8 yet).
+- **Display name** is a user preference, but the AI suffix is always added (" (AI)", or " - AI" on Teams).
+- **Connections:** users connect their calendar (to find standups and double-bookings) and GitHub/Linear/Jira (facts for the update). They don't connect Zoom, Meet or Teams logins: Penguin joins as a guest.
+- **Turn-taking stays rule-based** (`src/realtime/turn.ts`): instant, free and testable. An LLM classifier for ambiguous cases may come later in the paid tier. The LLM's job is drafting the update and answering from facts.
+- **Voice cloning (later, opt-in):** only the account holder's own voice, recorded live in the app with a consent sentence (no uploads); disclosure stays in every meeting; deletable. Check model licences before choosing (several open models are non-commercial).
+
 ## 2026-10-07: Official SDKs for Teams and Zoom; strict join pacing
 
 During Teams spike testing (about six automated guest joins to a fake meeting within minutes, from the owner's IP), the owner's personal Microsoft account was locked for "activity that goes against the Microsoft Services Agreement". The spike never signed in, so the cause is unconfirmed, but platforms clearly detect and act against bot-like joins, and users' accounts and IPs must not be put at risk.

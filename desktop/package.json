@@ -1,0 +1,33 @@
+{
+  "name": "penguin-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Penguin desktop app: covers your standup when you're double-booked.",
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "build:main": "esbuild src/main/index.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=out/main/index.js --log-level=warning",
+    "build:preload": "esbuild src/preload/app.ts src/preload/meeting.ts --bundle --platform=node --format=cjs --external:electron --outdir=out/preload --out-extension:.js=.cjs --log-level=warning",
+    "build:renderer": "vite build --logLevel warn",
+    "build": "npm run build:main && npm run build:preload && npm run build:renderer",
+    "dev": "node scripts/dev.mjs",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "setup:whisper": "bash scripts/setup-whisper.sh"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^44.6.0",
+    "esbuild": "^0.28.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.3"
+  }
+}

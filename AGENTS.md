@@ -51,6 +51,8 @@ src/
     brain/          claude.ts (draft, follow-up, recap prompts), slack.ts
     speech/         deepgram.ts (openListener, speak)
 public/agent.html   page the bot loads in the call: its camera, mic and speaker
+desktop/            Electron + React desktop app (see desktop/README.md); reuses src/realtime/turn.ts
+spikes/             throwaway experiments, not part of the build
 migrations/         numbered .sql files, applied once each, in order
 test/               *.test.ts
 ```

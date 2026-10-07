@@ -35,13 +35,16 @@ Teams and Zoom drivers added to the spike. Teams (browser guest join) reaches th
 
 Respond loop built in the spike: page audio → 16 kHz PCM → energy-gated utterances → local whisper.cpp (`base.en`, Metal; built by `setup-whisper.sh` into the spike's gitignored `vendor/`) → `TurnDetector` (bundled from `src/realtime/turn.ts`) → pre-synthesized update or a deferral. Verified offline with synthesized speech: handoff, follow-up and "floor moved on" all decided correctly, about 50 ms per transcription. Seen: "auth" heard as "Earth"; the real app should prompt Whisper with ticket and project names.
 
+**Desktop app started** (`desktop/`): Electron + React preferences window (name with enforced AI suffix, aliases, timezone, standing notes as the update, connection and voice placeholders, show-window toggle), menu bar icon, and "send Penguin to a meeting" with live status and transcript. The spike's join, listen, decide and speak loop is ported to TypeScript (`MeetingRunner`). Typecheck and build pass; the window renders. Not yet run against a real meeting from the app.
+
 ## Next (desktop)
 
 1. Teams: ACS prototype (needs an Azure account)
 2. Respond loop: test in a real call (owner on phone says "Mujeeb, you're up")
-3. Ports refactor: `domain/`, `application/`, `ports/`, `adapters/`
-4. Electron app skeleton (TypeScript), whisper.cpp + Piper adapters, SQLite
-5. License Worker on Cloudflare (Stripe, Ed25519 tokens, server-side Claude, ACS tokens for Teams)
+3. Desktop app: real-call test from the app; Piper TTS; packaging (electron-builder, bundled whisper binary, model download on first run)
+4. Cloudflare Worker + D1: Google and email-link sign-in, `penguin://` app sign-in, Stripe, license tokens, OAuth for Calendar/GitHub/Linear/Jira, Claude proxy (draft + answers), ACS tokens for Teams
+5. Website (React + Vite on Cloudflare Pages): landing, sign-up, checkout, download
+6. Ports refactor as the desktop and server share more code
 6. Zoom Meeting SDK (Marketplace approval) to replace the browser client
 
 ## Next (server, paused)
