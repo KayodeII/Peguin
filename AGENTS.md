@@ -9,7 +9,7 @@ Read next, in this order, when the task needs it:
 
 ## Direction (2026-10-06)
 
-Peguin is moving to a **desktop app** (Electron) that runs the bot on the user's machine, plus a small Cloudflare Worker for accounts, Stripe and license tokens. The server stack under `src/` stays as optional adapters during the migration. Read the DECISIONS entry before changing structure. Throwaway experiments live in `spikes/` and are not part of the build.
+Peguin is moving to a **desktop app** (Electron) that runs the bot on the user's machine, plus a small Cloudflare Worker (`cloud/`) for accounts, Paystack billing, licences, server-side Claude and the website at www.peguin.co. The server stack under `src/` stays as optional adapters during the migration. Read the DECISIONS entry before changing structure. Throwaway experiments live in `spikes/` and are not part of the build.
 
 ## What Peguin is
 
@@ -52,7 +52,8 @@ src/
     speech/         deepgram.ts (openListener, speak)
 public/agent.html   page the bot loads in the call: its camera, mic and speaker
 desktop/            Electron + React desktop app (see desktop/README.md); reuses src/realtime/turn.ts
-cloud/              Cloudflare Worker + D1: accounts, Stripe, licences, server-side Claude; serves web/dist
+cloud/              Cloudflare Worker + D1: accounts, Paystack, licences, server-side Claude, help chat; serves web/dist
+web/                React + Vite website (built into web/dist, served by the Worker)
 spikes/             throwaway experiments, not part of the build
 migrations/         numbered .sql files, applied once each, in order
 test/               *.test.ts
@@ -84,6 +85,13 @@ Live meetings need public URLs (ngrok) for `API_PUBLIC_URL` and `REALTIME_PUBLIC
 - API errors are JSON `{ error: "plain sentence saying what's wrong and how to fix it" }`; zod errors become 400 automatically.
 - Keep functions small and typed; avoid `any` except at external API boundaries.
 - Before finishing any change: `npm run typecheck && npm test`.
+
+## Branches, versions and releases
+
+- Work on a short-lived branch, open a PR into `main`, merge when CI is green. `main` is always releasable.
+- The product version is `desktop/package.json` (semver). Patch for fixes, minor for new features, major for breaking changes (for example a settings format the old app can't read).
+- Release from an up-to-date `main`: `npm run release -- patch|minor|major|x.y.z` bumps the version, commits `Release vX.Y.Z` and tags it. `git push origin main --follow-tags` publishes; `.github/workflows/release.yml` builds the .dmg and the site picks it up within ten minutes. See `docs/RELEASING.md`.
+- The Worker and website aren't versioned: deploy them after merging with `cd cloud && npx wrangler deploy` (and `npx wrangler d1 migrations apply penguin --remote` first when there's a new migration).
 
 ## Gotchas
 
