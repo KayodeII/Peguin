@@ -9,6 +9,7 @@ import type { Draft } from "../brain.js";
 import type { Settings } from "../settings.js";
 import { synthesize } from "../speech/tts.js";
 import { createListener, type Whisper } from "../speech/whisper.js";
+import { outDir, resource } from "../paths.js";
 import { botName, detectPlatform, webClientUrl, type Platform } from "./platform.js";
 
 export type MeetingStatus = "joining" | "waiting" | "in_call" | "ended" | "failed";
@@ -169,7 +170,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
   }
 }
 
-export const meetingPaths = (appRoot: string, outDir: string) => ({
+export const meetingPaths = () => ({
   preload: path.join(outDir, "preload/meeting.cjs"),
-  inject: path.join(appRoot, "resources/meeting-inject.js"),
+  inject: resource("meeting-inject.js"),
 });

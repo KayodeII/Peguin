@@ -3,7 +3,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer } from "node:net";
-import path from "node:path";
+import { whisperPaths } from "../paths.js";
 
 const RATE = 16000;
 const VOICE_RMS = 0.012;       // above this a chunk counts as speech
@@ -14,12 +14,6 @@ const PREROLL_CHUNKS = 3;      // keep ~250 ms before speech starts
 
 export type Whisper = { url: string; stop: () => void };
 
-/** whisper.cpp binary and model. Dev: ./vendor (scripts/setup-whisper.sh). */
-export function whisperPaths(appRoot: string) {
-  const dir = path.join(appRoot, "vendor/whisper.cpp");
-  return { bin: path.join(dir, "build/bin/whisper-server"), model: path.join(dir, "models/ggml-base.en.bin") };
-}
-
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer().listen(0, "127.0.0.1", () => {
@@ -29,9 +23,10 @@ function freePort(): Promise<number> {
   });
 }
 
-export async function startWhisper(appRoot: string): Promise<Whisper> {
-  const { bin, model } = whisperPaths(appRoot);
-  if (!existsSync(bin) || !existsSync(model)) throw new Error("Speech recognition isn't set up. Run `npm run setup:whisper` in desktop/.");
+export async function startWhisper(): Promise<Whisper> {
+  const { bin, model } = whisperPaths();
+  if (!existsSync(bin)) throw new Error("Speech recognition is missing from this install. Reinstall Peguin, or run `npm run setup:whisper` in desktop/.");
+  if (!existsSync(model)) throw new Error("The speech model hasn't finished downloading yet.");
   const port = await freePort();
   const proc = spawn(bin, ["-m", model, "--host", "127.0.0.1", "--port", String(port), "-l", "en"], { stdio: "ignore" });
   const url = `http://127.0.0.1:${port}`;

@@ -41,6 +41,8 @@ Respond loop built in the spike: page audio → 16 kHz PCM → energy-gated utte
 
 **Phase 2: accounts, billing, server-side Claude.** `cloud/` Worker + D1 (email link and Google sign-in, desktop PKCE sign-in via `peguin://`, Stripe checkout, portal and webhooks, Ed25519 licences, `/api/draft` and `/api/answer` on claude-opus-5 with refusal fallbacks and daily caps), verified locally with a 25-step end-to-end script. `web/` site (landing, pricing, sign-in, account, app hand-off), served by the Worker. Desktop: Account section (sign in through the browser, plan status, sign out), app token in the OS keychain, offline licence check; drafting and answers use the account when subscribed, else the Claude CLI. 46 tests pass. Not yet: deployed; real Stripe, Google, Resend and Anthropic keys; desktop-to-cloud sign-in run in a browser; pricing is a placeholder.
 
+**Live and packaged (2026-10-07).** Cloud deployed to www.peguin.co (peguin.co redirects), production D1 migrated, licence key set. Product renamed Peguin; $5/month. macOS installer builds (`npm run dist:mac`, ad-hoc signed, arm64) with the Peguin icon, menu bar icon, bundled static whisper-server and first-run model download; verified by launching the packaged app. Waiting on: Stripe, Google OAuth, Resend, Anthropic key; Apple Developer ID.
+
 ## Next (desktop)
 
 1. Teams: ACS prototype (needs an Azure account)

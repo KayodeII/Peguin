@@ -26,6 +26,7 @@ export function App() {
   const [next, setNext] = useState<{ label: string } | null>(null);
   const [toast, setToast] = useState("");
   const [account, setAccount] = useState<Account | null>(null);
+  const [model, setModel] = useState<{ progress: number; error?: string } | null>(null);
 
   const refreshNext = useCallback(() => { void window.penguin.nextStandup().then(setNext); }, []);
 
@@ -39,6 +40,7 @@ export function App() {
       if (e.kind === "draft") setDraft({ draft: e.draft, preparing: e.preparing, error: e.error });
       if (e.kind === "log") setToast(e.text);
       if (e.kind === "account") { setAccount(e.account); if (e.error) setToast(e.error); }
+      if (e.kind === "model") setModel(e.progress >= 1 && !e.error ? null : { progress: e.progress, error: e.error });
       if (e.kind === "meeting") {
         setLive((prev) => ({
           status: e.event.kind === "status" ? e.event.status : prev.status,
@@ -99,6 +101,18 @@ export function App() {
               {n.id === "live" && inCall && <span className="live-pill">LIVE</span>}
             </button>
           ))}
+          {model && (
+            <>
+              <p className="side-label">Speech recognition</p>
+              <div className="side-card">
+                {model.error ? <span className="warn">{model.error}</span> : <>
+                  <strong>Downloading {Math.round(model.progress * 100)}%</strong>
+                  <div className="progress"><i style={{ width: `${Math.round(model.progress * 100)}%` }} /></div>
+                  <span>One time, about 150 MB</span>
+                </>}
+              </div>
+            </>
+          )}
           <p className="side-label">Next standup</p>
           <div className="side-card">
             {settings.standup.url

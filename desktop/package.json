@@ -2,7 +2,7 @@
   "name": "penguin-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Peguin desktop app: covers your standup when you're double-booked.",
+  "description": "Peguin covers your standup when you're double-booked.",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
@@ -13,7 +13,9 @@
     "dev": "node scripts/dev.mjs",
     "start": "npm run build && electron .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "setup:whisper": "bash scripts/setup-whisper.sh"
+    "setup:whisper": "bash scripts/setup-whisper.sh",
+    "icons": "electron scripts/icons.cjs && bash scripts/icns.sh && node scripts/tray.mjs",
+    "dist:mac": "npm run build && bash scripts/build-whisper-release.sh && electron-builder --mac --arm64"
   },
   "dependencies": {
     "zod": "^4.6.5"
@@ -24,10 +26,71 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^44.6.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.3"
+  },
+  "productName": "Peguin",
+  "author": "Peguin",
+  "build": {
+    "appId": "co.peguin.app",
+    "productName": "Peguin",
+    "copyright": "\u00a9 Peguin",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/meeting-inject.js",
+        "to": "meeting-inject.js"
+      },
+      {
+        "from": "resources/trayTemplate.png",
+        "to": "trayTemplate.png"
+      },
+      {
+        "from": "resources/trayTemplate@2x.png",
+        "to": "trayTemplate@2x.png"
+      },
+      {
+        "from": "build/whisper/whisper-server",
+        "to": "whisper/whisper-server"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "Peguin",
+        "schemes": [
+          "peguin"
+        ]
+      }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "minimumSystemVersion": "12.0"
+    },
+    "dmg": {
+      "title": "Peguin ${version}",
+      "artifactName": "Peguin-${version}-mac-${arch}.${ext}"
+    }
   }
 }

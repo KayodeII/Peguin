@@ -23,4 +23,13 @@ Layout:
 - `src/renderer/`: the preferences window (React)
 - `resources/meeting-inject.js`: runs inside the meeting page: Peguin's mic and camera, audio tap, per-platform join drivers
 
-Not yet: Peguin account sign-in and connections (needs the Cloudflare Worker), packaging and signing, Piper TTS (macOS `say` for now), Windows tray icon. Dev aids: `PENGUIN_SNAPSHOT=file.png` saves a picture of the window and quits; `PENGUIN_USER_DATA=dir` uses a separate profile. Logic tests live in the root `test/desktop.test.ts`.
+## Installer
+
+```bash
+npm run dist:mac   # builds the app, a static whisper-server (scripts/build-whisper-release.sh) and release/Peguin-<version>-mac-arm64.dmg
+npm run icons      # regenerate build/icon.icns and the menu bar template icon
+```
+
+The DMG is ad-hoc signed (runs, but macOS asks the user to confirm on first open) until there's an Apple Developer ID for signing and notarization. The speech model (~150 MB) downloads on first run into the app-data folder, with progress in the sidebar. Apps opened from Finder get the login shell's PATH (`fixPath`), so git, gh and claude are found.
+
+Not yet: Developer ID signing and notarization, auto-update, Piper TTS (macOS `say` for now), Windows. Dev aids: `PENGUIN_SNAPSHOT=file.png` saves a picture of the window and quits; `PENGUIN_USER_DATA=dir` uses a separate profile. Logic tests live in the root `test/desktop.test.ts`.

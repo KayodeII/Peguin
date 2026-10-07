@@ -1,17 +1,18 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Tray } from "electron";
 import { existsSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { completeSignIn, refreshAccount, signOut, startSignIn, type Account } from "./account.js";
 import { answerQuestion, isFresh, loadDraft, prepareDraft, type Draft } from "./brain.js";
 import { meetingPaths, MeetingRunner, type MeetingEvent } from "./meeting/runner.js";
 import { nextStandup, startScheduler } from "./scheduler.js";
 import { loadSettings, saveSettings } from "./settings.js";
+import { fixPath, outDir, resource } from "./paths.js";
+import { ensureModel } from "./speech/model.js";
 import { startWhisper, type Whisper } from "./speech/whisper.js";
 
-const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."); // out/
-const appRoot = path.resolve(outDir, "..");                                        // desktop/
 const rendererUrl = process.env.PENGUIN_RENDERER_URL; // set by `npm run dev`
+
+fixPath();
 
 // Meeting windows are hidden; don't let Chromium pause them.
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
@@ -46,11 +47,12 @@ export type AppEvent =
   | { kind: "meeting"; event: MeetingEvent }
   | { kind: "draft"; draft: Draft | null; preparing: boolean; error?: string }
   | { kind: "log"; text: string }
-  | { kind: "account"; account: Account | null; error?: string };
+  | { kind: "account"; account: Account | null; error?: string }
+  | { kind: "model"; progress: number; error?: string };
 
 function send(e: AppEvent) {
   if (win && !win.isDestroyed()) win.webContents.send("app:event", e);
-  if (e.kind === "meeting" && e.event.kind === "status") tray?.setTitle(e.event.status === "in_call" ? "🐧●" : "🐧");
+  if (e.kind === "meeting" && e.event.kind === "status") tray?.setTitle(e.event.status === "in_call" ? " ●" : "");
 }
 
 /** Matches the theme so the window doesn't flash a different colour while loading. */
@@ -100,9 +102,10 @@ async function join(url: string) {
     send({ kind: "log", text: "Preparing today's update before joining…" });
     draft = await prepare().catch(() => draft); // join anyway: Peguin says the update will follow
   }
-  whisper ??= startWhisper(appRoot);
+  await speechModel();
+  whisper ??= startWhisper();
   whisper.catch(() => { whisper = null; });
-  const runner = new MeetingRunner(url, settings, await whisper, meetingPaths(appRoot, outDir), {
+  const runner = new MeetingRunner(url, settings, await whisper, meetingPaths(), {
     draft,
     answer: (q, recent) => answerQuestion(settings, draft, q, recent),
   });
@@ -115,6 +118,12 @@ async function join(url: string) {
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Download the speech model if needed, reporting progress to the window. */
+function speechModel(): Promise<void> {
+  return ensureModel((progress) => send({ kind: "model", progress }))
+    .catch((e) => { send({ kind: "model", progress: 0, error: message(e) }); throw e; });
+}
 
 let account: Account | null = null;
 async function updateAccount(fn: () => Promise<Account | null>) {
@@ -140,8 +149,9 @@ ipcMain.handle("account:signin", () => startSignIn());
 ipcMain.handle("account:signout", () => updateAccount(async () => { await signOut(); return null; }));
 
 app.whenReady().then(() => {
-  tray = new Tray(nativeImage.createEmpty());
-  tray.setTitle("🐧"); // macOS menu bar; a proper icon comes with packaging
+  const icon = nativeImage.createFromPath(resource("trayTemplate.png"));
+  icon.setTemplateImage(true); // macOS tints it for light and dark menu bars
+  tray = new Tray(icon);
   tray.setToolTip("Peguin");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "Open Peguin", click: openWindow },
@@ -151,6 +161,7 @@ app.whenReady().then(() => {
     { label: "Quit Peguin", role: "quit" },
   ]));
   openWindow();
+  void speechModel().catch(() => {});
   void updateAccount(refreshAccount);
   setInterval(() => void updateAccount(refreshAccount), 6 * 3600 * 1000);
   startScheduler({

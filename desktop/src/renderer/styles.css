@@ -196,3 +196,6 @@ label input, label select { text-transform: none; font-weight: 400; letter-spaci
 .accent-dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; box-shadow: inset 0 0 0 2px var(--main); }
 .accent-dot.on { border-color: var(--ink-strong); }
 .icon-btn.on { background: var(--active); color: var(--ink-strong); }
+.progress { height: 6px; border-radius: 3px; background: var(--active); overflow: hidden; margin: 6px 0 4px; }
+.progress i { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.side-card .warn { color: var(--yellow); }
