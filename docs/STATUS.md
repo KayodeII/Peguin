@@ -27,7 +27,22 @@ Last updated: 2026-10-06
 - Attendee webhook payload field names (parsed defensively; confirm against a real event)
 - Deepgram model names `nova-3` / `aura-2-thalia-en` on the owner's account
 
-## Next
+## Direction change (2026-10-06)
+
+Moving to desktop-first (see `docs/DECISIONS.md`). Spike in `spikes/meet-join/` **passed in a real Meet** (owner on phone, Penguin on the Mac): it joins as a guest named "(AI)", is admitted, speaks a line heard on the phone, and taps the other participants' audio (3 remote tracks, speech detected). Learned: Meet admits guests muted, so Penguin must click "Turn on microphone"; Penguin's window must be muted locally or it echoes on the host machine. Chromium logs a harmless BUNDLE codec-collision warning during setup.
+
+Teams and Zoom drivers added to the spike. Teams (browser guest join) reaches the meeting lookup on a fake link, but **browser automation for Teams is dropped** after the owner's Microsoft account was locked during testing. Teams moves to Azure Communication Services (see DECISIONS). Zoom browser client **passed in a real meeting** (owner hosting on phone): fills "Your Name" itself (found by label; the field has no placeholder), joins as "Mujeeb (AI)", turns on audio and video, and speaks. Zoom feature pop-ups ("Got it") have to be dismissed.
+
+## Next (desktop)
+
+1. Teams: ACS prototype (needs an Azure account)
+2. Respond loop in the spike: remote audio → 16 kHz utterances → whisper.cpp → `TurnDetector` → spoken update or deferral
+3. Ports refactor: `domain/`, `application/`, `ports/`, `adapters/`
+4. Electron app skeleton (TypeScript), whisper.cpp + Piper adapters, SQLite
+5. License Worker on Cloudflare (Stripe, Ed25519 tokens, server-side Claude, ACS tokens for Teams)
+6. Zoom Meeting SDK (Marketplace approval) to replace the browser client
+
+## Next (server, paused)
 
 1. First live test: one Zoom or Meet call with Recall, `POST /v1/users/:id/meetings`
 2. Tune `turn.ts` on real transcripts (log decisions, then add cases to tests)

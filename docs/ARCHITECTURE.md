@@ -1,5 +1,27 @@
 # Architecture
 
+> **Direction change (2026-10-06):** Penguin is moving to a desktop app that runs the bot on the user's own machine, with a small Cloudflare Worker for accounts and licenses. See `docs/DECISIONS.md`. The target layout is below. The rest of this file describes the current server implementation, which stays as an optional adapter set while the migration happens.
+
+## Target: desktop app plus license server
+
+```
+User's machine (Electron)                          Cloudflare (owner's domain)
+┌───────────────────────────────────────┐          ┌───────────────────────────┐
+│ Scheduler + calendar conflict check   │          │ Worker: auth, Stripe hook │
+│ Prep: GitHub/Linear/Jira → facts      │─HTTPS───►│   license tokens (Ed25519)│
+│ Hidden Chromium window in the meeting │          │   Claude draft/follow-up  │
+│   getUserMedia → Penguin voice+avatar │          │ D1 (accounts, subs)       │
+│   WebRTC remote tracks → STT          │          │ R2 (installers), Pages    │
+│ whisper.cpp STT · Piper TTS           │          └───────────────────────────┘
+│ TurnDetector (domain, pure)           │
+│ SQLite                                │
+└───────────────────────────────────────┘
+```
+
+The code is organized as ports and adapters: `domain/` (meeting state machine, turn detection, draft rules), `application/` (use cases), `ports/` (interfaces) and `adapters/`. The same use cases run on the desktop adapters (local Chromium, whisper.cpp, Piper, SQLite) or the server adapters (Recall/Attendee, Deepgram, Postgres, BullMQ).
+
+# Current server implementation
+
 ## Services
 
 One codebase and one Docker image, run as three processes. Each scales on its own.

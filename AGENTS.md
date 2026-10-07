@@ -7,6 +7,10 @@ Read next, in this order, when the task needs it:
 - `docs/DECISIONS.md`: why things are the way they are (platform research, vendor choices). Check here before proposing a different approach.
 - `docs/STATUS.md`: what's built, what's tested, what's not, what's next
 
+## Direction (2026-10-06)
+
+Penguin is moving to a **desktop app** (Electron) that runs the bot on the user's machine, plus a small Cloudflare Worker for accounts, Stripe and license tokens. The server stack under `src/` stays as optional adapters during the migration. Read the DECISIONS entry before changing structure. Throwaway experiments live in `spikes/` and are not part of the build.
+
 ## What Penguin is
 
 An AI standup assistant. It sends a bot into the owner's daily standup on **Zoom, Google Meet or Microsoft Teams**. The bot waits until someone hands the floor to the owner by name, then speaks the owner's update aloud. It answers short follow-ups using only prepared facts and posts a recap to Slack afterwards. The update is drafted before the meeting from GitHub, Linear and Jira activity.
@@ -15,7 +19,7 @@ Owner: Mujeeb Adebowale, senior backend/full-stack engineer (TypeScript, Node, G
 
 ## Non-negotiables
 
-1. **Penguin always discloses it's an AI** before speaking (`disclosure()` in `src/core/brain/claude.ts`), and the bot name ends in `(AI)`. Never remove or make this optional.
+1. **Penguin always discloses it's an AI** before speaking (`disclosure()` in `src/core/brain/claude.ts`), and the bot name ends in `(AI)` (on Teams, which forbids parentheses in guest names, ` - AI`). Never remove or make this optional.
 2. **Never invent facts in the meeting.** Follow-up answers come only from the prepared `draft.facts`; otherwise Penguin defers to the owner. Keep prompts strict about this.
 3. **All platforms go through the provider interface** (`src/core/providers/types.ts`). No platform-specific code outside a provider adapter.
 4. **Services stay stateless across nodes.** A live meeting's in-memory state lives only on the realtime node holding its WebSocket. Anything durable goes to Postgres, and anything cross-node goes through Redis. No sticky sessions.

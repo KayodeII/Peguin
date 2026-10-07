@@ -1,0 +1,14 @@
+{
+  "name": "penguin-meet-spike",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Spike: can an Electron window join a Google Meet as a guest, speak into it and hear it?",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^44.5.1"
+  }
+}

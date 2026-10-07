@@ -2,6 +2,35 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: Official SDKs for Teams and Zoom; strict join pacing
+
+During Teams spike testing (about six automated guest joins to a fake meeting within minutes, from the owner's IP), the owner's personal Microsoft account was locked for "activity that goes against the Microsoft Services Agreement". The spike never signed in, so the cause is unconfirmed, but platforms clearly detect and act against bot-like joins, and users' accounts and IPs must not be put at risk.
+
+Decision:
+- **Teams:** join through **Azure Communication Services** (ACS), Microsoft's supported way for an external app to join a Teams meeting as a guest with a custom name, sending and receiving audio. The ACS web Calling SDK runs inside the Electron app, so the desktop architecture is unchanged. It's billed per minute (a few cents per standup; check current pricing), so it goes through the server and is covered by the subscription.
+- **Zoom:** the browser-client approach for the spike; the **Zoom Meeting SDK** for production. That needs Zoom Marketplace approval for joining meetings outside our own account.
+- **Google Meet:** browser guest join (no official route that can speak; see the first entry). Keep it, and watch for enforcement.
+- **Join rules for every driver:** one join click per 15 s, at most 3 per meeting, no retry loops. Never sign in to any account inside Penguin's window (sign-in pages are blocked). Test against real meetings only, one join per test.
+
+## 2026-10-07: Bot name suffix is " - AI" on Teams
+
+Teams guest names allow only letters, numbers, spaces and `- ' . _ @`; "Mujeeb (AI)" leaves "Join now" disabled. On Teams the name is "Mujeeb - AI"; everywhere else it stays "Mujeeb (AI)". The spoken disclosure is unchanged.
+
+## 2026-10-06: Desktop-first; each user's machine runs the bot
+
+Context: the main use case is covering a standup when the owner is double-booked, so their computer is already on and in a call. Recall, Deepgram and a hosted cluster all charge per use; running on the user's machine makes running costs close to zero.
+
+Decision:
+- **Penguin becomes an Electron app.** A hidden Chromium window joins the meeting's web client as a guest named "<owner> (AI)". It replaces `getUserMedia` with Penguin's voice and an avatar, and taps the other participants' WebRTC audio tracks. This is the same technique Recall and Attendee use, run locally. Electron rather than Tauri, because we need our own Chromium to inject audio.
+- **Local speech:** whisper.cpp (STT) and Piper (TTS). Local storage: SQLite. A local scheduler replaces BullMQ.
+- **A small server on the owner's Cloudflare domain:** a Worker for accounts, Stripe subscription webhooks and signed license tokens (Ed25519, about 30 days, with offline grace), plus D1, and R2 for installers. Drafting with Claude stays server-side, so the API key never ships in the client and the paid feature can't be cracked away.
+- **Live follow-ups:** answered by Claude through the server when subscribed and online. Otherwise Penguin defers to the owner (`FOLLOWUPS=defer`); a small local model never answers live questions (non-negotiable 2).
+- **Kept as optional adapters, not the default:** the current server stack (Recall/Attendee, Deepgram, BullMQ, Postgres).
+
+Costs: Apple Developer Program for notarization and a Windows code-signing certificate before distribution; Stripe fees on revenue; a few cents of Claude per user. Local development needs neither signing nor paid keys.
+
+Order: (1) spike that Electron can join Meet, speak and hear (`spikes/meet-join/`); (2) ports refactor (domain and use cases independent of vendors); (3) Electron app skeleton; (4) license Worker; (5) Teams and Zoom web clients.
+
 ## 2026-10-06: Use a meeting-bot provider instead of native platform APIs
 
 Research (October 2026):
