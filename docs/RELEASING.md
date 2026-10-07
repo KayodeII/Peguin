@@ -1,10 +1,12 @@
 # Releasing the Mac app
 
-1. Bump the version in `desktop/package.json` (for example `cd desktop && npm version 0.2.0 --no-git-tag-version`) and commit it to `main`.
-2. Tag that commit and push the tag:
+1. Merge what's going out into `main`, then from an up-to-date `main`:
    ```bash
-   git tag v0.2.0 && git push origin v0.2.0
+   npm run release -- patch        # or minor, major, or an exact version like 0.3.0
+   git push origin main --follow-tags
    ```
+   The script refuses to run off `main`, with uncommitted changes, or when `main` differs from `origin/main`. It bumps `desktop/package.json` (and its lockfile), commits `Release vX.Y.Z` and tags `vX.Y.Z`.
+2. Pick the bump by what changed since the last release: patch for fixes, minor for new features, major for breaking changes.
 3. `.github/workflows/release.yml` builds the .dmg on an Apple silicon runner (bundling a static whisper.cpp at the pinned commit) and publishes a GitHub Release with:
    - `Peguin-0.2.0-mac-arm64.dmg`
    - `Peguin-mac-arm64.dmg` (same file, stable name)

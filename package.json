@@ -18,7 +18,8 @@
     "start:worker": "node dist/worker/main.js",
     "start:migrate": "node dist/core/migrate.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "release": "tsx scripts/release.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
