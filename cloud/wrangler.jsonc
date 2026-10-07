@@ -4,6 +4,11 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
+  // www.peguin.co is canonical; the bare domain redirects to it (src/index.ts).
+  "routes": [
+    { "pattern": "www.peguin.co", "custom_domain": true },
+    { "pattern": "peguin.co", "custom_domain": true }
+  ],
   // The website (../web) is served from the same Worker and origin as the API.
   "assets": {
     "directory": "../web/dist",
@@ -14,7 +19,7 @@
     { "binding": "DB", "database_name": "penguin", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" }
   ],
   "vars": {
-    "APP_ORIGIN": "http://localhost:8787",
+    "APP_ORIGIN": "https://www.peguin.co", // .dev.vars overrides this to http://localhost:8787
     "CLAUDE_MODEL": "claude-opus-5",
     "TRIAL_DAYS": "14",
     "DRAFTS_PER_DAY": "20",

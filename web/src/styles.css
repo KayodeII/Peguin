@@ -1,14 +1,14 @@
 :root {
-  --bg: #1e1f22; --panel: #2b2d31; --raised: #313338; --line: #3f4147;
-  --ink: #dbdee1; --strong: #f2f3f5; --muted: #949ba4;
-  --accent: #5b67f1; --accent-hover: #4752c4; --red: #f23f43; --green: #23a55a;
-  color-scheme: dark;
+  --bg: #ffffff; --panel: #f7f7f5; --raised: #efefee; --line: #e9e9e7;
+  --ink: #37352f; --strong: #191919; --muted: #787774;
+  --accent: #2383e2; --accent-hover: #1a6fc4; --red: #d44c47; --green: #448361;
+  color-scheme: light;
 }
-@media (prefers-color-scheme: light) {
-  :root { --bg: #f6f7f9; --panel: #ffffff; --raised: #eef0f3; --line: #dfe2e7; --ink: #2e3338; --strong: #060607; --muted: #5c6370; color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #191919; --panel: #202020; --raised: #2c2c2c; --line: #2f2f2f; --ink: #d4d4d4; --strong: #f0f0f0; --muted: #9b9b9b; --green: #4dab9a; --red: #df5452; color-scheme: dark; }
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 "Noto Sans", ui-sans-serif, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 a { color: inherit; }
 h1 { color: var(--strong); font-size: clamp(32px, 5vw, 52px); line-height: 1.1; letter-spacing: -0.02em; margin: 16px 0 12px; }
 h3 { color: var(--strong); margin: 0 0 6px; font-size: 17px; }
@@ -37,12 +37,12 @@ main { min-height: calc(100vh - 140px); padding: 0 20px; }
 .fine { font-size: 14px; color: var(--muted); margin-top: 18px; }
 
 .steps { max-width: 1000px; margin: 48px auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.steps > div { background: var(--panel); border-radius: 10px; padding: 22px; }
+.steps > div { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 22px; }
 .steps span { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; font-size: 14px; margin-bottom: 12px; }
 .steps p { margin: 0; color: var(--muted); }
 
 .quote { max-width: 760px; margin: 0 auto 72px; }
-.bubble { background: var(--panel); border-radius: 10px; padding: 18px 22px; border-left: 4px solid var(--accent); }
+.bubble { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 18px 22px; }
 .bubble .who { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .bubble strong { color: var(--strong); }
 .bubble em { font-style: normal; font-size: 10px; font-weight: 700; background: var(--accent); color: #fff; padding: 1px 5px; border-radius: 3px; }
@@ -50,7 +50,7 @@ main { min-height: calc(100vh - 140px); padding: 0 20px; }
 
 .narrow { max-width: 440px; margin: 56px auto; }
 .center { text-align: center; }
-.card { background: var(--panel); border-radius: 10px; padding: 20px; margin: 16px 0; text-align: left; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 20px; margin: 16px 0; text-align: left; }
 .card p { margin: 0 0 14px; color: var(--muted); }
 .plan .price { font-size: 18px; color: var(--muted); margin-bottom: 12px; }
 .plan .price strong { font-size: 44px; color: var(--strong); letter-spacing: -0.02em; }

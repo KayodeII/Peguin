@@ -2,6 +2,11 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: Notion-style themes; domain www.peguin.co
+
+- **Desktop look:** Discord's layout with Notion's colour and type by default. Themes in Settings → Appearance: System (follows the OS between Notion light and dark), Light, Dark, Midnight (Discord dark), plus five accents. Appearance saves instantly. Settings opens from one gear, in the user panel.
+- **Domain:** `https://www.peguin.co` is canonical and `peguin.co` redirects to it. The domain is spelled "peguin"; the product stays "Penguin". Installed builds talk to www.peguin.co; running from source talks to the local Worker unless `PENGUIN_CLOUD_URL` is set.
+
 ## 2026-10-07: One Cloudflare Worker for the website and the API
 
 `cloud/` is a single Worker with D1. It serves the website (`web/dist`, Workers static assets, Cloudflare's successor to Pages) and the API on one origin, so session cookies stay first-party and there's one deploy.

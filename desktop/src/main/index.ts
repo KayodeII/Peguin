@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Tray } from "electron";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,15 +46,22 @@ function send(e: AppEvent) {
   if (e.kind === "meeting" && e.event.kind === "status") tray?.setTitle(e.event.status === "in_call" ? "🐧●" : "🐧");
 }
 
+/** Matches the theme so the window doesn't flash a different colour while loading. */
+function windowBackground(): string {
+  const t = loadSettings().appearance.theme;
+  const dark = t === "dark" || (t === "system" && nativeTheme.shouldUseDarkColors);
+  return t === "midnight" ? "#313338" : dark ? "#191919" : "#ffffff";
+}
+
 function openWindow() {
   if (win && !win.isDestroyed()) { win.show(); win.focus(); return; }
   win = new BrowserWindow({
     width: 1180, height: 760, minWidth: 900, minHeight: 600, title: "Penguin", show: false,
-    backgroundColor: "#1e1f22", titleBarStyle: "hiddenInset", trafficLightPosition: { x: 14, y: 14 },
+    backgroundColor: windowBackground(), titleBarStyle: "hiddenInset", trafficLightPosition: { x: 14, y: 14 },
     webPreferences: { preload: path.join(outDir, "preload/app.cjs"), sandbox: true, contextIsolation: true },
   });
   if (rendererUrl) void win.loadURL(rendererUrl);
-  else void win.loadFile(path.join(outDir, "renderer/index.html"));
+  else void win.loadFile(path.join(outDir, "renderer/index.html"), { hash: process.env.PENGUIN_VIEW ?? "" });
   // Come to the front on launch, even when started from a terminal.
   win.once("ready-to-show", () => { win?.show(); app.focus({ steal: true }); });
   win.on("closed", () => { win = null; });

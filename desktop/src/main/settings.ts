@@ -23,6 +23,10 @@ export const Settings = z.object({
     github: z.boolean().default(true),
     claude_code: z.boolean().default(true),
   }).default({ git: true, github: true, claude_code: true }),
+  appearance: z.object({
+    theme: z.enum(["system", "light", "dark", "midnight"]).default("system"),
+    accent: z.enum(["blue", "purple", "green", "orange", "pink"]).default("blue"),
+  }).default({ theme: "system", accent: "blue" }),
   voice: z.enum(["default"]).default("default"),
   runHidden: z.boolean().default(true),
   onboarded: z.boolean().default(false),

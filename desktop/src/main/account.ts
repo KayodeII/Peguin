@@ -7,7 +7,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { PromptActivity } from "../../../src/core/brain/prompts.js";
 
-export const CLOUD_URL = (process.env.PENGUIN_CLOUD_URL ?? "http://localhost:8787").replace(/\/$/, "");
+/** Production for installed builds; the local Worker (cd cloud && npm run dev) when running from source. */
+export const CLOUD_URL = (process.env.PENGUIN_CLOUD_URL ?? (app.isPackaged ? "https://www.peguin.co" : "http://localhost:8787")).replace(/\/$/, "");
 
 /** Public half of the licence key (cloud: npm run keys:license). Replace with the production key at deploy. */
 const LICENSE_PUBLIC_JWK: JsonWebKey = { kty: "OKP", crv: "Ed25519", x: "9zqCksjEbfm0DIFzx5hv9P7iZuYsz5iQEi5kgFAEmTs" };

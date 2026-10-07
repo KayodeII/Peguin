@@ -43,6 +43,7 @@ function csrfOk(req: Request, path: string): boolean {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
+    if (url.hostname === "peguin.co") return Response.redirect(`https://www.peguin.co${url.pathname}${url.search}`, 301);
     const route = routes[`${req.method} ${url.pathname}`];
     if (!route) {
       if (/^\/(api|auth|app|webhooks)\//.test(url.pathname)) return json({ error: "Not found." }, 404);

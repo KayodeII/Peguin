@@ -20,7 +20,7 @@ export type LiveState = { status: MeetingStatus; detail?: string; events: Meetin
 
 export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [view, setView] = useState<View>("today");
+  const [view, setView] = useState<View>(() => (["today", "live", "sources", "settings"].includes(location.hash.slice(1)) ? location.hash.slice(1) as View : "today"));
   const [draft, setDraft] = useState<DraftState>({ draft: null, preparing: false });
   const [live, setLive] = useState<LiveState>({ status: "ended", events: [] });
   const [next, setNext] = useState<{ label: string } | null>(null);
@@ -52,6 +52,18 @@ export function App() {
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(""), 4000); return () => clearTimeout(t); }, [toast]);
 
+  // Theme: "system" follows the OS between Notion light and dark.
+  const theme = settings?.appearance.theme ?? "system";
+  const accent = settings?.appearance.accent ?? "blue";
+  useEffect(() => {
+    const media = matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => { document.documentElement.dataset.theme = theme === "system" ? (media.matches ? "dark" : "light") : theme; };
+    apply();
+    document.documentElement.dataset.accent = accent;
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme, accent]);
+
   if (!settings) return <div className="boot"><Logo size={48} /></div>;
 
   const save = async (s: Settings) => {
@@ -75,8 +87,6 @@ export function App() {
             {n.id === "live" && inCall && <span className="badge" />}
           </button>
         ))}
-        <div className="rail-spacer" />
-        <button className={`rail-btn ${view === "settings" ? "active" : ""}`} onClick={() => setView("settings")} title="Settings" aria-label="Settings"><Icon name="settings" /></button>
       </nav>
 
       <aside className="sidebar">
@@ -99,7 +109,7 @@ export function App() {
         <footer className="userbar">
           <Avatar name={settings.displayName} />
           <div className="who"><strong>{settings.displayName || "Your name"}</strong><span className={inCall ? "online" : ""}>{statusLine}</span></div>
-          <button className="icon-btn" onClick={() => setView("settings")} title="Settings" aria-label="Settings"><Icon name="settings" size={18} /></button>
+          <button className={`icon-btn ${view === "settings" ? "on" : ""}`} onClick={() => setView("settings")} title="Settings" aria-label="Settings"><Icon name="settings" size={18} /></button>
         </footer>
       </aside>
 

@@ -158,7 +158,9 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
   const [s, setS] = useState(settings);
   const [aliases, setAliases] = useState(settings.aliases.join(", "));
   const [error, setError] = useState("");
-  useEffect(() => { setS(settings); setAliases(settings.aliases.join(", ")); }, [settings]);
+  // Appearance saves instantly; keep other unsaved edits when it does.
+  useEffect(() => { setS((prev) => ({ ...prev, appearance: settings.appearance })); }, [settings.appearance]);
+  const setAppearance = (a: Partial<Settings["appearance"]>) => void save({ ...settings, appearance: { ...settings.appearance, ...a } });
   const next = { ...s, aliases: [...new Set(aliases.split(",").map((a) => a.trim()).filter(Boolean))].slice(0, 10) };
   const dirty = JSON.stringify(next) !== JSON.stringify(settings);
   const timezones = Intl.supportedValuesOf("timeZone");
@@ -195,6 +197,22 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
           <Toggle on={st.auto} onChange={(v) => setStandup({ auto: v })} label="Join automatically" />
         </div>
 
+        <h3 className="section-label">Appearance</h3>
+        <div className="themes" role="radiogroup" aria-label="Theme">
+          {THEMES.map((t) => (
+            <button key={t.id} role="radio" aria-checked={settings.appearance.theme === t.id} className={`theme-opt ${settings.appearance.theme === t.id ? "on" : ""}`} onClick={() => setAppearance({ theme: t.id })}>
+              <div className={`swatch ${t.id === "system" ? "system" : ""}`} style={t.vars}><i /><i />{t.id === "system" && <i style={{ background: "#191919" }} />}</div>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="accents" role="radiogroup" aria-label="Accent colour">
+          {ACCENTS.map((a) => (
+            <button key={a.id} role="radio" aria-checked={settings.appearance.accent === a.id} aria-label={a.id} title={a.id}
+              className={`accent-dot ${settings.appearance.accent === a.id ? "on" : ""}`} style={{ background: a.color }} onClick={() => setAppearance({ accent: a.id })} />
+          ))}
+        </div>
+
         <h3 className="section-label">Voice</h3>
         <div className="row-card"><div className="row-main"><strong>Default voice</strong><p>Your own voice: coming soon.</p></div><span className="tag">Active</span></div>
 
@@ -210,12 +228,22 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
         <div className="savebar">
           <span>Unsaved changes</span>
           <button className="btn link" onClick={() => { setS(settings); setAliases(settings.aliases.join(", ")); }}>Reset</button>
-          <button className="btn success" onClick={() => { setError(""); save(next).catch((e) => setError(message(e))); }}>Save changes</button>
+          <button className="btn success" onClick={() => { setError(""); save(next).then((saved) => { setS(saved); setAliases(saved.aliases.join(", ")); }).catch((e) => setError(message(e))); }}>Save changes</button>
         </div>
       )}
     </>
   );
 }
+
+const THEMES: { id: Settings["appearance"]["theme"]; label: string; vars: Record<string, string> }[] = [
+  { id: "system", label: "System", vars: { "--sw-side": "#f7f7f5", "--sw-main": "#ffffff", "--sw-ink": "#37352f" } },
+  { id: "light", label: "Light", vars: { "--sw-side": "#f7f7f5", "--sw-main": "#ffffff", "--sw-ink": "#37352f" } },
+  { id: "dark", label: "Dark", vars: { "--sw-side": "#202020", "--sw-main": "#191919", "--sw-ink": "#d4d4d4" } },
+  { id: "midnight", label: "Midnight", vars: { "--sw-side": "#2b2d31", "--sw-main": "#313338", "--sw-ink": "#dbdee1" } },
+];
+const ACCENTS: { id: Settings["appearance"]["accent"]; color: string }[] = [
+  { id: "blue", color: "#2383e2" }, { id: "purple", color: "#9065b0" }, { id: "green", color: "#448361" }, { id: "orange", color: "#d9730d" }, { id: "pink", color: "#c14c8a" },
+];
 
 const PLAN: Record<string, string> = { active: "Active", trialing: "Free trial", past_due: "Payment failed", canceled: "Canceled" };
 
