@@ -43,6 +43,8 @@ export function Home() {
 
       <section id="features" data-bg={BG.butter}><Transform /></section>
 
+      <AppShowcase />
+
       <section className="section" data-bg={BG.white}><FeatureRows /></section>
 
       <section data-bg={BG.mint}>
@@ -90,7 +92,6 @@ export function Home() {
         <Faq />
       </section>
 
-      <AppShowcase />
     </>
   );
 }
