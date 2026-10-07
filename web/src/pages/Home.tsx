@@ -1,4 +1,5 @@
-import { VoiceRings, Waveforms } from "../components/Backgrounds";
+import { AppShowcase } from "../components/AppDemo";
+import { Waveforms } from "../components/Backgrounds";
 import { Hero, Marquee } from "../components/Hero";
 import { MeetingDemo } from "../components/MeetingDemo";
 import { Morning } from "../components/Morning";
@@ -89,17 +90,7 @@ export function Home() {
         <Faq />
       </section>
 
-      <section className="final" data-bg={BG.white}>
-        <VoiceRings />
-        <div className="final-inner">
-          <Rise text="Next time standup clashes with something, send Peguin." />
-          <p data-reveal>It takes about two minutes to set up, and the first {TRIAL_DAYS} days are free.</p>
-          <div className="cta center" data-reveal>
-            <Link to="/signin?next=/account" className="btn big light">Try it free</Link>
-            <Link to="/pricing" className="btn big outline-light">See pricing <Icon name="arrow" size={16} /></Link>
-          </div>
-        </div>
-      </section>
+      <AppShowcase />
     </>
   );
 }
