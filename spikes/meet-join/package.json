@@ -1,0 +1,16 @@
+{
+  "name": "penguin-meet-spike",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Spike: can an Electron window join a Google Meet as a guest, speak into it and hear it?",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "prestart": "esbuild ../../src/realtime/turn.ts --format=esm --platform=node --outfile=gen/turn.js --log-level=warning"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "esbuild": "^0.28.2"
+  }
+}

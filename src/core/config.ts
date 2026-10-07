@@ -33,7 +33,7 @@ const Env = z.object({
 
   // AI
   ANTHROPIC_API_KEY: z.string().optional(),
-  CLAUDE_MODEL: z.string().default("claude-sonnet-5-5"),
+  CLAUDE_MODEL: z.string().default("claude-opus-5"),
   // Speech (Deepgram: streaming speech-to-text + text-to-speech)
   DEEPGRAM_API_KEY: z.string().optional(),
   DEEPGRAM_STT_MODEL: z.string().default("nova-3"),

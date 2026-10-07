@@ -1,8 +1,8 @@
-# Penguin
+# Peguin
 
-Penguin joins your standup on Zoom, Google Meet or Microsoft Teams, waits until someone calls your name, and gives your update out loud. It drafts the update beforehand from your GitHub, Linear and Jira activity. It answers simple follow-up questions using only those facts, defers anything else to you, and posts a recap to Slack afterwards.
+Peguin joins your standup on Zoom, Google Meet or Microsoft Teams, waits until someone calls your name, and gives your update out loud. It drafts the update beforehand from your GitHub, Linear and Jira activity. It answers simple follow-up questions using only those facts, defers anything else to you, and posts a recap to Slack afterwards.
 
-Penguin always introduces itself as your AI assistant before speaking.
+Peguin always introduces itself as your AI assistant before speaking.
 
 Working on this with a coding agent? Start with [AGENTS.md](AGENTS.md); background is in [docs/](docs/).
 
@@ -14,7 +14,7 @@ flowchart LR
     Bot["Meeting bot<br/>(Recall.ai or Attendee)"]
   end
   Bot -- "loads agent page:<br/>call audio = page mic,<br/>page audio = bot voice" --> RT
-  subgraph Penguin
+  subgraph Peguin
     API["api<br/>REST + webhooks"]
     RT["realtime<br/>1 WebSocket per meeting"]
     W["worker<br/>prep · join · recap"]
@@ -35,14 +35,14 @@ flowchart LR
 1. **Schedule fires** (BullMQ job scheduler, cron + timezone), or you call `POST /v1/users/:id/meetings`.
 2. **Prep** (worker): pull activity since the previous workday (Friday onward on Mondays), have Claude draft a 30–45 second spoken update plus grounded facts, and store both on the meeting.
 3. **Join** (worker): ask the provider for a bot. The bot opens `REALTIME_PUBLIC_URL/agent?m=…&t=…` in a headless browser. That page is the bot's camera, its speaker and its ears.
-4. **Live** (realtime): the page streams call audio to Penguin. Penguin runs it through streaming speech-to-text and the turn detector. When you're handed the floor it plays the update, which was synthesized when the session started so there's no delay. Follow-up questions go to Claude, limited to the prepared facts.
+4. **Live** (realtime): the page streams call audio to Peguin. Peguin runs it through streaming speech-to-text and the turn detector. When you're handed the floor it plays the update, which was synthesized when the session started so there's no delay. Follow-up questions go to Claude, limited to the prepared facts.
 5. **Recap** (worker): on the provider's "call ended" webhook, summarise the transcript and post questions and action items for you to Slack.
 
 ## Why it scales
 
 | Concern | Design |
 |---|---|
-| Running a browser inside every call | Done by the provider (Recall.ai or your Attendee cluster), not Penguin |
+| Running a browser inside every call | Done by the provider (Recall.ai or your Attendee cluster), not Peguin |
 | Live meetings | Each meeting lives entirely on the realtime node holding its WebSocket. No sticky sessions or shared memory. Add nodes to add capacity (`REALTIME_MAX_SESSIONS` per node; full nodes refuse with 503 so the bot reconnects elsewhere) |
 | Cross-node control | `POST /v1/meetings/:id/speak` publishes on Redis; whichever node holds the meeting acts on it |
 | Background work | One BullMQ queue, deterministic job ids (`prep-…`, `join-…`, `recap-…`) so retries and duplicate webhooks are harmless |
@@ -138,11 +138,11 @@ test/               turn detection, session loop, providers, crypto, dates
 - **Google Meet**: Google's own Meet Media API is receive-only and closed to new sign-ups, so Meet support comes through the bot provider.
 - **Zoom**: Zoom's RTMS is receive-only too, so the bot joins as a participant. Some Zoom accounts require bots to be admitted from the waiting room.
 - **Teams**: works through the provider, no Azure media bot of your own needed. External bots may need to be let in from the lobby.
-- **Consent**: check your company's recording and AI-participant policies. Penguin announces itself before speaking, and the bot's name says it's an AI.
+- **Consent**: check your company's recording and AI-participant policies. Peguin announces itself before speaking, and the bot's name says it's an AI.
 
 ## Next steps
 
 - A small web dashboard (login, connect tools with OAuth instead of tokens, live captions from the Redis channel)
 - Per-team accounts and API keys in place of the single admin key
-- Barge-in: stop talking if someone speaks over Penguin
+- Barge-in: stop talking if someone speaks over Peguin
 - Voice cloning, opt-in only, if you want it to sound like you

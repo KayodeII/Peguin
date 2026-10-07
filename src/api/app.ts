@@ -118,7 +118,7 @@ export function buildApp() {
   }));
 
   // ---------------------------------------------------------------- meetings
-  /** Send Penguin to a meeting now: prep the update, then join. */
+  /** Send Peguin to a meeting now: prep the update, then join. */
   app.post("/v1/users/:userId/meetings", wrap(async (req, res) => {
     const u = await userOr404(req, res); if (!u) return;
     const { meetingUrl: url } = z.object({ meetingUrl }).parse(req.body);
@@ -135,7 +135,7 @@ export function buildApp() {
   app.post("/v1/meetings/:id/speak", wrap(async (req, res) => {
     const id = uuid.parse(req.params.id);
     const listeners = await pub.publish(`penguin:cmd:${id}`, JSON.stringify({ type: "give_update" }));
-    res.status(listeners ? 202 : 409).json(listeners ? { ok: true } : { error: "Penguin isn't connected to that meeting right now" });
+    res.status(listeners ? 202 : 409).json(listeners ? { ok: true } : { error: "Peguin isn't connected to that meeting right now" });
   }));
   app.post("/v1/meetings/:id/leave", wrap(async (req, res) => {
     const m = await repo.getMeeting(uuid.parse(req.params.id));
@@ -148,7 +148,7 @@ export function buildApp() {
     if (err instanceof z.ZodError) return res.status(400).json({ error: "Invalid request", issues: err.issues });
     if (err?.code === "23505") return res.status(409).json({ error: "Already exists" });
     log.error({ err: String(err), stack: err?.stack }, "request failed");
-    res.status(500).json({ error: "Something went wrong on Penguin's side. Check the API logs." });
+    res.status(500).json({ error: "Something went wrong on Peguin's side. Check the API logs." });
   });
 
   return app;

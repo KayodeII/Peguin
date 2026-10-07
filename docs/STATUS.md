@@ -27,11 +27,37 @@ Last updated: 2026-10-06
 - Attendee webhook payload field names (parsed defensively; confirm against a real event)
 - Deepgram model names `nova-3` / `aura-2-thalia-en` on the owner's account
 
-## Next
+## Direction change (2026-10-06)
+
+Moving to desktop-first (see `docs/DECISIONS.md`). Spike in `spikes/meet-join/` **passed in a real Meet** (owner on phone, Peguin on the Mac): it joins as a guest named "(AI)", is admitted, speaks a line heard on the phone, and taps the other participants' audio (3 remote tracks, speech detected). Learned: Meet admits guests muted, so Peguin must click "Turn on microphone"; Peguin's window must be muted locally or it echoes on the host machine. Chromium logs a harmless BUNDLE codec-collision warning during setup.
+
+Teams and Zoom drivers added to the spike. Teams (browser guest join) reaches the meeting lookup on a fake link, but **browser automation for Teams is dropped** after the owner's Microsoft account was locked during testing. Teams moves to Azure Communication Services (see DECISIONS). Zoom browser client **passed in a real meeting** (owner hosting on phone): fills "Your Name" itself (found by label; the field has no placeholder), joins as "Mujeeb (AI)", turns on audio and video, and speaks. Zoom feature pop-ups ("Got it") have to be dismissed.
+
+Respond loop built in the spike: page audio → 16 kHz PCM → energy-gated utterances → local whisper.cpp (`base.en`, Metal; built by `setup-whisper.sh` into the spike's gitignored `vendor/`) → `TurnDetector` (bundled from `src/realtime/turn.ts`) → pre-synthesized update or a deferral. Verified offline with synthesized speech: handoff, follow-up and "floor moved on" all decided correctly, about 50 ms per transcription. Seen: "auth" heard as "Earth"; the real app should prompt Whisper with ticket and project names.
+
+**Desktop app started** (`desktop/`): Electron + React preferences window (name with enforced AI suffix, aliases, timezone, standing notes as the update, connection and voice placeholders, show-window toggle), menu bar icon, and "send Peguin to a meeting" with live status and transcript. The spike's join, listen, decide and speak loop is ported to TypeScript (`MeetingRunner`). Typecheck and build pass; the window renders. Not yet run against a real meeting from the app.
+
+**Desktop app: automatic updates and Discord-style UI.** Settings shrank to name, standup link and time, and source toggles (onboarding pre-fills the name from git). Sources: local git commits across repos, GitHub PRs and reviews via `gh`, and the user's own Claude Code prompts (opt-in, local; AI-session work is treated as in progress unless a commit or PR confirms it). Claude drafts the update and facts via `claude -p` (verified with synthetic activity: valid draft in about 10 s); live questions are answered from the facts only, otherwise Peguin defers. Scheduler prepares 15 minutes before and joins a minute before. Prompts are shared with the server (`src/core/brain/prompts.ts`). 40 tests pass. Not yet: a real prepare on the owner's data (run from the app), a real call from the app.
+
+**Phase 2: accounts, billing, server-side Claude.** `cloud/` Worker + D1 (email link and Google sign-in, desktop PKCE sign-in via `peguin://`, Stripe checkout, portal and webhooks, Ed25519 licences, `/api/draft` and `/api/answer` on claude-opus-5 with refusal fallbacks and daily caps), verified locally with a 25-step end-to-end script. `web/` site (landing, pricing, sign-in, account, app hand-off), served by the Worker. Desktop: Account section (sign in through the browser, plan status, sign out), app token in the OS keychain, offline licence check; drafting and answers use the account when subscribed, else the Claude CLI. 46 tests pass. Not yet: deployed; real Stripe, Google, Resend and Anthropic keys; desktop-to-cloud sign-in run in a browser; pricing is a placeholder.
+
+**Live and packaged (2026-10-07).** Cloud deployed to www.peguin.co (peguin.co redirects), production D1 migrated, licence key set. Product renamed Peguin; $5/month. macOS installer builds (`npm run dist:mac`, ad-hoc signed, arm64) with the Peguin icon, menu bar icon, bundled static whisper-server and first-run model download; verified by launching the packaged app. Waiting on: Stripe, Google OAuth, Resend, Anthropic key; Apple Developer ID.
+
+## Next (desktop)
+
+1. Teams: ACS prototype (needs an Azure account)
+2. Respond loop: test in a real call (owner on phone says "Mujeeb, you're up")
+3. Desktop app: real-call test from the app; Piper TTS; packaging (electron-builder, bundled whisper binary, model download on first run)
+4. Cloudflare Worker + D1: Google and email-link sign-in, `peguin://` app sign-in, Stripe, license tokens, OAuth for Calendar/GitHub/Linear/Jira, Claude proxy (draft + answers), ACS tokens for Teams
+5. Website (React + Vite on Cloudflare Pages): landing, sign-up, checkout, download
+6. Ports refactor as the desktop and server share more code
+6. Zoom Meeting SDK (Marketplace approval) to replace the browser client
+
+## Next (server, paused)
 
 1. First live test: one Zoom or Meet call with Recall, `POST /v1/users/:id/meetings`
 2. Tune `turn.ts` on real transcripts (log decisions, then add cases to tests)
 3. Web dashboard: login, OAuth connect for GitHub/Linear/Jira, live captions from `penguin:meeting:<id>`
 4. Per-team accounts and API keys to replace the single `ADMIN_API_KEY`
-5. Barge-in: stop speaking when someone talks over Penguin
+5. Barge-in: stop speaking when someone talks over Peguin
 6. Optional, opt-in voice cloning

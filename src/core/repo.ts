@@ -9,7 +9,7 @@ export type IntegrationKind = "github" | "linear" | "jira";
 export type Integration = { kind: IntegrationKind; token: string; config: Record<string, any> };
 export type MeetingStatus = "scheduled" | "preparing" | "joining" | "in_call" | "ended" | "failed";
 export type StandupDraft = {
-  script: string;          // what Penguin says when called on (~30-45s spoken)
+  script: string;          // what Peguin says when called on (~30-45s spoken)
   facts: string[];         // grounded bullet facts for answering follow-ups
   generated_at: string;
 };

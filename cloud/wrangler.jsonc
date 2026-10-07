@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "penguin",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // www.peguin.co is canonical; the bare domain redirects to it (src/index.ts).
+  "routes": [
+    { "pattern": "www.peguin.co", "custom_domain": true },
+    { "pattern": "peguin.co", "custom_domain": true }
+  ],
+  // The website (../web) is served from the same Worker and origin as the API.
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true // every request, so the bare-domain redirect also covers pages
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "penguin", "database_id": "a5e4b7ba-257f-4e3b-9c11-3a214c2155bb", "migrations_dir": "migrations" }
+  ],
+  "vars": {
+    "APP_ORIGIN": "https://www.peguin.co", // .dev.vars overrides this to http://localhost:8787
+    "CLAUDE_MODEL": "claude-opus-5",
+    "TRIAL_DAYS": "14",
+    "DRAFTS_PER_DAY": "20",
+    "ANSWERS_PER_DAY": "200",
+    "RELEASES_REPO": "KayodeII/Peguin", // GitHub Releases built by .github/workflows/release.yml
+    "APP_LATEST_VERSION": "0.1.0" // fallback only, when GitHub has no release
+  }
+  // Secrets (wrangler secret put, or .dev.vars locally): ANTHROPIC_API_KEY, PAYSTACK_SECRET_KEY,
+  // PAYSTACK_PLAN_CODE, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, RESEND_API_KEY, EMAIL_FROM, LICENSE_PRIVATE_JWK
+}

@@ -17,6 +17,8 @@ export class MeetingSession {
   private readonly turn: TurnDetector;
   private listener?: ReturnType<typeof openListener>;
   private updateAudio?: Promise<Buffer>;
+  private ackAudio?: Promise<Buffer>;
+  private static readonly ACK = "Yes, I'm here. Go ahead.";
   private busy = false;               // generating or playing audio
   private playbackTimer?: NodeJS.Timeout;
   private onPlaybackDone?: () => void;
@@ -43,9 +45,11 @@ export class MeetingSession {
 
   start() {
     if (this.meeting.update_given_at) this.turn.markUpdateGiven(); // reconnect after a node restart
-    // Synthesize the update now, so Penguin answers instantly when called on.
+    // Synthesize the update now, so Peguin answers instantly when called on.
     this.updateAudio = speak(this.updateText());
     this.updateAudio.catch((e) => this.l.error({ err: String(e) }, "pre-synthesis failed"));
+    this.ackAudio = speak(MeetingSession.ACK);
+    this.ackAudio.catch((e) => this.l.error({ err: String(e) }, "pre-synthesis failed"));
 
     this.listener = openListener({
       keywords: [this.user.name.split(/\s+/)[0]!, ...this.user.aliases].slice(0, 10),
@@ -97,6 +101,19 @@ export class MeetingSession {
     const d = this.turn.onUtterance(text, Date.now());
     if (d.action === "give_update") void this.giveUpdate();
     else if (d.action === "answer") void this.answer(d.question);
+    else if (d.action === "acknowledge") void this.acknowledge();
+  }
+
+  /** Called by name with no question yet: let them know Peguin is listening. */
+  private async acknowledge() {
+    this.busy = true;
+    try {
+      await this.play(await (this.ackAudio ?? speak(MeetingSession.ACK)), MeetingSession.ACK);
+    } catch (e) {
+      this.l.error({ err: String(e) }, "failed to acknowledge");
+    } finally {
+      this.busy = false;
+    }
   }
 
   private async giveUpdate() {
@@ -134,7 +151,7 @@ export class MeetingSession {
       this.turn.setSpeaking(true, Date.now());
       this.sendPage({ type: "state", state: "speaking", text });
       this.page.send(audio, { binary: true });
-      this.record({ speaker: "Penguin", text, is_bot: true, at: new Date() });
+      this.record({ speaker: "Peguin", text, is_bot: true, at: new Date() });
       // Safety net if the page never reports back: ~2.5 words/sec + margin.
       const ms = (text.split(/\s+/).length / 2.5) * 1000 + 5000;
       this.onPlaybackDone = resolve;

@@ -33,7 +33,7 @@ const handlers: { [N in JobName]: (data: JobData[N], job: Job) => Promise<unknow
       const { items, failed } = await gatherActivity(await repo.listIntegrations(u.id), since);
       await repo.setMeetingDraft(m.id, await draftStandup(u, items, failed));
     } catch (e) {
-      // Still join on the last attempt: Penguin falls back to the standing notes.
+      // Still join on the last attempt: Peguin falls back to the standing notes.
       if (job.attemptsMade + 1 < (job.opts.attempts ?? 1)) throw e;
       log.error({ meetingId, err: String(e) }, "prep failed; joining with fallback update");
     }
@@ -63,7 +63,7 @@ const handlers: { [N in JobName]: (data: JobData[N], job: Job) => Promise<unknow
     await repo.setMeetingRecap(m.id, recap);
     const hook = repo.slackWebhook(u);
     if (hook) {
-      const gave = m.update_given_at ? "Penguin gave your update." : "Penguin wasn't called on, so it didn't give your update.";
+      const gave = m.update_given_at ? "Peguin gave your update." : "Peguin wasn't called on, so it didn't give your update.";
       await postToSlack(hook, `*Standup recap* (${m.platform.replace("_", " ")})\n${gave}\n\n${recap}`);
     }
   },

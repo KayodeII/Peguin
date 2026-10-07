@@ -8,7 +8,7 @@ vi.mock("../src/core/speech/deepgram.js", () => ({
   speak: vi.fn(async (text: string) => Buffer.from(`mp3:${text}`)),
 }));
 vi.mock("../src/core/brain/claude.js", () => ({
-  disclosure: () => "Hi, this is Penguin, Mujeeb's AI assistant.",
+  disclosure: () => "Hi, this is Peguin, Mujeeb's AI assistant.",
   answerFollowUp: vi.fn(async () => "Yes, it merged yesterday."),
 }));
 const saved: any[] = [];
@@ -49,7 +49,7 @@ describe("MeetingSession", () => {
 
     say("Thanks Tolu. Mujib, you're up");
     await tick();
-    expect(page.audio()).toEqual(["mp3:Hi, this is Penguin, Mujeeb's AI assistant. Mujeeb merged the dispute webhook PR."]);
+    expect(page.audio()).toEqual(["mp3:Hi, this is Peguin, Mujeeb's AI assistant. Mujeeb merged the dispute webhook PR."]);
 
     say("Mujeeb, you're up"); // while speaking: ignored
     await tick();
