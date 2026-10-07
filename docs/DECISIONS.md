@@ -2,6 +2,10 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: App showcase with a grain gradient
+
+The closing tomato band is replaced by a ClickUp-style showcase (`web/src/components/AppDemo.tsx`): a rounded card with a slowly drifting, grainy gradient in the brand colours, the app icon, one line and the trial button, over a faithful copy of the desktop app. A scripted cursor prepares the update, joins the standup, and Peguin speaks and answers, then it loops. It only runs while on screen and shows the finished meeting for reduced motion. This is the one deliberate exception to "no gradients": the owner asked for it, and it frames the product rather than decorating text.
+
 ## 2026-10-07: Desktop install status and update checks
 
 The desktop app sends `x-peguin-version` on every cloud request; the Worker stores it on the app token (`app_tokens.app_version`). The account page shows "Installed" with the version and last use, "Update available" when `APP_LATEST_VERSION` is newer, or a download button. The app checks `/api/release` every six hours and shows an update card in the sidebar. Releases are GitHub Releases on the public repo, built by `.github/workflows/release.yml` when a `v*` tag is pushed; the Worker reads the latest one through the GitHub API (cached ten minutes) and `/download/mac` redirects to its .dmg, so a release needs no redeploy (see `docs/RELEASING.md`). `APP_LATEST_VERSION`/`APP_DOWNLOAD_URL` remain as a fallback. Auto-install (Squirrel/electron-updater) needs a signed app, so it waits for Apple signing.
