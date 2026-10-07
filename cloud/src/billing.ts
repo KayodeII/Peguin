@@ -41,9 +41,21 @@ async function paystack<T>(env: Env, path: string, body?: object): Promise<T> {
   return data.data as T;
 }
 
+type Plan = { amount: number; currency: string; interval: string };
+let planCache: { code: string; plan: Plan; at: number } | null = null;
+
+/** The live plan's price, so the website always shows what Paystack charges. Cached per isolate for 10 minutes. */
+export async function currentPlan(env: Env): Promise<Plan> {
+  const code = need(env, "PAYSTACK_PLAN_CODE");
+  if (planCache?.code === code && Date.now() - planCache.at < 600_000) return planCache.plan;
+  const p = await paystack<Plan>(env, `plan/${encodeURIComponent(code)}`);
+  planCache = { code, plan: { amount: p.amount, currency: p.currency, interval: p.interval }, at: Date.now() };
+  return planCache.plan;
+}
+
 export async function checkout(env: Env, user: User): Promise<Response> {
   const planCode = need(env, "PAYSTACK_PLAN_CODE");
-  const plan = await paystack<{ amount: number; currency: string }>(env, `plan/${encodeURIComponent(planCode)}`);
+  const plan = await currentPlan(env);
   const tx = await paystack<{ authorization_url: string }>(env, "transaction/initialize", {
     email: user.email,
     amount: String(plan.amount), // the plan's price; Paystack bills the plan

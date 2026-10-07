@@ -19,4 +19,15 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return data;
 }
 
+export type Plan = { amount: number; currency: string; interval: string; trialDays: number };
+
+/** "₦7,500/month" from the live Paystack plan. */
+export function formatPrice(p: Plan): string {
+  const money = new Intl.NumberFormat("en", { style: "currency", currency: p.currency, currencyDisplay: "narrowSymbol", maximumFractionDigits: p.amount % 100 ? 2 : 0 }).format(p.amount / 100);
+  return `${money}/${p.interval === "monthly" ? "month" : p.interval.replace(/ly$/, "")}`;
+}
+
+let planRequest: Promise<Plan | null> | null = null;
+export const getPlan = () => (planRequest ??= api<Plan>("/api/plan").catch(() => null));
+
 export const getMe = () => api<Me>("/api/me").catch((e: { status?: number }) => (e.status === 401 ? null : Promise.reject(e)));

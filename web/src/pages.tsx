@@ -1,9 +1,15 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, getMe, type Me } from "./api";
+import { api, formatPrice, getMe, getPlan, type Me, type Plan } from "./api";
 import { Link, Logo, navigate } from "./ui";
 
-// Keep in sync with the Stripe price (STRIPE_PRICE_ID) and TRIAL_DAYS in cloud/wrangler.jsonc.
-const PRICE = { amount: "$5", period: "month", trialDays: 14 };
+const TRIAL_DAYS = 14; // matches TRIAL_DAYS in cloud/wrangler.jsonc
+
+/** The live plan from Paystack; null until loaded or if billing isn't set up. */
+function usePlan(): Plan | null {
+  const [plan, setPlan] = useState<Plan | null>(null);
+  useEffect(() => { void getPlan().then(setPlan); }, []);
+  return plan;
+}
 
 export function Home() {
   return (
@@ -16,7 +22,7 @@ export function Home() {
           says it when it's your turn. It answers questions from your actual work and tells everyone it's an AI.
         </p>
         <div className="cta">
-          <Link to="/signin?next=/account" className="btn">Start {PRICE.trialDays}-day free trial</Link>
+          <Link to="/signin?next=/account" className="btn">Start {TRIAL_DAYS}-day free trial</Link>
           <Link to="/pricing" className="btn ghost">See pricing</Link>
         </div>
         <p className="fine">Google Meet and Zoom today. Teams next. macOS first.</p>
@@ -39,17 +45,18 @@ export function Home() {
 }
 
 export function Pricing() {
+  const plan = usePlan();
   return (
     <section className="narrow center">
       <h1>One plan</h1>
       <p className="lead">Everything Peguin does, for one person.</p>
       <div className="card plan">
-        <div className="price"><strong>{PRICE.amount}</strong>/{PRICE.period}</div>
+        <div className="price">{plan ? <><strong>{formatPrice(plan).split("/")[0]}</strong>/{formatPrice(plan).split("/")[1]}</> : <strong>&nbsp;</strong>}</div>
         <ul>
           <li>Automatic updates from git, GitHub and Claude Code</li>
           <li>Joins Google Meet and Zoom for you, on schedule</li>
           <li>Answers questions from your work, defers the rest</li>
-          <li>{PRICE.trialDays}-day free trial, no card needed</li>
+          <li>{TRIAL_DAYS}-day free trial, no card needed</li>
         </ul>
         <Link to="/signin?next=/account" className="btn wide">Start free trial</Link>
       </div>
@@ -106,6 +113,7 @@ const STATUS: Record<string, string> = {
 };
 
 export function Account() {
+  const plan = usePlan();
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [error, setError] = useState("");
   const done = new URLSearchParams(location.search).get("checkout") === "done";
@@ -140,7 +148,7 @@ export function Account() {
             : <p>{sub ? "Your plan has ended." : "Your free trial has ended."} Subscribe to keep using Peguin.</p>}
         {paid
           ? <button className="btn ghost" onClick={() => void go("/api/billing/portal")}>Manage billing</button>
-          : <button className="btn" onClick={() => void go("/api/billing/checkout")}>Subscribe · {PRICE.amount}/{PRICE.period}</button>}
+          : <button className="btn" onClick={() => void go("/api/billing/checkout")}>Subscribe{plan ? ` · ${formatPrice(plan)}` : ""}</button>}
       </div>
 
       <div className="card">

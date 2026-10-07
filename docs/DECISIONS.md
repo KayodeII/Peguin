@@ -7,7 +7,7 @@ Newest first. Add an entry when you make a choice a future agent might otherwise
 - **Billing is Paystack** (the owner is in Lagos; a Paystack key already exists). Checkout initialises a transaction with the plan (`PAYSTACK_PLAN_CODE`), which creates the subscription on payment. Manage billing uses Paystack's manage-subscription link.
 - **Webhook** `/webhooks/paystack`: `x-paystack-signature` is the HMAC-SHA512 of the raw body keyed with the secret key. Events carry no id, so each is deduplicated by a hash of its body. Subscription and invoice events always re-read the subscription from Paystack, matched to the user by email. The webhook URL is set in the Paystack dashboard (no API for it).
 - **Trial:** Paystack plans have no trials, so Peguin gives 14 days from sign-up with no card (`users.trial_ends_at`). Entitlement = trial, or active, or non-renewing until the period ends, or a failed renewal within 3 days.
-- **Price:** $5/month if the Paystack business accepts USD; otherwise a naira plan (`scripts/paystack-setup.mjs --currency NGN --amount …`).
+- **Price:** the Paystack business doesn't accept USD, so the plan is in naira. Test mode uses a ₦7,500/month placeholder until the owner sets the real price (`scripts/paystack-setup.mjs --currency NGN --amount …`). The website reads the live plan from `GET /api/plan`, so the shown price always matches what Paystack charges.
 - Stripe code and columns are retired (the columns stay in the schema; SQLite can't drop them cleanly).
 
 ## 2026-10-07: Notion-style themes; domain www.peguin.co

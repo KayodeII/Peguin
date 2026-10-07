@@ -1,5 +1,5 @@
 import { appConnect, appSignOut, appToken, emailStart, emailVerify, googleCallback, googleStart, requireUser, signOut } from "./auth.js";
-import { checkout, isEntitled, portal, subscriptionOf, webhook } from "./billing.js";
+import { checkout, currentPlan, isEntitled, portal, subscriptionOf, webhook } from "./billing.js";
 import { answer, draft } from "./claude.js";
 import { HttpError, type Env } from "./env.js";
 import { json } from "./http.js";
@@ -21,6 +21,7 @@ const routes: Record<string, Handler> = {
   "POST /api/app/token": (env, req) => appToken(env, req),
   "POST /api/app/signout": (env, req) => appSignOut(env, req),
 
+  "GET /api/plan": async (env) => json({ ...(await currentPlan(env)), trialDays: Number(env.TRIAL_DAYS) }, 200, { "cache-control": "public, max-age=300" }),
   "GET /api/me": authed(async (env, _req, user) => {
     const sub = await subscriptionOf(env, user.id);
     return json({ email: user.email, name: user.name, subscription: sub, trial_ends_at: user.trial_ends_at, entitled: isEntitled(sub, user.trial_ends_at) });
