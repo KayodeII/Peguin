@@ -1,37 +1,49 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { isEntitled, verifyStripeSignature } from "../cloud/src/billing.js";
+import { isEntitled, normaliseStatus, verifyPaystackSignature } from "../cloud/src/billing.js";
 import { signEd25519, verifyEd25519 } from "../cloud/src/crypto.js";
 import { safeNext } from "../cloud/src/http.js";
 
-describe("Stripe webhook signatures", () => {
-  const secret = "whsec_test";
-  const payload = '{"id":"evt_1"}';
-  const header = (t: number, body = payload, key = secret) => `t=${t},v1=${createHmac("sha256", key).update(`${t}.${body}`).digest("hex")}`;
-  const t = 1_800_000_000;
+describe("Paystack webhook signatures", () => {
+  const secret = "sk_test_abc";
+  const payload = '{"event":"charge.success"}';
+  const sign = (body: string, key = secret) => createHmac("sha512", key).update(body).digest("hex");
 
-  it("accepts a fresh, correctly signed event", async () => {
-    expect(await verifyStripeSignature(payload, header(t), secret, t + 10)).toBe(true);
+  it("accepts the HMAC-SHA512 of the raw body", async () => {
+    expect(await verifyPaystackSignature(payload, sign(payload), secret)).toBe(true);
+    expect(await verifyPaystackSignature(payload, sign(payload).toUpperCase(), secret)).toBe(true);
   });
-  it("rejects forged, tampered, stale and malformed headers", async () => {
-    expect(await verifyStripeSignature(payload, header(t, payload, "whsec_other"), secret, t)).toBe(false);
-    expect(await verifyStripeSignature('{"id":"evt_2"}', header(t), secret, t)).toBe(false);
-    expect(await verifyStripeSignature(payload, header(t), secret, t + 301)).toBe(false);
-    expect(await verifyStripeSignature(payload, "garbage", secret, t)).toBe(false);
+  it("rejects forged, tampered and missing signatures", async () => {
+    expect(await verifyPaystackSignature(payload, sign(payload, "sk_test_other"), secret)).toBe(false);
+    expect(await verifyPaystackSignature('{"event":"charge.failed"}', sign(payload), secret)).toBe(false);
+    expect(await verifyPaystackSignature(payload, "", secret)).toBe(false);
   });
 });
 
 describe("entitlement", () => {
   const at = 1_800_000_000;
-  it("active and trialing are entitled; canceled and missing are not", () => {
-    expect(isEntitled({ status: "active", current_period_end: at + 100 }, at)).toBe(true);
-    expect(isEntitled({ status: "trialing", current_period_end: at + 100 }, at)).toBe(true);
-    expect(isEntitled({ status: "canceled", current_period_end: at + 100 }, at)).toBe(false);
-    expect(isEntitled(null, at)).toBe(false);
+  const day = 86400;
+  it("the free trial counts until it ends, with or without a plan", () => {
+    expect(isEntitled(null, at + day, at)).toBe(true);
+    expect(isEntitled(null, at - 1, at)).toBe(false);
+    expect(isEntitled(null, null, at)).toBe(false);
   });
-  it("past_due gets a short grace period", () => {
-    expect(isEntitled({ status: "past_due", current_period_end: at - 86400 }, at)).toBe(true);
-    expect(isEntitled({ status: "past_due", current_period_end: at - 4 * 86400 }, at)).toBe(false);
+  it("paid states", () => {
+    expect(isEntitled({ status: "active", current_period_end: at - day }, null, at)).toBe(true); // renewal pending
+    expect(isEntitled({ status: "non_renewing", current_period_end: at + day }, null, at)).toBe(true);
+    expect(isEntitled({ status: "non_renewing", current_period_end: at - 1 }, null, at)).toBe(false);
+    expect(isEntitled({ status: "canceled", current_period_end: at + day }, null, at)).toBe(false);
+  });
+  it("a failed renewal gets a short grace period", () => {
+    expect(isEntitled({ status: "past_due", current_period_end: at - day }, null, at)).toBe(true);
+    expect(isEntitled({ status: "past_due", current_period_end: at - 4 * day }, null, at)).toBe(false);
+  });
+  it("maps Paystack statuses", () => {
+    expect(normaliseStatus("active")).toBe("active");
+    expect(normaliseStatus("non-renewing")).toBe("non_renewing");
+    expect(normaliseStatus("attention")).toBe("past_due");
+    expect(normaliseStatus("completed")).toBe("canceled");
+    expect(normaliseStatus("cancelled")).toBe("canceled");
   });
 });
 

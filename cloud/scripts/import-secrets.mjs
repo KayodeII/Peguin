@@ -1,16 +1,15 @@
 // Copies credentials from an existing .env file into the Worker's secrets,
 // piping each value straight to `wrangler secret put`. Values are never printed.
 //
-//   node scripts/import-secrets.mjs <path/to/.env> [--stripe] [--resend-domain]
+//   node scripts/import-secrets.mjs <path/to/.env> [--paystack] [--resend-domain]
 //
-//   --stripe          create the Peguin product, the $5/month price and the webhook
-//                     endpoint in that Stripe account; sets STRIPE_PRICE_ID and STRIPE_WEBHOOK_SECRET
+//   --paystack        create the Peguin monthly plan in that Paystack account (scripts/paystack-setup.mjs)
 //   --resend-domain   add peguin.co to that Resend account and print the DNS records to create
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 const [file, ...flags] = process.argv.slice(2);
-if (!file) { console.error("Usage: node scripts/import-secrets.mjs <path/to/.env> [--stripe] [--resend-domain]"); process.exit(1); }
+if (!file) { console.error("Usage: node scripts/import-secrets.mjs <path/to/.env> [--paystack] [--resend-domain]"); process.exit(1); }
 
 const env = {};
 for (const line of readFileSync(file, "utf8").split(/\r?\n/)) {
@@ -28,10 +27,9 @@ const ALIASES = {
   GOOGLE_CLIENT_ID: ["GOOGLE_CLIENT_ID", "AUTH_GOOGLE_ID", "GOOGLE_OAUTH_CLIENT_ID", "NEXT_PUBLIC_GOOGLE_CLIENT_ID"],
   GOOGLE_CLIENT_SECRET: ["GOOGLE_CLIENT_SECRET", "AUTH_GOOGLE_SECRET", "GOOGLE_OAUTH_CLIENT_SECRET"],
   ANTHROPIC_API_KEY: ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"],
-  STRIPE_SECRET_KEY: ["STRIPE_SECRET_KEY", "STRIPE_API_KEY", "STRIPE_SK"],
+  PAYSTACK_SECRET_KEY: ["PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET", "PAYSTACK_SK", "PAYSTACK_KEY"],
 };
-// Not copied on purpose: a webhook secret belongs to one endpoint (use --stripe),
-// and a price id belongs to another product.
+// Not copied on purpose: a plan code belongs to another product (use --paystack).
 
 function put(name, value) {
   const r = spawnSync("npx", ["wrangler", "secret", "put", name], { input: value, stdio: ["pipe", "ignore", "pipe"], encoding: "utf8" });
@@ -48,35 +46,10 @@ for (const [dest, names] of Object.entries(ALIASES)) {
 }
 put("EMAIL_FROM", "Peguin <hello@peguin.co>");
 
-async function stripe(path, params) {
-  const res = await fetch(`https://api.stripe.com/v1/${path}`, {
-    method: params ? "POST" : "GET",
-    headers: { authorization: `Bearer ${found.STRIPE_SECRET_KEY}`, "content-type": "application/x-www-form-urlencoded" },
-    body: params ? new URLSearchParams(params) : undefined,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(`Stripe ${path}: ${data.error?.message ?? res.status}`);
-  return data;
-}
-
-if (flags.includes("--stripe")) {
-  if (!found.STRIPE_SECRET_KEY) throw new Error("--stripe needs a Stripe secret key in the file.");
-  console.log(`Stripe (${found.STRIPE_SECRET_KEY.startsWith("sk_live_") ? "LIVE" : "test"} mode)`);
-  const product = await stripe("products", { name: "Peguin", description: "Your standup, covered." });
-  const price = await stripe("prices", {
-    product: product.id, currency: "usd", unit_amount: "500", "recurring[interval]": "month", nickname: "Peguin monthly",
-  });
-  const hook = await stripe("webhook_endpoints", {
-    url: "https://www.peguin.co/webhooks/stripe",
-    "enabled_events[0]": "checkout.session.completed",
-    "enabled_events[1]": "customer.subscription.created",
-    "enabled_events[2]": "customer.subscription.updated",
-    "enabled_events[3]": "customer.subscription.deleted",
-    description: "Peguin",
-  });
-  put("STRIPE_PRICE_ID", price.id);
-  put("STRIPE_WEBHOOK_SECRET", hook.secret);
-  console.log(`  product ${product.id}, price ${price.id} ($5/month), webhook ${hook.id}`);
+if (flags.includes("--paystack")) {
+  if (!found.PAYSTACK_SECRET_KEY) throw new Error("--paystack needs a Paystack secret key in the file.");
+  const r = spawnSync("node", [new URL("./paystack-setup.mjs", import.meta.url).pathname], { input: found.PAYSTACK_SECRET_KEY, stdio: ["pipe", "inherit", "inherit"] });
+  if (r.status !== 0) process.exit(r.status ?? 1);
 }
 
 if (flags.includes("--resend-domain")) {

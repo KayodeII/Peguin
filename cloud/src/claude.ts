@@ -10,7 +10,7 @@ import { body, json } from "./http.js";
 type Kind = "draft" | "answer";
 
 async function entitled(env: Env, user: User) {
-  if (!isEntitled(await subscriptionOf(env, user.id))) throw new HttpError(402, "Your subscription isn't active.");
+  if (!isEntitled(await subscriptionOf(env, user.id), user.trial_ends_at)) throw new HttpError(402, "Your trial has ended and there's no active plan.");
 }
 
 /** Per-user daily cap, so a stuck client can't run up the bill. */

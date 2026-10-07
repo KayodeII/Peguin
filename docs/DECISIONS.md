@@ -2,6 +2,14 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: Paystack instead of Stripe; our own 14-day trial
+
+- **Billing is Paystack** (the owner is in Lagos; a Paystack key already exists). Checkout initialises a transaction with the plan (`PAYSTACK_PLAN_CODE`), which creates the subscription on payment. Manage billing uses Paystack's manage-subscription link.
+- **Webhook** `/webhooks/paystack`: `x-paystack-signature` is the HMAC-SHA512 of the raw body keyed with the secret key. Events carry no id, so each is deduplicated by a hash of its body. Subscription and invoice events always re-read the subscription from Paystack, matched to the user by email. The webhook URL is set in the Paystack dashboard (no API for it).
+- **Trial:** Paystack plans have no trials, so Peguin gives 14 days from sign-up with no card (`users.trial_ends_at`). Entitlement = trial, or active, or non-renewing until the period ends, or a failed renewal within 3 days.
+- **Price:** $5/month if the Paystack business accepts USD; otherwise a naira plan (`scripts/paystack-setup.mjs --currency NGN --amount …`).
+- Stripe code and columns are retired (the columns stay in the schema; SQLite can't drop them cleanly).
+
 ## 2026-10-07: Notion-style themes; domain www.peguin.co
 
 - **Desktop look:** Discord's layout with Notion's colour and type by default. Themes in Settings → Appearance: System (follows the OS between Notion light and dark), Light, Dark, Midnight (Discord dark), plus five accents. Appearance saves instantly. Settings opens from one gear, in the user panel.
@@ -12,7 +20,7 @@ Newest first. Add an entry when you make a choice a future agent might otherwise
 `cloud/` is a single Worker with D1. It serves the website (`web/dist`, Workers static assets, Cloudflare's successor to Pages) and the API on one origin, so session cookies stay first-party and there's one deploy.
 - **Sign-in:** email links (Resend; printed to the console in dev) and Google. Sessions are random tokens stored hashed, in an HttpOnly SameSite=Lax cookie; cookie-authenticated writes must be JSON (CSRF).
 - **Desktop sign-in:** `/app/connect` with a PKCE S256 challenge, returning to `peguin://auth` with a one-time code that only the app's verifier can redeem, for a revocable app token.
-- **Billing:** Stripe over REST (no SDK). Webhooks are signature-checked with a 5-minute window, applied once per event id, and always re-read the subscription from Stripe, since events arrive out of order. `past_due` keeps working for 3 days.
+- **Billing:** originally Stripe; replaced by Paystack (see the entry above).
 - **Licences:** Ed25519-signed, at most 30 days, plus 3 offline days past the period end. The private JWK is a Worker secret; the public key ships in the app. JWKs are imported without `alg`, because Node and Workers disagree on its value.
 - **Claude:** `claude-opus-5` through the official SDK, with server-side refusal fallbacks (`fallbacks: "default"`). Drafts use high effort; live answers use low effort for speed. Daily per-user caps. Same prompts as the desktop (`src/core/brain/prompts.ts`).
 - The old server default `claude-sonnet-5-5` wasn't a valid model ID; it's now `claude-opus-5`.

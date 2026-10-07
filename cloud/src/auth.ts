@@ -2,7 +2,8 @@ import { b64url, randomToken, sha256 } from "./crypto.js";
 import { HttpError, need, type Env } from "./env.js";
 import { body, cookie, json, now, readCookie, redirect, safeNext } from "./http.js";
 
-export type User = { id: string; email: string; name: string | null; stripe_customer_id: string | null };
+export type User = { id: string; email: string; name: string | null; paystack_customer_code: string | null; trial_ends_at: number | null };
+const USER_COLS = "u.id, u.email, u.name, u.paystack_customer_code, u.trial_ends_at";
 
 const SESSION_COOKIE = "pg_session";
 const SESSION_DAYS = 30;
@@ -14,10 +15,10 @@ async function findOrCreateUser(env: Env, email: string, extra: { name?: string;
   const e = email.trim().toLowerCase();
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, name, google_sub, created_at) VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO users (id, email, name, google_sub, created_at, trial_ends_at) VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(email) DO UPDATE SET name = COALESCE(users.name, excluded.name), google_sub = COALESCE(users.google_sub, excluded.google_sub)`,
-  ).bind(id, e, extra.name ?? null, extra.googleSub ?? null, now()).run();
-  return (await env.DB.prepare("SELECT id, email, name, stripe_customer_id FROM users WHERE email = ?").bind(e).first<User>())!;
+  ).bind(id, e, extra.name ?? null, extra.googleSub ?? null, now(), now() + Number(env.TRIAL_DAYS) * 86400).run();
+  return (await env.DB.prepare(`SELECT ${USER_COLS} FROM users u WHERE u.email = ?`).bind(e).first<User>())!;
 }
 
 async function startSession(env: Env, userId: string, next: string): Promise<Response> {
@@ -32,7 +33,7 @@ export async function sessionUser(env: Env, req: Request): Promise<User | null> 
   const token = readCookie(req, SESSION_COOKIE);
   if (!token) return null;
   return env.DB.prepare(
-    `SELECT u.id, u.email, u.name, u.stripe_customer_id FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT ${USER_COLS} FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ?`,
   ).bind(await sha256(token), now()).first<User>();
 }
@@ -43,7 +44,7 @@ export async function appUser(env: Env, req: Request): Promise<User | null> {
   if (!token) return null;
   const hash = await sha256(token);
   const user = await env.DB.prepare(
-    `SELECT u.id, u.email, u.name, u.stripe_customer_id FROM app_tokens t JOIN users u ON u.id = t.user_id
+    `SELECT ${USER_COLS} FROM app_tokens t JOIN users u ON u.id = t.user_id
      WHERE t.token_hash = ? AND t.revoked_at IS NULL`,
   ).bind(hash).first<User>();
   if (user) await env.DB.prepare("UPDATE app_tokens SET last_used_at = ? WHERE token_hash = ?").bind(now(), hash).run();

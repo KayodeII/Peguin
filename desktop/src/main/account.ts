@@ -101,7 +101,8 @@ export async function refreshAccount(): Promise<Account | null> {
       rmSync(licenseFile(), { force: true });
     }
     const lic = await offlineLicense();
-    return { email: me.email, status: me.subscription?.status ?? null, entitled: !!lic, licenseUntil: lic?.exp ?? null };
+    const paid = me.subscription && me.subscription.status !== "canceled" ? me.subscription.status : null;
+    return { email: me.email, status: paid ?? (me.entitled ? "trialing" : me.subscription?.status ?? null), entitled: !!lic, licenseUntil: lic?.exp ?? null };
   } catch (e) {
     if ((e as { status?: number }).status === 401) { signOutLocal(); return null; }
     const lic = await offlineLicense(); // offline: trust the signed licence until it expires

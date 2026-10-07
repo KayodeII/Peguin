@@ -7,9 +7,8 @@ export interface Env {
   DRAFTS_PER_DAY: string;
   ANSWERS_PER_DAY: string;
   ANTHROPIC_API_KEY?: string;
-  STRIPE_SECRET_KEY?: string;
-  STRIPE_WEBHOOK_SECRET?: string;
-  STRIPE_PRICE_ID?: string;
+  PAYSTACK_SECRET_KEY?: string;
+  PAYSTACK_PLAN_CODE?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   RESEND_API_KEY?: string;

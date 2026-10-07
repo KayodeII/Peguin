@@ -1,98 +1,109 @@
-// Stripe over its REST API (form-encoded), which needs no SDK on Workers.
+// Paystack subscriptions over its REST API. The 14-day trial is ours (Paystack
+// plans have none): it starts at sign-up, and a paid plan takes over after.
 import type { User } from "./auth.js";
-import { hmacSha256Hex, timingSafeEqual } from "./crypto.js";
+import { hmacHex, sha256, timingSafeEqual } from "./crypto.js";
 import { HttpError, need, type Env } from "./env.js";
 import { json, now } from "./http.js";
 
-const ACTIVE = new Set(["active", "trialing"]);
-const GRACE_DAYS = 3; // past_due keeps working briefly while Stripe retries the card
+const GRACE_DAYS = 3; // a failed renewal keeps working briefly while Paystack retries
 
+/** Normalised: active | non_renewing | past_due | canceled. */
 export type Subscription = { status: string; current_period_end: number | null };
 
 export async function subscriptionOf(env: Env, userId: string): Promise<Subscription | null> {
   return env.DB.prepare("SELECT status, current_period_end FROM subscriptions WHERE user_id = ?").bind(userId).first<Subscription>();
 }
 
-/** Paid up, trialing, or past due within the grace period. */
-export function isEntitled(s: Subscription | null, at = now()): boolean {
+/** Paid, cancelled but paid through the period, in grace after a failed renewal, or in the free trial. */
+export function isEntitled(s: Subscription | null, trialEndsAt: number | null, at = now()): boolean {
+  if (trialEndsAt && at < trialEndsAt) return true;
   if (!s) return false;
-  if (ACTIVE.has(s.status)) return true;
-  return s.status === "past_due" && !!s.current_period_end && at < s.current_period_end + GRACE_DAYS * 86400;
+  if (s.status === "active") return true;
+  const end = s.current_period_end ?? 0;
+  if (s.status === "non_renewing") return at < end;
+  if (s.status === "past_due") return at < end + GRACE_DAYS * 86400;
+  return false;
 }
 
-async function stripe<T>(env: Env, path: string, params?: Record<string, string>): Promise<T> {
-  const res = await fetch(`https://api.stripe.com/v1/${path}`, {
-    method: params ? "POST" : "GET",
-    headers: { authorization: `Bearer ${need(env, "STRIPE_SECRET_KEY")}`, "content-type": "application/x-www-form-urlencoded" },
-    body: params ? new URLSearchParams(params) : undefined,
+/** Paystack's subscription status, in our words. */
+export function normaliseStatus(paystack: string): string {
+  return ({ active: "active", "non-renewing": "non_renewing", attention: "past_due" } as Record<string, string>)[paystack] ?? "canceled";
+}
+
+async function paystack<T>(env: Env, path: string, body?: object): Promise<T> {
+  const res = await fetch(`https://api.paystack.co/${path}`, {
+    method: body ? "POST" : "GET",
+    headers: { authorization: `Bearer ${need(env, "PAYSTACK_SECRET_KEY")}`, "content-type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
   });
-  const data = (await res.json()) as T & { error?: { message: string } };
-  if (!res.ok) throw new HttpError(502, `Stripe: ${data.error?.message ?? res.status}`);
-  return data;
+  const data = (await res.json().catch(() => ({}))) as { status?: boolean; message?: string; data?: T };
+  if (!res.ok || !data.status) throw new HttpError(502, `Paystack: ${data.message ?? res.status}`);
+  return data.data as T;
 }
 
 export async function checkout(env: Env, user: User): Promise<Response> {
-  const session = await stripe<{ url: string }>(env, "checkout/sessions", {
-    mode: "subscription",
-    "line_items[0][price]": need(env, "STRIPE_PRICE_ID"),
-    "line_items[0][quantity]": "1",
-    client_reference_id: user.id,
-    ...(user.stripe_customer_id ? { customer: user.stripe_customer_id } : { customer_email: user.email }),
-    "subscription_data[trial_period_days]": env.TRIAL_DAYS,
-    success_url: `${env.APP_ORIGIN}/account?checkout=done`,
-    cancel_url: `${env.APP_ORIGIN}/pricing`,
-    allow_promotion_codes: "true",
+  const planCode = need(env, "PAYSTACK_PLAN_CODE");
+  const plan = await paystack<{ amount: number; currency: string }>(env, `plan/${encodeURIComponent(planCode)}`);
+  const tx = await paystack<{ authorization_url: string }>(env, "transaction/initialize", {
+    email: user.email,
+    amount: String(plan.amount), // the plan's price; Paystack bills the plan
+    currency: plan.currency,
+    plan: planCode,
+    callback_url: `${env.APP_ORIGIN}/account?checkout=done`,
+    metadata: { user_id: user.id },
   });
-  return json({ url: session.url });
+  return json({ url: tx.authorization_url });
 }
 
 export async function portal(env: Env, user: User): Promise<Response> {
-  if (!user.stripe_customer_id) throw new HttpError(400, "There's no subscription to manage yet.");
-  const session = await stripe<{ url: string }>(env, "billing_portal/sessions", {
-    customer: user.stripe_customer_id, return_url: `${env.APP_ORIGIN}/account`,
-  });
-  return json({ url: session.url });
+  const row = await env.DB.prepare("SELECT paystack_subscription_code AS code FROM subscriptions WHERE user_id = ?").bind(user.id).first<{ code: string | null }>();
+  if (!row?.code) throw new HttpError(400, "There's no subscription to manage yet.");
+  const { link } = await paystack<{ link: string }>(env, `subscription/${encodeURIComponent(row.code)}/manage/link`);
+  return json({ url: link });
 }
 
-/** Stripe-Signature: t=<unix>,v1=<hex hmac of "t.payload">. Rejects stale or forged events. */
-export async function verifyStripeSignature(payload: string, header: string, secret: string, at = now(), toleranceSeconds = 300): Promise<boolean> {
-  const parts = Object.fromEntries(header.split(",").map((p) => p.split("=") as [string, string]));
-  const t = Number(parts.t);
-  const sigs = header.split(",").filter((p) => p.startsWith("v1=")).map((p) => p.slice(3));
-  if (!t || !sigs.length || Math.abs(at - t) > toleranceSeconds) return false;
-  const expected = await hmacSha256Hex(secret, `${t}.${payload}`);
-  return sigs.some((s) => timingSafeEqual(s, expected));
+/** x-paystack-signature is the hex HMAC-SHA512 of the raw body, keyed with the secret key. */
+export async function verifyPaystackSignature(payload: string, signature: string, secret: string): Promise<boolean> {
+  if (!signature) return false;
+  return timingSafeEqual(signature.toLowerCase(), await hmacHex(secret, payload, "SHA-512"));
 }
 
-type StripeEvent = { id: string; type: string; data: { object: Record<string, any> } };
+type PaystackSub = { subscription_code: string; status: string; next_payment_date: string | null; customer: { email: string; customer_code: string } };
+
+/** Events can arrive late or out of order, so always read the subscription's current state. */
+async function syncSubscription(env: Env, code: string): Promise<boolean> {
+  const sub = await paystack<PaystackSub>(env, `subscription/${encodeURIComponent(code)}`);
+  const user = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(sub.customer.email.toLowerCase()).first<{ id: string }>();
+  if (!user) return false;
+  const end = sub.next_payment_date ? Math.floor(Date.parse(sub.next_payment_date) / 1000) : null;
+  await env.DB.batch([
+    env.DB.prepare("UPDATE users SET paystack_customer_code = ? WHERE id = ?").bind(sub.customer.customer_code, user.id),
+    env.DB.prepare(
+      `INSERT INTO subscriptions (user_id, paystack_subscription_code, status, current_period_end, updated_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET paystack_subscription_code = excluded.paystack_subscription_code, status = excluded.status,
+         current_period_end = excluded.current_period_end, updated_at = excluded.updated_at`,
+    ).bind(user.id, sub.subscription_code, normaliseStatus(sub.status), end, now()),
+  ]);
+  return true;
+}
 
 export async function webhook(env: Env, req: Request): Promise<Response> {
   const payload = await req.text();
-  const ok = await verifyStripeSignature(payload, req.headers.get("stripe-signature") ?? "", need(env, "STRIPE_WEBHOOK_SECRET"));
+  const ok = await verifyPaystackSignature(payload, req.headers.get("x-paystack-signature") ?? "", need(env, "PAYSTACK_SECRET_KEY"));
   if (!ok) return json({ error: "Invalid signature." }, 400);
-  const event = JSON.parse(payload) as StripeEvent;
-  const seen = await env.DB.prepare("SELECT 1 FROM stripe_events WHERE id = ?").bind(event.id).first();
-  if (seen) return json({ ok: true, duplicate: true });
+  const id = await sha256(payload);
+  if (await env.DB.prepare("SELECT 1 FROM paystack_events WHERE id = ?").bind(id).first()) return json({ ok: true, duplicate: true });
 
-  const o = event.data.object;
-  if (event.type === "checkout.session.completed" && o.client_reference_id && o.customer) {
-    await env.DB.prepare("UPDATE users SET stripe_customer_id = ? WHERE id = ?").bind(o.customer, o.client_reference_id).run();
+  const event = JSON.parse(payload) as { event: string; data: Record<string, any> };
+  const d = event.data;
+  const code: string | undefined = d.subscription_code ?? d.subscription?.subscription_code;
+  if (event.event === "charge.success" && d.metadata?.user_id && d.customer?.customer_code) {
+    await env.DB.prepare("UPDATE users SET paystack_customer_code = ? WHERE id = ?").bind(d.customer.customer_code, d.metadata.user_id).run();
   }
-  if (event.type.startsWith("customer.subscription.")) {
-    const user = await env.DB.prepare("SELECT id FROM users WHERE stripe_customer_id = ?").bind(o.customer).first<{ id: string }>();
-    // A subscription can arrive before checkout.session.completed links the customer; Stripe resends it.
-    if (!user) return json({ error: "Unknown customer; retry." }, 409);
-    // Events can arrive out of order, so read the subscription's current state rather than trusting the event.
-    const live = await stripe<Record<string, any>>(env, `subscriptions/${encodeURIComponent(o.id)}`);
-    const status = String(live.status);
-    const periodEnd = Number(live.current_period_end ?? live.items?.data?.[0]?.current_period_end) || null;
-    await env.DB.prepare(
-      `INSERT INTO subscriptions (user_id, stripe_subscription_id, status, current_period_end, updated_at) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET stripe_subscription_id = excluded.stripe_subscription_id, status = excluded.status,
-         current_period_end = excluded.current_period_end, updated_at = excluded.updated_at`,
-    ).bind(user.id, o.id, status, periodEnd, now()).run();
+  if (code && /^(subscription\.|invoice\.)/.test(event.event)) {
+    // Unknown customer means the account doesn't exist (yet); a non-2xx makes Paystack retry.
+    if (!(await syncSubscription(env, code))) return json({ error: "Unknown customer; retry." }, 409);
   }
-  // Recorded only once applied, so a retried event that failed earlier still gets processed.
-  await env.DB.prepare("INSERT OR IGNORE INTO stripe_events (id, received_at) VALUES (?, ?)").bind(event.id, now()).run();
+  await env.DB.prepare("INSERT OR IGNORE INTO paystack_events (id, received_at) VALUES (?, ?)").bind(id, now()).run();
   return json({ ok: true });
 }

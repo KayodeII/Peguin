@@ -49,7 +49,7 @@ export function Pricing() {
           <li>Automatic updates from git, GitHub and Claude Code</li>
           <li>Joins Google Meet and Zoom for you, on schedule</li>
           <li>Answers questions from your work, defers the rest</li>
-          <li>{PRICE.trialDays}-day free trial, cancel any time</li>
+          <li>{PRICE.trialDays}-day free trial, no card needed</li>
         </ul>
         <Link to="/signin?next=/account" className="btn wide">Start free trial</Link>
       </div>
@@ -102,7 +102,7 @@ export function SignIn() {
 }
 
 const STATUS: Record<string, string> = {
-  active: "Active", trialing: "Free trial", past_due: "Payment failed, retrying", canceled: "Canceled", unpaid: "Unpaid", incomplete: "Incomplete",
+  active: "Active", non_renewing: "Cancelled, active until", past_due: "Payment failed, retrying", canceled: "Ended",
 };
 
 export function Account() {
@@ -121,6 +121,8 @@ export function Account() {
   if (!me) return null;
   const sub = me.subscription;
   const until = sub?.current_period_end ? new Date(sub.current_period_end * 1000).toLocaleDateString() : null;
+  const paid = sub && sub.status !== "canceled";
+  const trialDays = me.trial_ends_at ? Math.ceil((me.trial_ends_at * 1000 - Date.now()) / 86400000) : 0;
 
   return (
     <section className="narrow">
@@ -131,10 +133,14 @@ export function Account() {
 
       <div className="card">
         <h3>Plan</h3>
-        {sub ? <p>{STATUS[sub.status] ?? sub.status}{until ? ` · ${sub.status === "canceled" ? "ended" : "renews"} ${until}` : ""}</p> : <p>No plan yet.</p>}
-        {me.entitled || sub
+        {paid
+          ? <p>{STATUS[sub.status] ?? sub.status}{until ? ` ${sub.status === "active" ? "· renews" : ""} ${until}` : ""}</p>
+          : trialDays > 0
+            ? <p>Free trial · {trialDays} day{trialDays === 1 ? "" : "s"} left. Subscribe any time to keep going after.</p>
+            : <p>{sub ? "Your plan has ended." : "Your free trial has ended."} Subscribe to keep using Peguin.</p>}
+        {paid
           ? <button className="btn ghost" onClick={() => void go("/api/billing/portal")}>Manage billing</button>
-          : <button className="btn" onClick={() => void go("/api/billing/checkout")}>Start {PRICE.trialDays}-day free trial</button>}
+          : <button className="btn" onClick={() => void go("/api/billing/checkout")}>Subscribe · {PRICE.amount}/{PRICE.period}</button>}
       </div>
 
       <div className="card">

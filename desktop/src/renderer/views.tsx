@@ -247,7 +247,7 @@ const ACCENTS: { id: Settings["appearance"]["accent"]; color: string }[] = [
   { id: "blue", color: "#2383e2" }, { id: "purple", color: "#9065b0" }, { id: "green", color: "#448361" }, { id: "orange", color: "#d9730d" }, { id: "pink", color: "#c14c8a" },
 ];
 
-const PLAN: Record<string, string> = { active: "Active", trialing: "Free trial", past_due: "Payment failed", canceled: "Canceled" };
+const PLAN: Record<string, string> = { active: "Active", trialing: "Free trial", non_renewing: "Cancelled, active until period end", past_due: "Payment failed", canceled: "Ended" };
 
 function AccountCard({ account }: { account: Account | null }) {
   const [waiting, setWaiting] = useState(false);

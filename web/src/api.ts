@@ -2,6 +2,7 @@ export type Me = {
   email: string;
   name: string | null;
   subscription: { status: string; current_period_end: number | null } | null;
+  trial_ends_at: number | null;
   entitled: boolean;
 };
 

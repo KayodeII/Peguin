@@ -23,7 +23,7 @@ const routes: Record<string, Handler> = {
 
   "GET /api/me": authed(async (env, _req, user) => {
     const sub = await subscriptionOf(env, user.id);
-    return json({ email: user.email, name: user.name, subscription: sub, entitled: isEntitled(sub) });
+    return json({ email: user.email, name: user.name, subscription: sub, trial_ends_at: user.trial_ends_at, entitled: isEntitled(sub, user.trial_ends_at) });
   }),
   "POST /api/billing/checkout": authed((env, _req, user) => checkout(env, user)),
   "POST /api/billing/portal": authed((env, _req, user) => portal(env, user)),
@@ -31,7 +31,7 @@ const routes: Record<string, Handler> = {
   "POST /api/draft": authed((env, req, user) => draft(env, req, user)),
   "POST /api/answer": authed((env, req, user) => answer(env, req, user)),
 
-  "POST /webhooks/stripe": (env, req) => webhook(env, req),
+  "POST /webhooks/paystack": (env, req) => webhook(env, req),
 };
 
 /** Cookie-authenticated writes must be JSON, which a cross-site form can't send. */
