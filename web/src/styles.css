@@ -483,10 +483,6 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-col
 @keyframes hp-lean { from { transform: rotate(3deg); } to { transform: rotate(-1deg); } }
 @keyframes hp-stride { from { transform: translateX(-5px); } 50% { transform: translate(0, -3px); } to { transform: translateX(5px); } }
 @keyframes hp-swing { from { transform: rotate(-14deg); } to { transform: rotate(10deg); } }
-.hp.roll .hp-roller { transform-origin: 40px 58px; animation: hp-roll .9s cubic-bezier(.45, .05, .4, 1); }
-.hp.roll .hp-sprite { animation: hp-hop .9s ease-in-out; }
-@keyframes hp-roll { to { transform: rotate(360deg); } }
-@keyframes hp-hop { 40% { transform: translateY(-16px); } 80% { transform: translateY(1px); } }
 .hp-flip-l { transform-origin: 19px 50px; transition: transform .35s var(--ease); }
 .hp-flip-r { transform-origin: 61px 50px; transition: transform .35s var(--ease); }
 .hp.flag-up.flag-right .hp-flip-r { transform: rotate(-130deg); }
@@ -508,15 +504,9 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-col
 
 .hp-chirp { position: absolute; top: 26px; padding: 5px 9px; border-radius: 12px; background: var(--strong); color: #fff; font: 600 12px/1 var(--sans); white-space: nowrap; opacity: 0; transform: translateY(6px) scale(.8); transition: opacity .2s, transform .3s var(--ease); pointer-events: none; }
 .hp.flag-right .hp-chirp { right: 58px; border-bottom-right-radius: 2px; }
-.hp.flag-left .hp-chirp { left: 58px; border-bottom-left-radius: 2px; }
+.hp.flag-left .hp-chirp { top: -22px; right: -4px; border-bottom-right-radius: 2px; }
 .hp.chirping .hp-chirp { opacity: 1; transform: none; }
 
-.hp-dismiss { position: absolute; top: -8px; z-index: 1; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--bg); color: var(--muted); cursor: pointer; pointer-events: auto; box-shadow: var(--shadow); opacity: 0; transition: opacity .2s; }
-.hp.flag-right .hp-dismiss { left: -6px; }
-.hp.flag-left .hp-dismiss { right: -6px; }
-.hp:hover .hp-dismiss, .hp.flag-up .hp-dismiss, .hp-dismiss:focus-visible { opacity: 1; }
-.hp-dismiss:hover { color: var(--strong); }
-@media (hover: none) { .hp-dismiss { opacity: 1; } }
 
 .hp-launcher { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); box-shadow: var(--shadow-lg); cursor: pointer; transition: transform .2s var(--ease); animation: hc-in .35s var(--ease); }
 .hp-launcher:hover { transform: translateY(-2px) scale(1.04); }

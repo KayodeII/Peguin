@@ -1,118 +1,80 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, getMe } from "../api";
 import { faq } from "../faq";
 import { Icon, Logo, reducedMotion } from "../ui";
 import { chirp } from "./Perched";
 
-const DISMISS_KEY = "peguin-help-dismissed";
 const W = 64; // walker width in px
+const STEP_MS = 520; // one waddle
+const STEPS = 5;
 const WALK_SPEED = 34; // px per second
-const ROLL_SPEED = 95;
+const FLAG_MS = 3200;
+const SEEN_KEY = "peguin-help-intro";
 
-type Phase = "walk" | "roll" | "flag";
+type Phase = "walk" | "flag";
 
-const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
-const write = (k: string, v: string | null) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* private mode */ } };
+const seen = () => { try { return sessionStorage.getItem(SEEN_KEY) === "1"; } catch { return false; } };
+const markSeen = () => { try { sessionStorage.setItem(SEEN_KEY, "1"); } catch { /* private mode */ } };
 
 /**
- * The help entry point: Peguin waddles along the bottom of the page, now and
- * then rolls over, raises a "Need help?" flag and chirps. Clicking it opens
- * the help chat. It can be sent away; a small button stays in the corner.
+ * The help entry point. Once per visit Peguin walks in five steps, raises a
+ * "Need help?" flag and chirps, then settles into the chat button in the corner.
  */
 export function HelpPenguin() {
-  const [dismissed, setDismissed] = useState(() => read(DISMISS_KEY) === "1");
+  const [intro, setIntro] = useState(() => !seen() && !reducedMotion());
   const [open, setOpen] = useState(false);
-
-  const dismiss = () => { write(DISMISS_KEY, "1"); setDismissed(true); };
-  const bringBack = () => { write(DISMISS_KEY, null); setDismissed(false); setOpen(false); };
+  const done = useCallback(() => { markSeen(); setIntro(false); }, []);
 
   return (
     <>
-      {!open && (dismissed
-        ? <button className="hp-launcher" onClick={() => setOpen(true)} aria-label="Open help chat"><Logo size={28} /></button>
-        : <Walker onOpen={() => { chirp(); setOpen(true); }} onDismiss={dismiss} />)}
-      {open && <HelpChat onClose={() => setOpen(false)} dismissed={dismissed} onBringBack={bringBack} />}
+      {!open && (intro
+        ? <Walker onOpen={() => { chirp(); done(); setOpen(true); }} onDone={done} />
+        : <button className="hp-launcher" onClick={() => setOpen(true)} aria-label="Open help chat"><Logo size={28} /></button>)}
+      {open && <HelpChat onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-/* ------------------------------------------------------------ the walking penguin */
+/* ------------------------------------------------------------ the walk-in */
 
-function Walker({ onOpen, onDismiss }: { onOpen: () => void; onDismiss: () => void }) {
-  const still = reducedMotion();
+function Walker({ onOpen, onDone }: { onOpen: () => void; onDone: () => void }) {
   const box = useRef<HTMLDivElement>(null);
-  const x = useRef(typeof window === "undefined" ? 0 : innerWidth - W - 24);
-  const [dir, setDir] = useState<1 | -1>(-1);
-  const dirRef = useRef<1 | -1>(-1);
-  const [phase, setPhase] = useState<Phase>(still ? "flag" : "walk");
-  const phaseRef = useRef(phase);
-  phaseRef.current = phase;
+  // Ends where the chat button sits, so the hand-off looks continuous.
+  const endX = () => innerWidth - W - 20;
+  const x = useRef(endX() + (WALK_SPEED * STEPS * STEP_MS) / 1000);
+  const [phase, setPhase] = useState<Phase>("walk");
   const [hover, setHover] = useState(false);
-  const [chirping, setChirping] = useState(false);
-  const [flagLeft, setFlagLeft] = useState(true);
-  const started = useRef(false);
 
-  // Movement: one rAF loop writes the transform directly, no re-render per frame.
+  // Walk left for five steps.
   useEffect(() => {
     const place = () => { if (box.current) box.current.style.transform = `translate3d(${x.current}px,0,0)`; };
     place();
-    if (still) return;
+    if (phase !== "walk") return;
     let last = performance.now(), raf = 0;
     const tick = (t: number) => {
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
-      const ph = phaseRef.current;
-      if (!hover && (ph === "walk" || ph === "roll")) {
-        const max = innerWidth - W - 12;
-        x.current += dirRef.current * (ph === "roll" ? ROLL_SPEED : WALK_SPEED) * dt;
-        if (x.current <= 12 || x.current >= max) {
-          x.current = Math.min(max, Math.max(12, x.current));
-          dirRef.current = (dirRef.current * -1) as 1 | -1;
-          setDir(dirRef.current);
-        }
-        place();
-      }
+      x.current = Math.max(endX(), x.current - WALK_SPEED * dt);
+      place();
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    const onResize = () => { x.current = Math.min(x.current, innerWidth - W - 12); place(); };
-    addEventListener("resize", onResize);
-    return () => { cancelAnimationFrame(raf); removeEventListener("resize", onResize); };
-  }, [still, hover]);
+    const t = setTimeout(() => setPhase("flag"), STEPS * STEP_MS);
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); };
+  }, [phase]);
 
-  // The routine: walk a while, roll over, raise the flag and chirp, repeat.
+  // Flag up and a chirp, then become the chat button (held while the pointer is on it).
   useEffect(() => {
-    if (still || hover) return;
-    // The first flag comes early so people notice it.
-    const ms = phase === "walk" ? (started.current ? 7000 + Math.random() * 4000 : 4000) : phase === "roll" ? 900 : 3600;
-    started.current = true;
-    const t = setTimeout(() => {
-      if (phase === "walk") setPhase("roll");
-      else if (phase === "roll") { setFlagLeft(x.current > innerWidth / 2); setPhase("flag"); }
-      else setPhase("walk");
-    }, ms);
+    if (phase !== "flag" || hover) return;
+    const t = setTimeout(onDone, FLAG_MS);
     return () => clearTimeout(t);
-  }, [phase, hover, still]);
+  }, [phase, hover, onDone]);
 
-  // A chirp bubble each time the flag goes up.
-  useEffect(() => {
-    if (phase !== "flag" && !hover) return;
-    setChirping(true);
-    const t = setTimeout(() => setChirping(false), 1200);
-    return () => clearTimeout(t);
-  }, [phase, hover]);
-
-  const flagUp = phase === "flag" || hover;
-  const side = hover ? x.current > innerWidth / 2 : flagLeft;
-  const profile = !flagUp && (phase === "walk" || phase === "roll"); // seen from the side while moving
-
+  const flagUp = phase === "flag";
   return (
-    <div ref={box} className={`hp ${phase} ${profile ? "profile" : ""} ${flagUp ? "flag-up" : ""} ${side ? "flag-left" : "flag-right"} ${chirping ? "chirping" : ""}`}
-      style={{ ["--dir" as string]: dir }}
-      onPointerEnter={() => { setHover(true); setFlagLeft(x.current > innerWidth / 2); }} onPointerLeave={() => setHover(false)}>
-      <button className="hp-dismiss" onClick={onDismiss} aria-label="Send Peguin away"><Icon name="close" size={12} /></button>
-      <button className="hp-bird" onClick={onOpen} aria-label="Need help? Open the help chat"
-        onFocus={() => setHover(true)} onBlur={() => setHover(false)}>
+    <div ref={box} className={`hp ${phase} ${flagUp ? "flag-up chirping" : "profile"} flag-left`}
+      style={{ ["--dir" as string]: -1 }} onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}>
+      <button className="hp-bird" onClick={onOpen} aria-label="Need help? Open the help chat">
         <span className="hp-flag" aria-hidden><i className="hp-pole" /><span className="hp-cloth">Need help?</span></span>
         <span className="hp-chirp" aria-hidden>chirp!</span>
         <PenguinSide />
@@ -179,7 +141,7 @@ type View = "chat" | "contact" | "sent";
 const GREETING: Msg = { role: "assistant", text: "Ask me anything about Peguin. I'm an AI and only answer from our help pages. If I don't know, you can message the team." };
 const SUGGESTED = faq().filter((_, i) => [0, 1, 3, 7].includes(i));
 
-function HelpChat({ onClose, dismissed, onBringBack }: { onClose: () => void; dismissed: boolean; onBringBack: () => void }) {
+function HelpChat({ onClose }: { onClose: () => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -263,7 +225,6 @@ function HelpChat({ onClose, dismissed, onBringBack }: { onClose: () => void; di
           </form>
           <footer className="hc-foot">
             <button onClick={toContact}>Message the team</button>
-            {dismissed && <button onClick={onBringBack}>Let Peguin walk again</button>}
           </footer>
         </>
       )}
