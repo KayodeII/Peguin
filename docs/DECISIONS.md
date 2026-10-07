@@ -2,6 +2,10 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: Help penguin, help chat and designed emails
+
+Support starts from the mascot: Peguin walks along the bottom of the page, rolls over, raises a "Need help?" flag and chirps (`web/src/components/HelpPenguin.tsx`). Visitors can send it away; a small corner button remains. The chat answers suggested FAQ questions locally and free-form ones through `/api/support/chat`, where Claude answers only from the site FAQ (`web/src/faq.ts`, shared with the page) and the live price, and marks anything else for handoff. Handoffs go to `/api/support/message`: stored in D1 and emailed only to `SUPPORT_INBOX`, never to the visitor's address, so the public form can't be used as a spam relay. Both endpoints are rate limited per hashed IP. Emails (sign-in, welcome on first sign-in, support inbox) share one table-based, inline-styled layout in `cloud/src/email.ts` with PNG art under `web/public/email/`, because Gmail drops SVG.
+
 ## 2026-10-07: Light-only website with a flowing section colour
 
 The dark look users saw came from the OS dark-mode styles, which the owner didn't want, so the site is now light-only. Following Ghost, Ramp and ClickUp, each home section declares a pastel `data-bg` and `useBackgroundFlow` (in `web/src/ui.tsx`) fades the page background between them as you scroll. Big image moments are scroll-driven: a photo that opens from an inset card to full bleed (`ExpandingPhoto`) and a pinned rail of persona cards that slides sideways (`PeopleRail`), both in `web/src/components/Scenes.tsx`. The no-slop rules from the entry below still apply.

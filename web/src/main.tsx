@@ -1,6 +1,7 @@
 import Lenis from "lenis";
 import { StrictMode, useEffect, useState, type JSX } from "react";
 import { createRoot } from "react-dom/client";
+import { HelpPenguin } from "./components/HelpPenguin";
 import { Footer, Nav } from "./components/Sections";
 import { Account, Connected, Pricing, SignIn } from "./pages/Account";
 import { Home } from "./pages/Home";
@@ -37,6 +38,7 @@ function App() {
       {!bare && <Nav />}
       <main className={bare ? "bare" : ""}><Page /></main>
       {!bare && <Footer />}
+      {path !== "/connected" && <HelpPenguin />}
     </>
   );
 }

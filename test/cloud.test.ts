@@ -2,7 +2,9 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { isEntitled, normaliseStatus, verifyPaystackSignature } from "../cloud/src/billing.js";
 import { signEd25519, verifyEd25519 } from "../cloud/src/crypto.js";
+import { escapeHtml, signInEmail, supportInboxEmail } from "../cloud/src/email.js";
 import { safeNext } from "../cloud/src/http.js";
+import { HANDOFF, parseReply, supportSystem } from "../cloud/src/support.js";
 
 describe("Paystack webhook signatures", () => {
   const secret = "sk_test_abc";
@@ -66,5 +68,37 @@ describe("redirects after sign-in", () => {
     expect(safeNext("/account")).toBe("/account");
     expect(safeNext("/app/connect?x=1")).toBe("/app/connect?x=1");
     for (const bad of ["//evil.com", "https://evil.com", "/\\evil.com", "", null, undefined]) expect(safeNext(bad)).toBe("/account");
+  });
+});
+
+describe("help chat", () => {
+  it("detects and strips the handoff marker", () => {
+    expect(parseReply(`The team can help with refunds by email. ${HANDOFF}`)).toEqual({ text: "The team can help with refunds by email.", handoff: true });
+    expect(parseReply("Yes, Google Meet and Zoom.")).toEqual({ text: "Yes, Google Meet and Zoom.", handoff: false });
+  });
+
+  it("grounds the prompt in the site FAQ and the live price", () => {
+    const s = supportSystem(14, "The plan costs NGN 7,500 per month.");
+    expect(s).toContain("Is there a Windows version?");
+    expect(s).toContain("14-day free trial");
+    expect(s).toContain("NGN 7,500");
+    expect(s).toContain(HANDOFF);
+  });
+});
+
+describe("emails", () => {
+  it("escapes what visitors write before it goes into HTML", () => {
+    const m = supportInboxEmail("https://www.peguin.co", { from: "a@b.co", message: "<script>x</script>", transcript: "", page: "/", userId: null });
+    expect(m.html).not.toContain("<script>");
+    expect(m.html).toContain("&lt;script&gt;");
+    expect(m.replyTo).toBe("a@b.co");
+  });
+
+  it("puts the sign-in link in both the HTML and text parts", () => {
+    const link = "https://www.peguin.co/auth/email/verify?token=abc";
+    const m = signInEmail("https://www.peguin.co", link, 15);
+    expect(m.html).toContain(link);
+    expect(m.text).toContain(link);
+    expect(escapeHtml(`"&'`)).toBe("&quot;&amp;&#39;");
   });
 });

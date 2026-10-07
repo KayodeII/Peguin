@@ -4,6 +4,7 @@ import { answer, draft } from "./claude.js";
 import { HttpError, type Env } from "./env.js";
 import { json } from "./http.js";
 import { issueLicense } from "./license.js";
+import { supportChat, supportMessage } from "./support.js";
 
 type Handler = (env: Env, req: Request, url: URL) => Promise<Response>;
 
@@ -31,6 +32,9 @@ const routes: Record<string, Handler> = {
   "GET /api/license": authed((env, _req, user) => issueLicense(env, user)),
   "POST /api/draft": authed((env, req, user) => draft(env, req, user)),
   "POST /api/answer": authed((env, req, user) => answer(env, req, user)),
+
+  "POST /api/support/chat": (env, req) => supportChat(env, req),
+  "POST /api/support/message": (env, req) => supportMessage(env, req),
 
   "POST /webhooks/paystack": (env, req) => webhook(env, req),
 };

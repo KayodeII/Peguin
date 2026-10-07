@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { reducedMotion } from "../ui";
 
 /** A short two-note chirp, synthesised (no audio file). Only ever played on click. */
-function chirp() {
+export function chirp() {
   try {
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new Ctx();

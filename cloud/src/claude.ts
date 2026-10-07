@@ -24,16 +24,18 @@ async function countUse(env: Env, user: User, kind: Kind) {
   if ((row?.count ?? 0) > limit) throw new HttpError(429, `Daily limit reached (${limit} ${kind}s). It resets at midnight UTC.`);
 }
 
-async function ask(env: Env, system: string, user: string, effort: "low" | "high"): Promise<string> {
+export type Turn = { role: "user" | "assistant"; content: string };
+
+export async function ask(env: Env, system: string, user: string | Turn[], effort: "low" | "high", maxTokens = 16000): Promise<string> {
   const client = new Anthropic({ apiKey: need(env, "ANTHROPIC_API_KEY") });
   const res = await client.beta.messages.create({
     model: env.CLAUDE_MODEL,
-    max_tokens: 16000,
+    max_tokens: maxTokens,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     output_config: { effort },
     system,
-    messages: [{ role: "user", content: user }],
+    messages: typeof user === "string" ? [{ role: "user", content: user }] : user,
   });
   if (res.stop_reason === "refusal") throw new HttpError(422, "Claude declined this request.");
   return res.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();

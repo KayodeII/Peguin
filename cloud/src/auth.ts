@@ -1,4 +1,5 @@
 import { b64url, randomToken, sha256 } from "./crypto.js";
+import { sendEmail, signInEmail, welcomeEmail } from "./email.js";
 import { HttpError, need, type Env } from "./env.js";
 import { body, cookie, json, now, readCookie, redirect, safeNext } from "./http.js";
 
@@ -18,7 +19,15 @@ async function findOrCreateUser(env: Env, email: string, extra: { name?: string;
     `INSERT INTO users (id, email, name, google_sub, created_at, trial_ends_at) VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(email) DO UPDATE SET name = COALESCE(users.name, excluded.name), google_sub = COALESCE(users.google_sub, excluded.google_sub)`,
   ).bind(id, e, extra.name ?? null, extra.googleSub ?? null, now(), now() + Number(env.TRIAL_DAYS) * 86400).run();
-  return (await env.DB.prepare(`SELECT ${USER_COLS} FROM users u WHERE u.email = ?`).bind(e).first<User>())!;
+  const user = (await env.DB.prepare(`SELECT ${USER_COLS} FROM users u WHERE u.email = ?`).bind(e).first<User>())!;
+  if (user.id === id) await sendWelcome(env, user.email);
+  return user;
+}
+
+/** Best effort: a failed welcome email mustn't block signing in. */
+async function sendWelcome(env: Env, to: string) {
+  try { await sendEmail(env, { to, ...welcomeEmail(env.APP_ORIGIN, Number(env.TRIAL_DAYS)) }); }
+  catch (e) { console.error("welcome email failed", e); }
 }
 
 async function startSession(env: Env, userId: string, next: string): Promise<Response> {
@@ -59,17 +68,6 @@ export async function requireUser(env: Env, req: Request): Promise<User> {
 
 /* ------------------------------------------------------------ email link */
 
-async function sendEmail(env: Env, to: string, subject: string, text: string): Promise<boolean> {
-  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return false;
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, text }),
-  });
-  if (!res.ok) throw new HttpError(502, "Couldn't send the sign-in email. Try again in a minute.");
-  return true;
-}
-
 export async function emailStart(env: Env, req: Request): Promise<Response> {
   const { email, next } = await body<{ email?: string; next?: string }>(req);
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "Enter a valid email address.");
@@ -77,8 +75,7 @@ export async function emailStart(env: Env, req: Request): Promise<Response> {
   await env.DB.prepare("INSERT INTO magic_links (token_hash, email, next, expires_at) VALUES (?, ?, ?, ?)")
     .bind(await sha256(token), email.trim().toLowerCase(), safeNext(next), now() + LINK_MINUTES * 60).run();
   const link = `${env.APP_ORIGIN}/auth/email/verify?token=${token}`;
-  const sent = await sendEmail(env, email, "Sign in to Peguin",
-    `Sign in to Peguin:\n\n${link}\n\nThe link works once and expires in ${LINK_MINUTES} minutes. If you didn't ask for it, ignore this email.`);
+  const sent = await sendEmail(env, { to: email, ...signInEmail(env.APP_ORIGIN, link, LINK_MINUTES) });
   if (sent) return json({ ok: true });
   // Without an email provider only local development can sign in (the link comes back in the response).
   if (!env.APP_ORIGIN.startsWith("http://localhost")) throw new HttpError(503, "Email sign-in isn't set up yet. Use Continue with Google.");

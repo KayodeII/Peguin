@@ -1,0 +1,263 @@
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { api, getMe } from "../api";
+import { faq } from "../faq";
+import { Icon, Logo, reducedMotion } from "../ui";
+import { chirp } from "./Perched";
+
+const DISMISS_KEY = "peguin-help-dismissed";
+const W = 64; // walker width in px
+const WALK_SPEED = 34; // px per second
+const ROLL_SPEED = 95;
+
+type Phase = "walk" | "roll" | "flag";
+
+const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
+const write = (k: string, v: string | null) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* private mode */ } };
+
+/**
+ * The help entry point: Peguin waddles along the bottom of the page, now and
+ * then rolls over, raises a "Need help?" flag and chirps. Clicking it opens
+ * the help chat. It can be sent away; a small button stays in the corner.
+ */
+export function HelpPenguin() {
+  const [dismissed, setDismissed] = useState(() => read(DISMISS_KEY) === "1");
+  const [open, setOpen] = useState(false);
+
+  const dismiss = () => { write(DISMISS_KEY, "1"); setDismissed(true); };
+  const bringBack = () => { write(DISMISS_KEY, null); setDismissed(false); setOpen(false); };
+
+  return (
+    <>
+      {!open && (dismissed
+        ? <button className="hp-launcher" onClick={() => setOpen(true)} aria-label="Open help chat"><Logo size={28} /></button>
+        : <Walker onOpen={() => { chirp(); setOpen(true); }} onDismiss={dismiss} />)}
+      {open && <HelpChat onClose={() => setOpen(false)} dismissed={dismissed} onBringBack={bringBack} />}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------ the walking penguin */
+
+function Walker({ onOpen, onDismiss }: { onOpen: () => void; onDismiss: () => void }) {
+  const still = reducedMotion();
+  const box = useRef<HTMLDivElement>(null);
+  const x = useRef(typeof window === "undefined" ? 0 : innerWidth - W - 24);
+  const [dir, setDir] = useState<1 | -1>(-1);
+  const dirRef = useRef<1 | -1>(-1);
+  const [phase, setPhase] = useState<Phase>(still ? "flag" : "walk");
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  const [hover, setHover] = useState(false);
+  const [chirping, setChirping] = useState(false);
+  const [flagLeft, setFlagLeft] = useState(true);
+  const started = useRef(false);
+
+  // Movement: one rAF loop writes the transform directly, no re-render per frame.
+  useEffect(() => {
+    const place = () => { if (box.current) box.current.style.transform = `translate3d(${x.current}px,0,0)`; };
+    place();
+    if (still) return;
+    let last = performance.now(), raf = 0;
+    const tick = (t: number) => {
+      const dt = Math.min(0.05, (t - last) / 1000);
+      last = t;
+      const ph = phaseRef.current;
+      if (!hover && (ph === "walk" || ph === "roll")) {
+        const max = innerWidth - W - 12;
+        x.current += dirRef.current * (ph === "roll" ? ROLL_SPEED : WALK_SPEED) * dt;
+        if (x.current <= 12 || x.current >= max) {
+          x.current = Math.min(max, Math.max(12, x.current));
+          dirRef.current = (dirRef.current * -1) as 1 | -1;
+          setDir(dirRef.current);
+        }
+        place();
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const onResize = () => { x.current = Math.min(x.current, innerWidth - W - 12); place(); };
+    addEventListener("resize", onResize);
+    return () => { cancelAnimationFrame(raf); removeEventListener("resize", onResize); };
+  }, [still, hover]);
+
+  // The routine: walk a while, roll over, raise the flag and chirp, repeat.
+  useEffect(() => {
+    if (still || hover) return;
+    // The first flag comes early so people notice it.
+    const ms = phase === "walk" ? (started.current ? 7000 + Math.random() * 4000 : 4000) : phase === "roll" ? 900 : 3600;
+    started.current = true;
+    const t = setTimeout(() => {
+      if (phase === "walk") setPhase("roll");
+      else if (phase === "roll") { setFlagLeft(x.current > innerWidth / 2); setPhase("flag"); }
+      else setPhase("walk");
+    }, ms);
+    return () => clearTimeout(t);
+  }, [phase, hover, still]);
+
+  // A chirp bubble each time the flag goes up.
+  useEffect(() => {
+    if (phase !== "flag" && !hover) return;
+    setChirping(true);
+    const t = setTimeout(() => setChirping(false), 1200);
+    return () => clearTimeout(t);
+  }, [phase, hover]);
+
+  const flagUp = phase === "flag" || hover;
+  const side = hover ? x.current > innerWidth / 2 : flagLeft;
+
+  return (
+    <div ref={box} className={`hp ${phase} ${flagUp ? "flag-up" : ""} ${side ? "flag-left" : "flag-right"} ${chirping ? "chirping" : ""}`}
+      style={{ ["--dir" as string]: dir }}
+      onPointerEnter={() => { setHover(true); setFlagLeft(x.current > innerWidth / 2); }} onPointerLeave={() => setHover(false)}>
+      <button className="hp-dismiss" onClick={onDismiss} aria-label="Send Peguin away"><Icon name="close" size={12} /></button>
+      <button className="hp-bird" onClick={onOpen} aria-label="Need help? Open the help chat"
+        onFocus={() => setHover(true)} onBlur={() => setHover(false)}>
+        <span className="hp-flag" aria-hidden><i className="hp-pole" /><span className="hp-cloth">Need help?</span></span>
+        <span className="hp-chirp" aria-hidden>chirp!</span>
+        <PenguinSprite />
+      </button>
+    </div>
+  );
+}
+
+function PenguinSprite() {
+  return (
+    <svg className="hp-sprite" viewBox="0 0 80 100" width={W} height={80} aria-hidden>
+      <g className="hp-roller">
+        <ellipse className="hp-foot hp-foot-l" cx="29" cy="94" rx="9" ry="4.5" fill="#f2a93b" />
+        <ellipse className="hp-foot hp-foot-r" cx="51" cy="94" rx="9" ry="4.5" fill="#f2a93b" />
+        <g className="hp-waddle">
+          <path className="hp-flip-l" d="M17 48 C6 56 3 72 7 84 C9 89 14 88 15 82 C16 72 18 62 21 55 Z" fill="#191919" />
+          <path className="hp-flip-r" d="M63 48 C74 56 77 72 73 84 C71 89 66 88 65 82 C64 72 62 62 59 55 Z" fill="#191919" />
+          <ellipse cx="40" cy="56" rx="25" ry="35" fill="#191919" />
+          <ellipse cx="40" cy="63" rx="16.5" ry="26" fill="#f4f1ea" />
+          <g className="hp-face">
+            <circle cx="31" cy="38" r="5.5" fill="#fff" /><circle cx="49" cy="38" r="5.5" fill="#fff" />
+            <circle className="hp-pupil" cx="31.5" cy="39" r="2.6" fill="#191919" /><circle className="hp-pupil" cx="49.5" cy="39" r="2.6" fill="#191919" />
+            <path className="hp-beak-top" d="M34 45 h12 l-6 5.5 z" fill="#f2a93b" />
+            <path className="hp-beak-bottom" d="M36 49 h8 l-4 3.5 z" fill="#e0912a" />
+            <ellipse cx="24" cy="48" rx="4" ry="2.4" fill="#f4a3a3" opacity=".55" />
+            <ellipse cx="56" cy="48" rx="4" ry="2.4" fill="#f4a3a3" opacity=".55" />
+          </g>
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/* ------------------------------------------------------------ the chat */
+
+type Msg = { role: "user" | "assistant"; text: string; handoff?: boolean };
+type View = "chat" | "contact" | "sent";
+
+const GREETING: Msg = { role: "assistant", text: "Hi, I'm Peguin's help assistant, an AI. Ask me about the app, pricing or privacy. If I can't answer, I'll pass it to the team." };
+const SUGGESTED = faq().filter((_, i) => [0, 1, 3, 7].includes(i));
+
+function HelpChat({ onClose, dismissed, onBringBack }: { onClose: () => void; dismissed: boolean; onBringBack: () => void }) {
+  const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<View>("chat");
+  const [email, setEmail] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  const list = useRef<HTMLDivElement>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { void getMe().then((m) => m && setEmail((e) => e || m.email)).catch(() => {}); }, []);
+  useEffect(() => { field.current?.focus(); }, [view]);
+  useEffect(() => { list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "smooth" }); }, [msgs, busy]);
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    addEventListener("keydown", esc);
+    return () => removeEventListener("keydown", esc);
+  }, [onClose]);
+
+  const lastQuestion = () => [...msgs].reverse().find((m) => m.role === "user")?.text ?? "";
+  const toContact = () => { setNote((n) => n || lastQuestion()); setError(""); setView("contact"); };
+
+  async function send(text: string) {
+    const q = text.trim();
+    if (!q || busy) return;
+    setInput("");
+    const local = SUGGESTED.find((f) => f.q === q);
+    const next = [...msgs, { role: "user" as const, text: q }];
+    setMsgs(next);
+    if (local) { setMsgs([...next, { role: "assistant", text: local.a }]); return; }
+    setBusy(true);
+    try {
+      const r = await api<{ text: string; handoff: boolean }>("/api/support/chat", { body: { messages: next.map(({ role, text }) => ({ role, text })) } });
+      setMsgs([...next, { role: "assistant", text: r.text, handoff: r.handoff }]);
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      const text = status === 429 ? (e as Error).message : "I can't answer that right now. Send it to the team and they'll reply by email.";
+      setMsgs([...next, { role: "assistant", text, handoff: true }]);
+    } finally { setBusy(false); }
+  }
+
+  async function contact(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true); setError("");
+    const transcript = msgs.slice(1).map((m) => `${m.role === "user" ? "Visitor" : "Assistant"}: ${m.text}`).join("\n");
+    try { await api("/api/support/message", { body: { email, message: note, transcript, page: location.pathname } }); setView("sent"); }
+    catch (err) { setError((err as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <section className="hc" role="dialog" aria-label="Peguin help">
+      <header className="hc-head">
+        <span className="hc-avatar"><Logo size={26} /></span>
+        <div><strong>Peguin help</strong><span>{view === "chat" ? "Answers from our docs, or a person by email" : "A person reads every message"}</span></div>
+        <button className="hc-close" onClick={onClose} aria-label="Close help"><Icon name="close" size={16} /></button>
+      </header>
+
+      {view === "chat" && (
+        <>
+          <div className="hc-list" ref={list} data-lenis-prevent>
+            {msgs.map((m, i) => (
+              <div key={i} className={`hc-msg ${m.role}`}>
+                <p>{m.text}</p>
+                {m.handoff && <button className="hc-handoff" onClick={toContact}>Send this to the team<Icon name="arrow" size={14} /></button>}
+              </div>
+            ))}
+            {busy && <div className="hc-msg assistant typing" aria-label="Typing"><i /><i /><i /></div>}
+            {msgs.length === 1 && (
+              <div className="hc-chips">{SUGGESTED.map((f) => <button key={f.q} onClick={() => void send(f.q)}>{f.q}</button>)}</div>
+            )}
+          </div>
+          <form className="hc-input" onSubmit={(e) => { e.preventDefault(); void send(input); }}>
+            <textarea ref={field} rows={1} value={input} placeholder="Ask a question" maxLength={1000}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(input); } }} />
+            <button className="hc-send" disabled={!input.trim() || busy} aria-label="Send"><Icon name="arrow" size={18} /></button>
+          </form>
+          <footer className="hc-foot">
+            <button onClick={toContact}>Talk to a person</button>
+            {dismissed && <button onClick={onBringBack}>Let Peguin walk again</button>}
+          </footer>
+        </>
+      )}
+
+      {view === "contact" && (
+        <form className="hc-form" onSubmit={contact} data-lenis-prevent>
+          <p className="muted">Tell us what's going on. The team replies by email, usually within a day.</p>
+          {error && <div className="error" role="alert">{error}</div>}
+          <label>Your email<input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" /></label>
+          <label>Message<textarea ref={field} required rows={5} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} /></label>
+          <button className="btn wide" disabled={busy}>{busy ? "Sending" : "Send to the team"}</button>
+          <button type="button" className="link" onClick={() => setView("chat")}>Back to chat</button>
+        </form>
+      )}
+
+      {view === "sent" && (
+        <div className="hc-sent">
+          <PenguinSprite />
+          <h3>Sent</h3>
+          <p className="muted">We'll reply to {email}.</p>
+          <button className="btn ghost" onClick={() => setView("chat")}>Back to chat</button>
+        </div>
+      )}
+    </section>
+  );
+}

@@ -14,6 +14,8 @@ export interface Env {
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
   LICENSE_PRIVATE_JWK?: string;
+  /** Where help-chat messages are emailed. Without it they are only stored in D1. */
+  SUPPORT_INBOX?: string;
 }
 
 /** A secret the current route can't work without. */
