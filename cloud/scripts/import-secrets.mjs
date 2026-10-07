@@ -31,6 +31,20 @@ const ALIASES = {
 };
 // Not copied on purpose: a plan code belongs to another product (use --paystack).
 
+// When no exact name matches: any name fitting the pattern, test keys first.
+const PATTERNS = {
+  PAYSTACK_SECRET_KEY: { name: /PAYSTACK.*(SECRET|SK)|(SECRET|SK).*PAYSTACK/i, value: /^sk_(test|live)_/ },
+  ANTHROPIC_API_KEY: { name: /ANTHROPIC|CLAUDE/i, value: /^sk-ant-/ },
+  RESEND_API_KEY: { name: /RESEND/i, value: /^re_/ },
+  GOOGLE_CLIENT_SECRET: { name: /GOOGLE.*SECRET/i, value: /./ },
+};
+function byPattern(dest) {
+  const p = PATTERNS[dest];
+  if (!p) return undefined;
+  const hits = Object.keys(env).filter((n) => p.name.test(n) && p.value.test(env[n]));
+  return hits.find((n) => /TEST/i.test(n) || env[n].startsWith("sk_test_")) ?? hits[0];
+}
+
 function put(name, value) {
   const r = spawnSync("npx", ["wrangler", "secret", "put", name], { input: value, stdio: ["pipe", "ignore", "pipe"], encoding: "utf8" });
   if (r.status !== 0) throw new Error(`wrangler secret put ${name} failed: ${r.stderr.split("\n").filter(Boolean).slice(-2).join(" ")}`);
@@ -40,9 +54,9 @@ function put(name, value) {
 const found = {};
 console.log(`Reading ${file}`);
 for (const [dest, names] of Object.entries(ALIASES)) {
-  const src = names.find((n) => env[n]);
-  if (src) { found[dest] = env[src]; put(dest, env[src]); }
-  else console.log(`  not found: ${dest} (looked for ${names.join(", ")})`);
+  const src = names.find((n) => env[n]) ?? byPattern(dest);
+  if (src) { found[dest] = env[src]; put(dest, env[src]); if (!names.includes(src)) console.log(`    (from ${src})`); }
+  else console.log(`  not found: ${dest} (looked for ${names.join(", ")}${PATTERNS[dest] ? " and similar names" : ""})`);
 }
 put("EMAIL_FROM", "Peguin <hello@peguin.co>");
 
