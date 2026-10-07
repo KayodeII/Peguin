@@ -4,7 +4,7 @@ import type { AppEvent } from "../main/index";
 import { botName } from "../main/meeting/platform";
 import type { MeetingEvent, MeetingStatus } from "../main/meeting/runner";
 import type { Settings } from "../main/settings";
-import { Avatar, Icon, message } from "./ui";
+import { Avatar, Icon, Logo, message } from "./ui";
 import { LiveView, Onboarding, SettingsView, SourcesView, TodayView } from "./views";
 
 export type View = "today" | "live" | "sources" | "settings";
@@ -48,7 +48,7 @@ export function App() {
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(""), 4000); return () => clearTimeout(t); }, [toast]);
 
-  if (!settings) return <div className="boot">🐧</div>;
+  if (!settings) return <div className="boot"><Logo size={48} /></div>;
 
   const save = async (s: Settings) => {
     const saved: Settings = await window.penguin.saveSettings(s);
@@ -58,12 +58,12 @@ export function App() {
   const prepare = () => window.penguin.prepareDraft().catch((e: unknown) => setToast(message(e)));
   const inCall = live.status === "in_call" || live.status === "joining" || live.status === "waiting";
   const statusLine = inCall ? (live.status === "in_call" ? "In your standup" : "Joining a meeting")
-    : draft.preparing ? "Writing your update…" : next ? `Next standup ${next.label.replace(/^\w/, (c) => c.toLowerCase())}` : "No standup set";
+    : draft.preparing ? "Writing your update" : next ? next.label : "No standup set";
 
   return (
     <div className="app">
       <nav className="rail" aria-label="Sections">
-        <button className={`home ${view === "today" ? "active" : ""}`} onClick={() => setView("today")} title="Penguin">🐧</button>
+        <button className={`home ${view === "today" ? "active" : ""}`} onClick={() => setView("today")} title="Penguin" aria-label="Today"><Logo /></button>
         <div className="rail-sep" />
         {NAV.filter((n) => n.id !== "today").map((n) => (
           <button key={n.id} className={`rail-btn ${view === n.id ? "active" : ""}`} onClick={() => setView(n.id)} title={n.label} aria-label={n.label}>
@@ -88,8 +88,8 @@ export function App() {
           <p className="side-label">Next standup</p>
           <div className="side-card">
             {settings.standup.url
-              ? <><strong>{next?.label ?? "Not scheduled"}</strong><span>{settings.standup.auto ? "Penguin will join for you" : "Auto-join is off"}</span></>
-              : <><strong>No standup yet</strong><button className="link" onClick={() => setView("settings")}>Add your standup link</button></>}
+              ? <><strong>{next?.label ?? "Not scheduled"}</strong><span>{settings.standup.auto ? "Auto-join on" : "Auto-join off"}</span></>
+              : <><strong>None set</strong><button className="link" onClick={() => setView("settings")}>Add standup</button></>}
           </div>
         </div>
         <footer className="userbar">

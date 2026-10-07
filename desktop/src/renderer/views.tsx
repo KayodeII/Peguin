@@ -3,12 +3,12 @@ import type { DraftState, LiveState } from "./App";
 import type { Draft } from "../main/brain";
 import { botName } from "../main/meeting/platform";
 import type { Settings } from "../main/settings";
-import { Avatar, dayTime, Icon, message, Toggle, Typing } from "./ui";
+import { Avatar, dayTime, Icon, Logo, message, Toggle, Typing } from "./ui";
 
 const SOURCE_INFO = {
-  git: { name: "Git commits", desc: "Your commits across the repos on this computer. Found automatically." },
-  github: { name: "GitHub", desc: "PRs you opened, merged or reviewed, through the GitHub CLI's login." },
-  claude_code: { name: "Claude Code sessions", desc: "What you asked Claude Code to work on. Only your prompts, read on this computer, never tool output or code." },
+  git: { name: "Git commits", desc: "Commits in repos on this computer." },
+  github: { name: "GitHub", desc: "PRs and reviews, via the gh CLI." },
+  claude_code: { name: "Claude Code", desc: "Your prompts only. Never code or output." },
 } as const;
 type SourceKey = keyof typeof SOURCE_INFO;
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -30,16 +30,16 @@ export function TodayView({ settings, draft, prepare, goSources }: { settings: S
   const name = botName(settings.displayName, "google_meet");
   return (
     <>
-      <ChannelHeader name="today" topic="What Penguin will say when it's your turn">
+      <ChannelHeader name="today" topic="Your next update">
         <button className="btn ghost" disabled={draft.preparing} onClick={prepare}><Icon name="refresh" size={16} />{d ? "Refresh" : "Prepare"}</button>
       </ChannelHeader>
       <div className="scroll">
         {!d && !draft.preparing && (
           <div className="empty">
-            <div className="empty-art">🐧</div>
+            <Logo size={56} />
             <h2>No update yet</h2>
-            <p>Penguin reads your work since the last standup and writes a 30–45 second update. You don't type anything.</p>
-            <button className="btn primary" onClick={prepare}>Prepare today's update</button>
+            <p>Built from your work since the last standup.</p>
+            <button className="btn primary" onClick={prepare}>Prepare update</button>
           </div>
         )}
         {d && (
@@ -49,7 +49,7 @@ export function TodayView({ settings, draft, prepare, goSources }: { settings: S
               <div className="msg-head"><strong>{name}</strong><span className="tag">AI</span><time>Prepared {dayTime(d.generatedAt)}</time></div>
               <p className="msg-text">{d.script}</p>
               <div className="embed">
-                <div className="embed-title">What Penguin knows · answers questions from these only</div>
+                <div className="embed-title">Facts used for questions</div>
                 <ul>{d.facts.map((f, i) => <li key={i}>{f}</li>)}</ul>
               </div>
               <div className="chips">
@@ -63,8 +63,8 @@ export function TodayView({ settings, draft, prepare, goSources }: { settings: S
             </div>
           </article>
         )}
-        {draft.preparing && <Typing text="Penguin is reading your work and writing the update…" />}
-        {draft.error && <div className="notice error">Couldn't prepare the update: {draft.error}</div>}
+        {draft.preparing && <Typing text="Penguin is writing" />}
+        {draft.error && <div className="notice error">{draft.error}</div>}
       </div>
     </>
   );
@@ -72,8 +72,8 @@ export function TodayView({ settings, draft, prepare, goSources }: { settings: S
 
 /* ---------------------------------------------------------------- Live */
 
-const ACTION: Record<string, string> = { give_update: "gave your update", answer: "is answering", acknowledge: "said it's listening" };
-const STATUS: Record<string, string> = { joining: "Joining…", waiting: "Waiting to be let in", in_call: "In the call", ended: "Not in a meeting", failed: "Couldn't join" };
+const ACTION: Record<string, string> = { give_update: "gave the update", answer: "answered", acknowledge: "acknowledged" };
+const STATUS: Record<string, string> = { joining: "Joining", waiting: "In the lobby", in_call: "In the call", ended: "Idle", failed: "Couldn't join" };
 
 export function LiveView({ settings, live, join, leave }: { settings: Settings; live: LiveState; join: (u: string) => void; leave: () => void }) {
   const [url, setUrl] = useState(settings.standup.url);
@@ -89,9 +89,8 @@ export function LiveView({ settings, live, join, leave }: { settings: Settings; 
       <div className="scroll">
         {live.events.length === 0 && (
           <div className="empty">
-            <div className="empty-art">🎧</div>
-            <h2>Nothing live right now</h2>
-            <p>When Penguin is in a meeting, you'll see what it hears and says here. It joins muted with the camera off and only unmutes to speak.</p>
+            <h2>Not in a meeting</h2>
+            <p>The transcript shows up here.</p>
           </div>
         )}
         {live.events.map((e, i) => {
@@ -110,10 +109,10 @@ export function LiveView({ settings, live, join, leave }: { settings: Settings; 
         <div ref={end} />
       </div>
       <form className="composer" onSubmit={(e) => { e.preventDefault(); if (!active && url.trim()) join(url.trim()); }}>
-        <input value={url} disabled={active} placeholder="Paste a Google Meet, Zoom or Teams link to send Penguin" onChange={(e) => setUrl(e.target.value)} />
+        <input value={url} disabled={active} placeholder="Meeting link" onChange={(e) => setUrl(e.target.value)} />
         {active
           ? <button type="button" className="btn danger" onClick={leave}>Leave</button>
-          : <button type="submit" className="btn primary" disabled={!url.trim()}><Icon name="send" size={16} />Send Penguin</button>}
+          : <button type="submit" className="btn primary" disabled={!url.trim()}><Icon name="send" size={16} />Join</button>}
       </form>
     </>
   );
@@ -126,7 +125,7 @@ export function SourcesView({ settings, draft, save, prepare }: { settings: Sett
   const setSource = (id: SourceKey, on: boolean) => void save({ ...settings, sources: { ...settings.sources, [id]: on } });
   return (
     <>
-      <ChannelHeader name="sources" topic="Where Penguin learns what you worked on">
+      <ChannelHeader name="sources">
         <button className="btn ghost" onClick={prepare}><Icon name="refresh" size={16} />Re-check</button>
       </ChannelHeader>
       <div className="scroll narrow">
@@ -143,9 +142,9 @@ export function SourcesView({ settings, draft, save, prepare }: { settings: Sett
             </div>
           );
         })}
-        <h3 className="section-label">Coming with your Penguin account</h3>
-        {["Google / Outlook Calendar: finds your standups and double-bookings", "Linear", "Jira", "GitHub without the CLI"].map((t) => (
-          <div key={t} className="row-card muted"><div className="row-main"><strong>{t.split(":")[0]}</strong>{t.includes(":") && <p>{t.split(": ")[1]}</p>}</div><span className="tag">Soon</span></div>
+        <h3 className="section-label">Coming soon</h3>
+        {["Calendar", "Linear", "Jira"].map((t) => (
+          <div key={t} className="row-card muted"><div className="row-main"><strong>{t}</strong></div><span className="tag">Soon</span></div>
         ))}
       </div>
     </>
@@ -174,10 +173,10 @@ export function SettingsView({ settings, save, preview }: { settings: Settings; 
           <label>Name<input value={s.displayName} maxLength={40} onChange={(e) => setS({ ...s, displayName: e.target.value })} /></label>
           <label>Also called<input value={aliases} placeholder="Mujib, MJ" onChange={(e) => setAliases(e.target.value)} /></label>
         </div>
-        <p className="hint">Joins as <strong>{preview(s.displayName)}</strong>. The AI label is always added.</p>
+        <p className="hint">Joins as <strong>{preview(s.displayName)}</strong></p>
 
         <h3 className="section-label">Your standup</h3>
-        <label>Meeting link<input value={st.url} placeholder="https://meet.google.com/abc-defg-hij" onChange={(e) => setStandup({ url: e.target.value })} /></label>
+        <label>Link<input value={st.url} placeholder="https://meet.google.com/abc-defg-hij" onChange={(e) => setStandup({ url: e.target.value })} /></label>
         <div className="field-grid">
           <label>Starts at<input type="time" value={st.time} onChange={(e) => setStandup({ time: e.target.value })} /></label>
           <div className="label">Days
@@ -188,24 +187,24 @@ export function SettingsView({ settings, save, preview }: { settings: Settings; 
           </div>
         </div>
         <div className="row-card">
-          <div className="row-main"><strong>Join for me automatically</strong><p>Penguin prepares 15 minutes before and joins just before it starts.</p></div>
+          <div className="row-main"><strong>Auto-join</strong><p>Prepares 15 minutes before, joins at the start.</p></div>
           <Toggle on={st.auto} onChange={(v) => setStandup({ auto: v })} label="Join automatically" />
         </div>
 
         <h3 className="section-label">Voice</h3>
-        <div className="row-card"><div className="row-main"><strong>Default voice</strong><p>Your own voice is coming later: opt-in, recorded in the app, and Penguin still says it's an AI.</p></div><span className="tag">Active</span></div>
+        <div className="row-card"><div className="row-main"><strong>Default voice</strong><p>Your own voice: coming soon.</p></div><span className="tag">Active</span></div>
 
         <h3 className="section-label">Advanced</h3>
         <label>Timezone<select value={s.timezone} onChange={(e) => setS({ ...s, timezone: e.target.value })}>{timezones.map((t) => <option key={t}>{t}</option>)}</select></label>
         <div className="row-card">
-          <div className="row-main"><strong>Show the meeting window</strong><p>Watch what Penguin does in the call.</p></div>
+          <div className="row-main"><strong>Show meeting window</strong></div>
           <Toggle on={!s.runHidden} onChange={(v) => setS({ ...s, runHidden: !v })} label="Show the meeting window" />
         </div>
         {error && <div className="notice error">{error}</div>}
       </div>
       {dirty && (
         <div className="savebar">
-          <span>Careful, you have unsaved changes!</span>
+          <span>Unsaved changes</span>
           <button className="btn link" onClick={() => { setS(settings); setAliases(settings.aliases.join(", ")); }}>Reset</button>
           <button className="btn success" onClick={() => { setError(""); save(next).catch((e) => setError(message(e))); }}>Save changes</button>
         </div>
@@ -232,24 +231,23 @@ export function Onboarding({ settings, save, done }: { settings: Settings; save:
   return (
     <div className="modal-backdrop">
       <div className="modal" role="dialog" aria-labelledby="welcome">
-        <div className="modal-art">🐧</div>
+        <div className="modal-art"><Logo size={56} /></div>
         <h2 id="welcome">Welcome to Penguin</h2>
-        <p className="modal-sub">It covers your standup when you're double-booked: it reads your work, writes your update, joins the call and says it, as your AI assistant.</p>
-        <label>Your name<input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
+        <p className="modal-sub">Your standup, covered.</p>
+        <label>Name<input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
         <p className="hint">Joins as <strong>{botName(name, "google_meet")}</strong></p>
         <div className="field-grid">
-          <label><span>Standup link <span className="opt">· optional</span></span><input value={url} placeholder="Meet, Zoom or Teams link" onChange={(e) => setUrl(e.target.value)} /></label>
+          <label><span>Standup link <span className="opt">optional</span></span><input value={url} placeholder="Meet, Zoom or Teams" onChange={(e) => setUrl(e.target.value)} /></label>
           <label>Starts at<input type="time" value={at} onChange={(e) => setAt(e.target.value)} /></label>
         </div>
-        <p className="section-label small">Let Penguin read</p>
+        <p className="section-label small">Sources</p>
         {(Object.keys(SOURCE_INFO) as SourceKey[]).map((id) => (
           <div key={id} className="row-card compact">
             <div className="row-main"><strong>{SOURCE_INFO[id].name}</strong><p>{SOURCE_INFO[id].desc}</p></div>
             <Toggle on={sources[id]} onChange={(v) => setSources({ ...sources, [id]: v })} label={SOURCE_INFO[id].name} />
           </div>
         ))}
-        <p className="hint">Your work summary is written by Claude. Nothing is shared with your team except what Penguin says in the call.</p>
-        {error && <div className="notice error">{error}</div>}
+                {error && <div className="notice error">{error}</div>}
         <button className="btn primary wide" disabled={!name.trim()} onClick={() => void finish()}>Get started</button>
       </div>
     </div>

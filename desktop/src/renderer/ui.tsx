@@ -27,9 +27,20 @@ export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boo
   );
 }
 
+export function Logo({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden>
+      <ellipse cx="16" cy="17" rx="10" ry="12" fill="#0b1118" />
+      <ellipse cx="16" cy="20" rx="6.5" ry="8" fill="#f4f1ea" />
+      <circle cx="12.5" cy="12" r="1.6" fill="#fff" /><circle cx="19.5" cy="12" r="1.6" fill="#fff" />
+      <path d="M13.5 15.5h5l-2.5 2.6z" fill="#f2a93b" />
+    </svg>
+  );
+}
+
 export function Avatar({ name, bot }: { name: string; bot?: boolean }) {
   const initials = name.trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "?";
-  return <div className={`avatar ${bot ? "bot" : ""}`} aria-hidden>{bot ? "🐧" : initials}</div>;
+  return <div className={`avatar ${bot ? "bot" : ""}`} aria-hidden>{bot ? <Logo size={30} /> : initials}</div>;
 }
 
 export function Typing({ text }: { text: string }) {

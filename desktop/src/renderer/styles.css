@@ -22,7 +22,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); }
 .rail { background: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 0 12px; -webkit-app-region: drag; }
 .rail > * { -webkit-app-region: no-drag; }
 .rail .home, .rail-btn { position: relative; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--main); color: var(--ink); transition: border-radius .15s, background .15s, color .15s; }
-.rail .home { font-size: 26px; }
+.rail .home { background: #f4f1ea; }
 .rail .home:hover, .rail .home.active, .rail-btn:hover, .rail-btn.active { border-radius: 16px; background: var(--accent); color: #fff; }
 .rail-btn.active::before, .rail .home.active::before { content: ""; position: absolute; left: -12px; width: 4px; height: 40px; border-radius: 0 4px 4px 0; background: var(--ink-strong); }
 .rail-sep { width: 32px; height: 2px; border-radius: 1px; background: var(--active); }
@@ -54,7 +54,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); }
 /* Avatars */
 .avatar { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 600; font-size: 15px; background: #5865f2; color: #fff; }
 .userbar .avatar { width: 32px; height: 32px; font-size: 13px; }
-.avatar.bot { background: #0f1720; font-size: 22px; }
+.avatar.bot { background: #f4f1ea; }
 
 /* Content */
 .content { display: flex; flex-direction: column; min-width: 0; position: relative; }
@@ -104,7 +104,6 @@ input:focus, select:focus { outline: 2px solid var(--accent); }
 @keyframes blink { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
 
 .empty { max-width: 440px; margin: 10vh auto 0; text-align: center; color: var(--muted); }
-.empty-art { font-size: 56px; }
 .empty h2 { color: var(--ink-strong); margin: 12px 0 6px; font-size: 20px; }
 .empty p { margin: 0 0 18px; }
 .notice { margin-top: 12px; padding: 10px 14px; border-radius: 4px; font-size: 14px; }
@@ -152,7 +151,7 @@ label input, label select { text-transform: none; font-weight: 400; letter-spaci
 /* Modal */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: grid; place-items: center; z-index: 10; }
 .modal { width: min(520px, calc(100% - 32px)); max-height: calc(100% - 48px); overflow: auto; background: var(--main); border-radius: var(--radius); padding: 28px 24px 20px; }
-.modal-art { font-size: 48px; text-align: center; }
+.modal-art { display: flex; justify-content: center; }
 .modal h2 { text-align: center; margin: 8px 0 4px; color: var(--ink-strong); font-size: 24px; }
 .modal-sub { text-align: center; color: var(--muted); margin: 0 0 20px; }
 .modal .row-card { background: var(--side); }
