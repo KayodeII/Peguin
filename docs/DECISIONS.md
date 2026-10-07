@@ -2,6 +2,10 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: Reduced motion means calmer, not off
+
+Visitors with "reduce motion" switched on (common on Windows, where turning off animation effects sets it) saw an almost static site. Now reduced motion keeps fades, typing, speaking bars, the hero scene, the scripted app demo and the perched penguin, and drops only travel: smooth scrolling, parallax, the showcase tilt, cursor-driven layer drift, looping background motion and the help penguin's walk-in. Reveals fade in place instead of sliding. The build also targets Safari 14 and Chrome 87 so older Macs and iPhones get the full site.
+
 ## 2026-10-07: App showcase with a grain gradient
 
 The closing tomato band is replaced by a ClickUp-style showcase (`web/src/components/AppDemo.tsx`): a rounded card with a slowly drifting, grainy gradient in the brand colours, the app icon, one line and the trial button, over a faithful copy of the desktop app. A scripted cursor prepares the update, joins the standup, and Peguin speaks and answers, then it loops. It only runs while on screen and shows the finished meeting for reduced motion. This is the one deliberate exception to "no gradients": the owner asked for it, and it frames the product rather than decorating text.

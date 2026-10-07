@@ -21,7 +21,7 @@ const markSeen = () => { try { sessionStorage.setItem(SEEN_KEY, "1"); } catch { 
  * "Need help?" flag and chirps, then settles into the chat button in the corner.
  */
 export function HelpPenguin() {
-  const [intro, setIntro] = useState(() => !seen() && !reducedMotion());
+  const [intro, setIntro] = useState(() => !seen());
   const [open, setOpen] = useState(false);
   const done = useCallback(() => { markSeen(); setIntro(false); }, []);
 
@@ -41,8 +41,9 @@ function Walker({ onOpen, onDone }: { onOpen: () => void; onDone: () => void }) 
   const box = useRef<HTMLDivElement>(null);
   // Ends where the chat button sits, so the hand-off looks continuous.
   const endX = () => innerWidth - W - 20;
-  const x = useRef(endX() + (WALK_SPEED * STEPS * STEP_MS) / 1000);
-  const [phase, setPhase] = useState<Phase>("walk");
+  const still = reducedMotion(); // no walk-in: it appears with the flag up
+  const x = useRef(endX() + (still ? 0 : (WALK_SPEED * STEPS * STEP_MS) / 1000));
+  const [phase, setPhase] = useState<Phase>(still ? "flag" : "walk");
   const [hover, setHover] = useState(false);
 
   // Walk left for five steps.
