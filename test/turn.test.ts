@@ -70,12 +70,31 @@ describe("TurnDetector", () => {
     expect(t.onUtterance("Mujeeb, what's the ETA on the Lagos rail work?", 61000).action).toBe("answer");
   });
 
-  it("caps follow-ups", () => {
+  it("caps unnamed follow-ups", () => {
     const t = new TurnDetector({ names, maxFollowUps: 1 });
     t.markUpdateGiven();
     t.setSpeaking(false, 0);
-    expect(t.onUtterance("Mujeeb, is it deployed?", 5000).action).toBe("answer");
-    expect(t.onUtterance("Mujeeb, and the tests?", 9000).action).toBe("none");
+    expect(t.onUtterance("is it deployed?", 5000).action).toBe("answer");
+    t.setSpeaking(true, 5000); t.setSpeaking(false, 8000);
+    expect(t.onUtterance("and the tests?", 10000).action).toBe("none");
+  });
+
+  it("always answers questions that name the user, however many came before", () => {
+    const t = new TurnDetector({ names, maxFollowUps: 1 });
+    t.markUpdateGiven();
+    t.setSpeaking(false, 0);
+    for (let i = 1; i <= 5; i++) {
+      const now = i * 30000;
+      expect(t.onUtterance(`Mujeeb, question number ${i}?`, now).action).toBe("answer");
+      t.setSpeaking(true, now); t.setSpeaking(false, now + 3000);
+    }
+  });
+
+  it("named statements late in the call are not questions", () => {
+    const t = new TurnDetector({ names });
+    t.markUpdateGiven();
+    t.setSpeaking(false, 0);
+    expect(t.onUtterance("Mujeeb did a great job on the release", 120000).action).toBe("none");
   });
 });
 

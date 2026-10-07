@@ -4,8 +4,10 @@
  * Inputs are finalised utterances from speech-to-text. Penguin speaks when:
  *  1. someone hands the floor to the user by name ("Mujeeb, you're up",
  *     "Mujeeb?", "what about Mujeeb") and the update hasn't been given; or
- *  2. after the update, someone asks a question that names the user, or asks
- *     a question within the follow-up window right after Penguin finished.
+ *  2. after the update, someone asks a question that names the user (always
+ *     answered: going silent when addressed is worse than deferring), or asks
+ *     an unnamed question within the follow-up window right after Penguin
+ *     finished (capped by maxFollowUps, since those are guesses).
  * It stays silent while it is talking and for a short tail after, so it never
  * reacts to its own voice echoing back from the call.
  */
@@ -19,7 +21,7 @@ export type TurnOptions = {
   names: string[];              // the user's name plus aliases
   followUpWindowMs?: number;    // questions right after the update count as follow-ups
   echoTailMs?: number;          // ignore audio this long after Penguin stops
-  maxFollowUps?: number;
+  maxFollowUps?: number;       // cap on unnamed follow-ups; named questions are always answered
 };
 
 const HANDOFF = [
@@ -122,13 +124,14 @@ export class TurnDetector {
       return isHandoff(t, this.o.names) ? { action: "give_update" } : { action: "none" };
     }
 
-    if (this.followUps >= this.o.maxFollowUps || !isQuestion(t)) return { action: "none" };
-    const named = mentionsName(t, this.o.names);
+    if (!isQuestion(t)) return { action: "none" };
+    if (mentionsName(t, this.o.names)) return { action: "answer", question: t };
+    if (this.followUps >= this.o.maxFollowUps) return { action: "none" };
     const inWindow = now - this.lastSpokeEndedAt <= this.o.followUpWindowMs;
     // "Sarah, what about you?" right after Penguin finishes is the floor moving
     // on, not a follow-up for us.
-    const handsToSomeoneElse = !named && HANDOFF.some((r) => r.test(normalize(t)));
-    if (named || (inWindow && !handsToSomeoneElse)) {
+    const handsToSomeoneElse = HANDOFF.some((r) => r.test(normalize(t)));
+    if (inWindow && !handsToSomeoneElse) {
       this.followUps++;
       return { action: "answer", question: t };
     }
