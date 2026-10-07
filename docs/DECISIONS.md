@@ -2,6 +2,13 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: Brand palette and a bolder, photo-led website
+
+- **Palette:** warm and nostalgic rather than black. Terracotta `#B4552C` is the brand colour (white text 4.9:1), with sage `#3F7A71`, butter `#F2D589`, cream paper `#FAF5EC` and espresso `#2A211C` for dark sections. Bold bands keep these exact colours in dark mode; accent text lightens instead.
+- **Type:** Notion-style system sans; Fraunces (Google Fonts) for italic accents and big numbers.
+- **Site:** after Wispr Flow and Ghost. A split hero with a photo and floating animated meeting cards; an integrations marquee; a dark live-demo band; a terracotta band of product facts (40 s, 15 min, 0 lines of code; no vanity metrics); before/after; three photo feature rows with animated UI cards; a bento grid; auto-advancing persona tabs; a how-it-works timeline; a sage privacy band; pricing; FAQ; a terracotta final call to action; and an espresso footer. Scroll reveals and count-ups respect reduced motion.
+- **Photos:** ten free Unsplash images (no Unsplash+), self-hosted as WebP in `web/public/images` (about 1.7 MB) and credited in the footer (`web/src/photos.ts`).
+
 ## 2026-10-07: Website redesign modelled on Wispr Flow, Notion theme
 
 `web/` follows wisprflow.ai's structure: a short headline with an italic serif accent, an animated product demo (a standup where Peguin is called and speaks), a "works with" strip, a before/after (raw commits to a 40-second update), features, how it works, privacy, pricing, FAQ, a final call to action, and a multi-column footer. Colours and type stay Notion's, with dark mode from the OS. **No invented social proof:** no customer logos, testimonials, stats or certifications until they're real. The demos use the example name "Ada". Sign-in emails come from `no-reply@peguin.co`.

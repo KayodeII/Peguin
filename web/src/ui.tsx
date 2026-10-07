@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { siClaude, siGit, siGithub, siGooglemeet, siJira, siLinear, siZoom, type SimpleIcon } from "simple-icons";
 
 /** Client-side navigation; the Worker serves index.html for every page. "/#faq" scrolls to a section. */
@@ -66,6 +66,12 @@ const ICONS: Record<string, ReactNode> = {
   tag: <><path d="M20 12 12 20l-8-8V4h8z" /><circle cx="8" cy="8" r="1.5" /></>,
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
   plug: <><path d="M9 7V3M15 7V3" /><path d="M6 7h12v4a6 6 0 0 1-12 0z" /><path d="M12 17v4" /></>,
+  calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
+  sparkle: <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" />,
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6" /></>,
+  globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>,
+  code: <><path d="m8 7-5 5 5 5M16 7l5 5-5 5" /></>,
+  wave: <path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,
 };
@@ -81,4 +87,57 @@ export function Icon({ name, size = 20 }: { name: keyof typeof ICONS | string; s
 /** Headline with an italic serif emphasis, e.g. <Title em="keep the update.">Skip the standup,</Title> */
 export function Title({ as: Tag = "h2", children, em, className }: { as?: "h1" | "h2"; children: ReactNode; em?: string; className?: string }) {
   return <Tag className={className}>{children}{em && <> <em>{em}</em></>}</Tag>;
+}
+
+export const reducedMotion = () => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** Adds .in to every [data-reveal] element as it scrolls into view (once). Re-scans when `key` changes. */
+export function useRevealAll(key: unknown) {
+  useEffect(() => {
+    const els = [...document.querySelectorAll<HTMLElement>("[data-reveal]:not(.in)")];
+    if (reducedMotion() || !("IntersectionObserver" in window)) { els.forEach((e) => e.classList.add("in")); return; }
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    }, { rootMargin: "0px 0px -10% 0px", threshold: 0.12 });
+    els.forEach((e) => io.observe(e));
+    return () => io.disconnect();
+  }, [key]);
+}
+
+/** True once the element has been on screen. */
+export function useInView<T extends Element>(): [React.RefObject<T | null>, boolean] {
+  const ref = useRef<T>(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    if (!ref.current || seen) return;
+    if (reducedMotion()) { setSeen(true); return; }
+    const io = new IntersectionObserver(([e]) => { if (e?.isIntersecting) { setSeen(true); io.disconnect(); } }, { threshold: 0.3 });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [seen]);
+  return [ref, seen];
+}
+
+/** Counts up to `to` once visible. */
+export function CountUp({ to, suffix = "", duration = 1200 }: { to: number; suffix?: string; duration?: number }) {
+  const [ref, seen] = useInView<HTMLSpanElement>();
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!seen) return;
+    if (reducedMotion()) { setN(to); return; }
+    const start = performance.now();
+    let raf = 0;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / duration);
+      setN(Math.round(to * (1 - (1 - p) ** 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [seen, to, duration]);
+  return <span ref={ref}>{n}{suffix}</span>;
+}
+
+export function Img({ photo, className, eager }: { photo: { src: string; alt: string }; className?: string; eager?: boolean }) {
+  return <img src={photo.src} alt={photo.alt} className={className} loading={eager ? "eager" : "lazy"} decoding="async" />;
 }

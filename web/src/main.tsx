@@ -4,7 +4,7 @@ import { Footer, Nav } from "./components/Sections";
 import { Account, Connected, Pricing, SignIn } from "./pages/Account";
 import { Home } from "./pages/Home";
 import "./styles.css";
-import { scrollToHash } from "./ui";
+import { scrollToHash, useRevealAll } from "./ui";
 
 const PAGES: Record<string, () => JSX.Element | null> = { "/pricing": Pricing, "/signin": SignIn, "/account": Account, "/connected": Connected };
 const TITLES: Record<string, string> = { "/pricing": "Pricing", "/signin": "Sign in", "/account": "Account", "/connected": "Signed in" };
@@ -20,6 +20,7 @@ function App() {
     document.title = TITLES[path] ? `${TITLES[path]} · Peguin` : "Peguin · Your standup, covered";
     if (location.hash) requestAnimationFrame(() => scrollToHash(location.hash));
   }, [path]);
+  useRevealAll(path);
   const Page = PAGES[path] ?? Home;
   const bare = path === "/signin" || path === "/connected";
   return (

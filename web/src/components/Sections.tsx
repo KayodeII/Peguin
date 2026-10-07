@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatPrice, getPlan, type Plan } from "../api";
+import { PHOTOS } from "../photos";
 import { Icon, Link, Logo } from "../ui";
 
 export const TRIAL_DAYS = 14; // matches TRIAL_DAYS in cloud/wrangler.jsonc
@@ -66,6 +67,7 @@ export function Faq() {
 const NAV = [
   { to: "/#how", label: "How it works" },
   { to: "/#features", label: "Features" },
+  { to: "/#who", label: "Who it's for" },
   { to: "/#privacy", label: "Privacy" },
   { to: "/pricing", label: "Pricing" },
   { to: "/#faq", label: "FAQ" },
@@ -117,7 +119,15 @@ export function Footer() {
           <Link to="/account">Sign in</Link>
         </div>
       </div>
-      <div className="footer-base">© {new Date().getFullYear()} Peguin</div>
+      <div className="footer-base">
+        <span>© {new Date().getFullYear()} Peguin</span>
+        <span className="credits">
+          Photos on <a href="https://unsplash.com" target="_blank" rel="noreferrer">Unsplash</a> by{" "}
+          {Object.values(PHOTOS).map((p, i, all) => (
+            <span key={p.src}><a href={p.url} target="_blank" rel="noreferrer">{p.by}</a>{i < all.length - 1 ? ", " : "."}</span>
+          ))}
+        </span>
+      </div>
     </footer>
   );
 }
