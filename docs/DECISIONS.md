@@ -2,6 +2,10 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: Light-only website with a flowing section colour
+
+The dark look users saw came from the OS dark-mode styles, which the owner didn't want, so the site is now light-only. Following Ghost, Ramp and ClickUp, each home section declares a pastel `data-bg` and `useBackgroundFlow` (in `web/src/ui.tsx`) fades the page background between them as you scroll. Big image moments are scroll-driven: a photo that opens from an inset card to full bleed (`ExpandingPhoto`) and a pinned rail of persona cards that slides sideways (`PeopleRail`), both in `web/src/components/Scenes.tsx`. The no-slop rules from the entry below still apply.
+
 ## 2026-10-07: Notion neutrals, no AI-slop patterns, motion-led website
 
 Replaces the warm "coffee" palette below. The owner wanted it closer to Notion and the site to feel alive like wisprflow.ai, without the generic look of AI-made sites.

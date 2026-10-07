@@ -120,8 +120,8 @@ export function Footer() {
           <Link to="/account">Sign in</Link>
         </div>
       </div>
-      <div className="footer-mark" aria-hidden>Peguin</div>
       <div className="footer-base"><span>© {new Date().getFullYear()} Peguin</span><span>Made in Lagos</span></div>
+      <div className="footer-mark" aria-hidden>Peguin</div>
     </footer>
   );
 }

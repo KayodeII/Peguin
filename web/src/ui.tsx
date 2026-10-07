@@ -211,3 +211,28 @@ export function Rise({ as: Tag = "h2", text, className, delay = 0 }: { as?: "h1"
     </Tag>
   );
 }
+
+/**
+ * The page background glides between section colours as you scroll: whichever
+ * [data-bg] section is under the middle of the screen sets the colour, and CSS
+ * transitions the change. Gives the page one flowing mix of colours.
+ */
+export function useBackgroundFlow(key: unknown) {
+  useEffect(() => {
+    const sections = [...document.querySelectorAll<HTMLElement>("[data-bg]")];
+    if (!sections.length) return;
+    let raf = 0, current = "";
+    const update = () => {
+      raf = 0;
+      const mid = innerHeight * 0.55;
+      const hit = sections.find((s) => { const r = s.getBoundingClientRect(); return r.top <= mid && r.bottom >= mid; });
+      const color = hit?.dataset.bg ?? "";
+      if (color && color !== current) { current = color; document.body.style.backgroundColor = color; }
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(update); };
+    update();
+    addEventListener("scroll", on, { passive: true });
+    addEventListener("resize", on);
+    return () => { removeEventListener("scroll", on); removeEventListener("resize", on); cancelAnimationFrame(raf); document.body.style.backgroundColor = ""; };
+  }, [key]);
+}

@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { PHOTOS, type Photo } from "../photos";
-import { Brand, Icon, Img, Logo, reducedMotion, useParallax } from "../ui";
+import { Brand, Icon, Img, Logo, useParallax } from "../ui";
 
 /* ------------------------------------------------------------ feature rows */
 
@@ -116,45 +116,6 @@ export function Tiles() {
         </div>
         <div className="source-stack">
           {["git", "github", "claude_code", "linear", "jira"].map((id) => <Brand key={id} id={id} size={36} />)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------ who it's for */
-
-const PERSONAS = [
-  { id: "eng", label: "Engineers", photo: PHOTOS.engineers, title: "Deep in a bug when standup starts", body: "Keep going. Peguin gives the update from your commits and pull requests, and your team hears what you did yesterday." },
-  { id: "mgr", label: "Engineering managers", photo: PHOTOS.managers, title: "Your 1:1 runs into the team standup", body: "Stay with your report. Peguin covers your update and answers what it can, and the rest waits for you." },
-  { id: "fnd", label: "Founders", photo: PHOTOS.founders, title: "A customer call at 9:30", body: "Take the call. Your team still hears what shipped, from the work itself, not from a note you wrote at midnight." },
-  { id: "rem", label: "Remote teams", photo: PHOTOS.remote, title: "Standup lands at an awkward hour", body: "If your Mac is on, Peguin can attend. Your teammates get your update whatever the time is where you are." },
-];
-
-export function Personas() {
-  const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
-  useEffect(() => {
-    if (paused || reducedMotion()) return;
-    const t = setTimeout(() => setActive((a) => (a + 1) % PERSONAS.length), 6000);
-    return () => clearTimeout(t);
-  }, [active, paused]);
-  const p = PERSONAS[active]!;
-  return (
-    <div className="personas" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-      <div className="tabs" role="tablist" aria-label="Who it's for">
-        {PERSONAS.map((x, i) => (
-          <button key={x.id} role="tab" aria-selected={i === active} className={i === active ? "on" : ""} onClick={() => { setActive(i); setPaused(true); }}>
-            {x.label}
-            {i === active && !paused && <span className="tab-progress" key={active} />}
-          </button>
-        ))}
-      </div>
-      <div className="persona" role="tabpanel" key={p.id}>
-        <Img photo={p.photo} className="persona-photo" />
-        <div className="persona-copy">
-          <h3>{p.title}</h3>
-          <p>{p.body}</p>
         </div>
       </div>
     </div>

@@ -2,11 +2,17 @@ import { VoiceRings, Waveforms } from "../components/Backgrounds";
 import { Hero, Marquee } from "../components/Hero";
 import { MeetingDemo } from "../components/MeetingDemo";
 import { Morning } from "../components/Morning";
+import { ExpandingPhoto, PeopleRail } from "../components/Scenes";
 import { Faq, PricingCard, TRIAL_DAYS } from "../components/Sections";
-import { FeatureRows, Personas, Tiles } from "../components/Showcase";
+import { FeatureRows, Tiles } from "../components/Showcase";
 import { Transform } from "../components/Transform";
 import { PHOTOS } from "../photos";
-import { Icon, Img, Link, Rise } from "../ui";
+import { Icon, Img, Link, Rise, useBackgroundFlow } from "../ui";
+
+// The page background glides through these as you scroll (see useBackgroundFlow).
+const BG = {
+  white: "#ffffff", sky: "#e9f2fd", butter: "#fff6d8", mint: "#e7f5ec", lilac: "#f1ecfc", peach: "#ffefe8", ice: "#eef6fb",
+};
 
 const KEPT = [
   { icon: "laptop", title: "On your Mac", body: "Joining the call, listening and speech recognition run on your computer." },
@@ -15,14 +21,17 @@ const KEPT = [
 ];
 
 export function Home() {
+  useBackgroundFlow("home");
   return (
     <>
-      <Hero />
-      <Marquee />
+      <div data-bg={BG.white}>
+        <Hero />
+        <Marquee />
+      </div>
 
-      <section className="band dark" id="demo">
+      <section className="flow-section" id="demo" data-bg={BG.sky}>
         <Waveforms />
-        <div className="band-inner">
+        <div className="flow-inner">
           <div className="section-head">
             <Rise text="Here's a standup it covered" />
             <p className="section-lead" data-reveal>Ada was on a customer call. The team still got her update, and a straight answer to the question that came after.</p>
@@ -31,25 +40,26 @@ export function Home() {
         </div>
       </section>
 
-      <section id="features"><Transform /></section>
+      <section id="features" data-bg={BG.butter}><Transform /></section>
 
-      <section className="section"><FeatureRows /></section>
+      <section className="section" data-bg={BG.white}><FeatureRows /></section>
 
-      <section className="section" id="how"><Morning /></section>
+      <section data-bg={BG.mint}>
+        <ExpandingPhoto photo={PHOTOS.final} lines={["You're in the other meeting.", "Your team still hears what you shipped.", "Nobody waits on you to unmute."]} />
+      </section>
 
-      <section className="band soft">
-        <div className="band-inner">
+      <section className="section" id="how" data-bg={BG.mint}><Morning /></section>
+
+      <section className="flow-section" data-bg={BG.lilac}>
+        <div className="flow-inner">
           <div className="section-head"><Rise text="The parts that took the longest to get right" /></div>
           <Tiles />
         </div>
       </section>
 
-      <section className="section" id="who">
-        <div className="section-head"><Rise text="Who it's for" /></div>
-        <div data-reveal><Personas /></div>
-      </section>
+      <section id="who" data-bg={BG.peach}><PeopleRail /></section>
 
-      <section className="section" id="privacy">
+      <section className="section" id="privacy" data-bg={BG.white}>
         <div className="split">
           <div className="split-photo" data-reveal><Img photo={PHOTOS.privacy} /></div>
           <div>
@@ -64,20 +74,22 @@ export function Home() {
         </div>
       </section>
 
-      <section className="section" id="pricing">
-        <div className="section-head">
-          <Rise text="One plan" />
-          <p className="section-lead" data-reveal>{TRIAL_DAYS} days free, without a card. Then one monthly price.</p>
+      <section className="flow-section" id="pricing" data-bg={BG.ice}>
+        <div className="flow-inner">
+          <div className="section-head">
+            <Rise text="One plan" />
+            <p className="section-lead" data-reveal>{TRIAL_DAYS} days free, without a card. Then one monthly price.</p>
+          </div>
+          <div data-reveal><PricingCard /></div>
         </div>
-        <div data-reveal><PricingCard /></div>
       </section>
 
-      <section className="section narrow-section" id="faq">
+      <section className="section narrow-section" id="faq" data-bg={BG.white}>
         <div className="section-head"><Rise text="Questions" /></div>
         <Faq />
       </section>
 
-      <section className="final">
+      <section className="final" data-bg={BG.white}>
         <VoiceRings />
         <div className="final-inner">
           <Rise text="Next time standup clashes with something, send Peguin." />
