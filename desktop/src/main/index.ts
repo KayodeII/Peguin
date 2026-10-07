@@ -2,7 +2,9 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, Tray } from "electron";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { answerQuestion, isFresh, loadDraft, prepareDraft, type Draft } from "./brain.js";
 import { meetingPaths, MeetingRunner, type MeetingEvent } from "./meeting/runner.js";
+import { nextStandup, startScheduler } from "./scheduler.js";
 import { loadSettings, saveSettings } from "./settings.js";
 import { startWhisper, type Whisper } from "./speech/whisper.js";
 
@@ -18,54 +20,87 @@ app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 app.userAgentFallback = app.userAgentFallback.replace(/ (Electron|penguin-desktop)\/\S+/g, "");
 
 app.setName("Penguin"); // before ready: menu name and app-data folder
+if (process.env.PENGUIN_USER_DATA) app.setPath("userData", process.env.PENGUIN_USER_DATA); // dev: separate profile
 if (!app.requestSingleInstanceLock()) app.quit();
 
-let prefs: BrowserWindow | null = null;
+let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let whisper: Promise<Whisper> | null = null;
 let meeting: MeetingRunner | null = null;
+let preparing: Promise<Draft> | null = null;
 
-function openPreferences() {
-  if (prefs && !prefs.isDestroyed()) { prefs.show(); prefs.focus(); return; }
-  prefs = new BrowserWindow({
-    width: 900, height: 760, minWidth: 720, minHeight: 560, title: "Penguin", show: false,
-    backgroundColor: "#0f1720",
+export type AppEvent =
+  | { kind: "meeting"; event: MeetingEvent }
+  | { kind: "draft"; draft: Draft | null; preparing: boolean; error?: string }
+  | { kind: "log"; text: string };
+
+function send(e: AppEvent) {
+  if (win && !win.isDestroyed()) win.webContents.send("app:event", e);
+  if (e.kind === "meeting" && e.event.kind === "status") tray?.setTitle(e.event.status === "in_call" ? "🐧●" : "🐧");
+}
+
+function openWindow() {
+  if (win && !win.isDestroyed()) { win.show(); win.focus(); return; }
+  win = new BrowserWindow({
+    width: 1180, height: 760, minWidth: 900, minHeight: 600, title: "Penguin", show: false,
+    backgroundColor: "#1e1f22", titleBarStyle: "hiddenInset", trafficLightPosition: { x: 14, y: 14 },
     webPreferences: { preload: path.join(outDir, "preload/app.cjs"), sandbox: true, contextIsolation: true },
   });
-  if (rendererUrl) void prefs.loadURL(rendererUrl);
-  else void prefs.loadFile(path.join(outDir, "renderer/index.html"));
+  if (rendererUrl) void win.loadURL(rendererUrl);
+  else void win.loadFile(path.join(outDir, "renderer/index.html"));
   // Come to the front on launch, even when started from a terminal.
-  prefs.once("ready-to-show", () => { prefs?.show(); app.focus({ steal: true }); });
-  prefs.on("closed", () => { prefs = null; });
+  win.once("ready-to-show", () => { win?.show(); app.focus({ steal: true }); });
+  win.on("closed", () => { win = null; });
   // Dev aid: PENGUIN_SNAPSHOT=out.png saves a picture of this window, then quits.
   const snap = process.env.PENGUIN_SNAPSHOT;
-  if (snap) prefs.webContents.once("did-finish-load", () => setTimeout(async () => {
-    writeFileSync(snap, (await prefs!.webContents.capturePage()).toPNG());
+  if (snap) win.webContents.once("did-finish-load", () => setTimeout(async () => {
+    writeFileSync(snap, (await win!.webContents.capturePage()).toPNG());
     app.exit(0);
-  }, 1200));
+  }, Number(process.env.PENGUIN_SNAPSHOT_DELAY ?? 1500)));
 }
 
-function send(e: MeetingEvent) {
-  if (prefs && !prefs.isDestroyed()) prefs.webContents.send("meeting:event", e);
-  if (e.kind === "status") tray?.setTitle(e.status === "in_call" ? "🐧●" : "🐧");
+/** One preparation at a time; everyone waiting shares it. */
+function prepare(): Promise<Draft> {
+  if (preparing) return preparing;
+  send({ kind: "draft", draft: loadDraft(), preparing: true });
+  preparing = prepareDraft(loadSettings())
+    .then((d) => { send({ kind: "draft", draft: d, preparing: false }); return d; })
+    .catch((e) => { send({ kind: "draft", draft: loadDraft(), preparing: false, error: message(e) }); throw e; })
+    .finally(() => { preparing = null; });
+  return preparing;
 }
+
+async function join(url: string) {
+  const settings = loadSettings();
+  if (!settings.displayName.trim()) throw new Error("Add your name in Settings first, so Penguin knows when it's called.");
+  meeting?.stop();
+  let draft = loadDraft();
+  if (!isFresh(draft, settings.timezone)) {
+    send({ kind: "log", text: "Preparing today's update before joining…" });
+    draft = await prepare().catch(() => draft); // join anyway: Penguin says the update will follow
+  }
+  whisper ??= startWhisper(appRoot);
+  whisper.catch(() => { whisper = null; });
+  const runner = new MeetingRunner(url, settings, await whisper, meetingPaths(appRoot, outDir), {
+    draft,
+    answer: (q, recent) => answerQuestion(settings, draft, q, recent),
+  });
+  meeting = runner;
+  runner.on("event", (event) => {
+    send({ kind: "meeting", event });
+    if (event.kind === "status" && (event.status === "ended" || event.status === "failed") && meeting === runner) meeting = null;
+  });
+  await runner.start();
+}
+
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 ipcMain.handle("settings:get", () => loadSettings());
 ipcMain.handle("settings:save", (_e, s: unknown) => saveSettings(s));
-
-ipcMain.handle("meeting:join", async (_e, url: string) => {
-  const settings = loadSettings();
-  if (!settings.displayName.trim()) throw new Error("Set your name in Profile first, so Penguin knows when it's called.");
-  meeting?.stop();
-  whisper ??= startWhisper(appRoot);
-  whisper.catch(() => { whisper = null; });
-  const runner = new MeetingRunner(url, settings, await whisper, meetingPaths(appRoot, outDir));
-  meeting = runner;
-  runner.on("event", send);
-  runner.on("event", (e) => { if (e.kind === "status" && (e.status === "ended" || e.status === "failed") && meeting === runner) meeting = null; });
-  await runner.start();
-  return { platform: runner.platform };
-});
+ipcMain.handle("draft:get", () => ({ draft: loadDraft(), preparing: !!preparing }));
+ipcMain.handle("draft:prepare", () => prepare());
+ipcMain.handle("standup:next", () => nextStandup(loadSettings()));
+ipcMain.handle("meeting:join", (_e, url: string) => join(url));
 ipcMain.handle("meeting:leave", () => { meeting?.stop(); meeting = null; });
 
 app.whenReady().then(() => {
@@ -73,16 +108,23 @@ app.whenReady().then(() => {
   tray.setTitle("🐧"); // macOS menu bar; a proper icon comes with packaging
   tray.setToolTip("Penguin");
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "Open Penguin", click: openPreferences },
+    { label: "Open Penguin", click: openWindow },
+    { label: "Prepare today's update", click: () => void prepare().catch(() => {}) },
     { label: "Leave meeting", click: () => { meeting?.stop(); meeting = null; } },
     { type: "separator" },
     { label: "Quit Penguin", role: "quit" },
   ]));
-  openPreferences();
-  app.on("activate", openPreferences);
+  openWindow();
+  startScheduler({
+    settings: loadSettings,
+    prepare,
+    join,
+    log: (text) => send({ kind: "log", text }),
+  });
+  app.on("activate", openWindow);
 });
 
-app.on("second-instance", openPreferences);
+app.on("second-instance", openWindow);
 // Keep running in the menu bar when the window closes.
 app.on("window-all-closed", () => {});
 app.on("will-quit", () => {

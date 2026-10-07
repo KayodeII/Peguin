@@ -1,162 +1,113 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { Draft } from "../main/brain";
+import type { AppEvent } from "../main/index";
 import { botName } from "../main/meeting/platform";
 import type { MeetingEvent, MeetingStatus } from "../main/meeting/runner";
 import type { Settings } from "../main/settings";
+import { Avatar, Icon, message } from "./ui";
+import { LiveView, Onboarding, SettingsView, SourcesView, TodayView } from "./views";
 
-const CONNECTIONS = [
-  { id: "calendar", name: "Google or Outlook Calendar", why: "Finds your standups and tells Penguin when you're double-booked." },
-  { id: "github", name: "GitHub", why: "PRs and commits since your last standup." },
-  { id: "linear", name: "Linear", why: "Issues you moved or closed." },
-  { id: "jira", name: "Jira", why: "Tickets you moved or closed." },
+export type View = "today" | "live" | "sources" | "settings";
+const NAV: { id: View; label: string; icon: string }[] = [
+  { id: "today", label: "Today", icon: "today" },
+  { id: "live", label: "Live meeting", icon: "live" },
+  { id: "sources", label: "Sources", icon: "sources" },
 ];
 
-const STATUS_TEXT: Record<MeetingStatus, string> = {
-  joining: "Joining", waiting: "In the waiting room", in_call: "In the call", ended: "Not in a meeting", failed: "Couldn't join",
-};
-
-const ACTION_TEXT: Record<string, string> = {
-  give_update: "gave your update", answer: "deferred the question to you", acknowledge: "said it's listening", none: "",
-};
+export type DraftState = { draft: Draft | null; preparing: boolean; error?: string };
+export type LiveState = { status: MeetingStatus; detail?: string; events: MeetingEvent[] };
 
 export function App() {
-  const [saved, setSaved] = useState<Settings | null>(null);
-  const [draft, setDraft] = useState<Settings | null>(null);
-  const [aliasText, setAliasText] = useState("");
-  const [error, setError] = useState("");
-  const [url, setUrl] = useState("");
-  const [status, setStatus] = useState<{ status: MeetingStatus; detail?: string }>({ status: "ended" });
-  const [events, setEvents] = useState<MeetingEvent[]>([]);
-  const timezones = useMemo(() => Intl.supportedValuesOf("timeZone"), []);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [view, setView] = useState<View>("today");
+  const [draft, setDraft] = useState<DraftState>({ draft: null, preparing: false });
+  const [live, setLive] = useState<LiveState>({ status: "ended", events: [] });
+  const [next, setNext] = useState<{ label: string } | null>(null);
+  const [toast, setToast] = useState("");
+
+  const refreshNext = useCallback(() => { void window.penguin.nextStandup().then(setNext); }, []);
 
   useEffect(() => {
-    void window.penguin.getSettings().then((s: Settings) => { setSaved(s); setDraft(s); setAliasText(s.aliases.join(", ")); });
-    return window.penguin.onMeetingEvent((raw) => {
-      const e = raw as MeetingEvent;
-      if (e.kind === "status") setStatus({ status: e.status, detail: e.detail });
-      setEvents((prev) => [...prev.slice(-80), e]);
+    void window.penguin.getSettings().then(setSettings);
+    void window.penguin.getDraft().then((d: DraftState) => setDraft(d));
+    refreshNext();
+    return window.penguin.onEvent((raw) => {
+      const e = raw as AppEvent;
+      if (e.kind === "draft") setDraft({ draft: e.draft, preparing: e.preparing, error: e.error });
+      if (e.kind === "log") setToast(e.text);
+      if (e.kind === "meeting") {
+        setLive((prev) => ({
+          status: e.event.kind === "status" ? e.event.status : prev.status,
+          detail: e.event.kind === "status" ? e.event.detail : prev.detail,
+          events: [...prev.events.slice(-150), e.event],
+        }));
+        if (e.event.kind === "status" && e.event.status === "joining") setView("live");
+      }
     });
-  }, []);
+  }, [refreshNext]);
 
-  if (!draft || !saved) return <main className="loading">Loading…</main>;
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(""), 4000); return () => clearTimeout(t); }, [toast]);
 
-  const dirty = JSON.stringify({ ...draft, aliases: parseAliases(aliasText) }) !== JSON.stringify(saved);
-  const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setDraft({ ...draft, [k]: v });
-  const live = status.status === "joining" || status.status === "waiting" || status.status === "in_call";
+  if (!settings) return <div className="boot">🐧</div>;
 
-  async function save() {
-    setError("");
-    try {
-      const s: Settings = await window.penguin.saveSettings({ ...draft, aliases: parseAliases(aliasText) });
-      setSaved(s); setDraft(s); setAliasText(s.aliases.join(", "));
-    } catch (e) { setError(message(e)); }
-  }
-
-  async function join() {
-    setError(""); setEvents([]);
-    try { if (dirty) await save(); await window.penguin.join(url.trim()); }
-    catch (e) { setError(message(e)); }
-  }
+  const save = async (s: Settings) => {
+    const saved: Settings = await window.penguin.saveSettings(s);
+    setSettings(saved); refreshNext();
+    return saved;
+  };
+  const prepare = () => window.penguin.prepareDraft().catch((e: unknown) => setToast(message(e)));
+  const inCall = live.status === "in_call" || live.status === "joining" || live.status === "waiting";
+  const statusLine = inCall ? (live.status === "in_call" ? "In your standup" : "Joining a meeting")
+    : draft.preparing ? "Writing your update…" : next ? `Next standup ${next.label.replace(/^\w/, (c) => c.toLowerCase())}` : "No standup set";
 
   return (
-    <main>
-      <header>
-        <div className="brand"><span className="logo" aria-hidden>🐧</span><h1>Penguin</h1></div>
-        <p className="muted">Covers your standup when you're double-booked. It always says it's an AI.</p>
-      </header>
+    <div className="app">
+      <nav className="rail" aria-label="Sections">
+        <button className={`home ${view === "today" ? "active" : ""}`} onClick={() => setView("today")} title="Penguin">🐧</button>
+        <div className="rail-sep" />
+        {NAV.filter((n) => n.id !== "today").map((n) => (
+          <button key={n.id} className={`rail-btn ${view === n.id ? "active" : ""}`} onClick={() => setView(n.id)} title={n.label} aria-label={n.label}>
+            <Icon name={n.icon} />
+            {n.id === "live" && inCall && <span className="badge" />}
+          </button>
+        ))}
+        <div className="rail-spacer" />
+        <button className={`rail-btn ${view === "settings" ? "active" : ""}`} onClick={() => setView("settings")} title="Settings" aria-label="Settings"><Icon name="settings" /></button>
+      </nav>
 
-      {error && <div className="error" role="alert">{error}</div>}
-
-      <section>
-        <h2>Profile</h2>
-        <label>Your name
-          <input value={draft.displayName} maxLength={40} placeholder="Mujeeb Adebowale"
-            onChange={(e) => set("displayName", e.target.value)} />
-        </label>
-        <p className="hint">
-          Penguin joins as <strong>{botName(draft.displayName, "google_meet")}</strong>
-          {" "}(on Teams: <strong>{botName(draft.displayName, "teams")}</strong>). The AI label is always added.
-        </p>
-        <label>Other ways people say or spell it
-          <input value={aliasText} placeholder="Mujib, MJ" onChange={(e) => setAliasText(e.target.value)} />
-        </label>
-        <p className="hint">Comma-separated. Helps Penguin notice when it's your turn.</p>
-        <label>Timezone
-          <select value={draft.timezone} onChange={(e) => set("timezone", e.target.value)}>
-            {timezones.map((tz) => <option key={tz}>{tz}</option>)}
-          </select>
-        </label>
-      </section>
-
-      <section>
-        <h2>Your update</h2>
-        <label>What Penguin says when it's your turn
-          <textarea rows={4} maxLength={1000} value={draft.standingNotes}
-            placeholder="Yesterday I finished the Zoom join flow. Today I'm on onboarding. No blockers."
-            onChange={(e) => set("standingNotes", e.target.value)} />
-        </label>
-        <p className="hint">
-          Penguin says only what you write here and never adds facts. Questions get "I'll get you to follow up".
-          Connecting your tools below will draft this for you.
-        </p>
-      </section>
-
-      <section>
-        <h2>Connections</h2>
-        <ul className="connections">
-          {CONNECTIONS.map((c) => (
-            <li key={c.id}>
-              <div><strong>{c.name}</strong><p className="hint">{c.why}</p></div>
-              <button disabled title="Needs your Penguin account, coming next">Connect</button>
-            </li>
+      <aside className="sidebar">
+        <header className="sidebar-head">Penguin</header>
+        <div className="sidebar-body">
+          <p className="side-label">Workspace</p>
+          {NAV.map((n) => (
+            <button key={n.id} className={`channel ${view === n.id ? "active" : ""}`} onClick={() => setView(n.id)}>
+              <Icon name="hash" size={18} />{n.id === "today" ? "today" : n.id === "live" ? "live-meeting" : "sources"}
+              {n.id === "live" && inCall && <span className="live-pill">LIVE</span>}
+            </button>
           ))}
-        </ul>
-        <p className="hint">Connecting needs a Penguin account (coming next). Penguin never asks for your Zoom, Meet or Teams login: it joins as a guest.</p>
-      </section>
-
-      <section>
-        <h2>Voice</h2>
-        <label className="radio"><input type="radio" checked readOnly /> Default voice</label>
-        <label className="radio disabled"><input type="radio" disabled /> Your own voice <span className="tag">Later</span></label>
-        <p className="hint">Opt-in. You'll record a short script in the app; Penguin still says it's an AI in every meeting.</p>
-        <label className="radio"><input type="checkbox" checked={!draft.runHidden}
-          onChange={(e) => set("runHidden", !e.target.checked)} /> Show the meeting window (to watch what Penguin does)</label>
-      </section>
-
-      <div className="savebar">
-        <button className="primary" disabled={!dirty} onClick={() => void save()}>{dirty ? "Save changes" : "Saved"}</button>
-      </div>
-
-      <section>
-        <h2>Send Penguin to a meeting</h2>
-        <div className="row">
-          <input value={url} placeholder="Paste a Google Meet, Zoom or Teams link" disabled={live}
-            onChange={(e) => setUrl(e.target.value)} />
-          {live
-            ? <button onClick={() => void window.penguin.leave()}>Leave</button>
-            : <button className="primary" disabled={!url.trim()} onClick={() => void join()}>Join</button>}
+          <p className="side-label">Next standup</p>
+          <div className="side-card">
+            {settings.standup.url
+              ? <><strong>{next?.label ?? "Not scheduled"}</strong><span>{settings.standup.auto ? "Penguin will join for you" : "Auto-join is off"}</span></>
+              : <><strong>No standup yet</strong><button className="link" onClick={() => setView("settings")}>Add your standup link</button></>}
+          </div>
         </div>
-        <p className={`status ${status.status}`}><span className="dot" />{STATUS_TEXT[status.status]}{status.detail ? ` · ${status.detail}` : ""}</p>
-        {events.length > 0 && (
-          <ol className="events">
-            {events.filter((e) => e.kind !== "status").map((e, i) => (
-              <li key={i} className={e.kind}>
-                {e.kind === "heard"
-                  ? <>Heard “{e.text}”{ACTION_TEXT[e.action] ? <strong> → {ACTION_TEXT[e.action]}</strong> : null}</>
-                  : e.text}
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
-    </main>
+        <footer className="userbar">
+          <Avatar name={settings.displayName} />
+          <div className="who"><strong>{settings.displayName || "Your name"}</strong><span className={inCall ? "online" : ""}>{statusLine}</span></div>
+          <button className="icon-btn" onClick={() => setView("settings")} title="Settings" aria-label="Settings"><Icon name="settings" size={18} /></button>
+        </footer>
+      </aside>
+
+      <main className="content">
+        {view === "today" && <TodayView settings={settings} draft={draft} prepare={prepare} goSources={() => setView("sources")} />}
+        {view === "live" && <LiveView settings={settings} live={live} join={(u) => window.penguin.join(u).catch((e: unknown) => setToast(message(e)))} leave={() => void window.penguin.leave()} />}
+        {view === "sources" && <SourcesView settings={settings} draft={draft.draft} save={save} prepare={prepare} />}
+        {view === "settings" && <SettingsView settings={settings} save={save} preview={(n) => botName(n, "google_meet")} />}
+      </main>
+
+      {!settings.onboarded && <Onboarding settings={settings} save={save} done={() => { void prepare(); setView("today"); }} />}
+      {toast && <div className="toast" role="status">{toast}</div>}
+    </div>
   );
-}
-
-function parseAliases(text: string): string[] {
-  return [...new Set(text.split(",").map((a) => a.trim()).filter(Boolean))].slice(0, 10);
-}
-
-/** Electron prefixes IPC errors with "Error invoking remote method '...': Error: ". */
-function message(e: unknown): string {
-  return String(e instanceof Error ? e.message : e).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
 }

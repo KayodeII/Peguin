@@ -5,6 +5,7 @@ import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { TurnDetector } from "../../../../src/realtime/turn.js";
+import type { Draft } from "../brain.js";
 import type { Settings } from "../settings.js";
 import { synthesize } from "../speech/tts.js";
 import { createListener, type Whisper } from "../speech/whisper.js";
@@ -18,14 +19,13 @@ export type MeetingEvent =
 
 const SIGN_IN_HOSTS = /^(login\.microsoftonline\.com|login\.live\.com|accounts\.google\.com)$/;
 
-/** The words Penguin may say. Nothing here is a fact about the user's work. */
-export function lines(s: Settings) {
+/** The fixed words Penguin says. The update itself is the prepared draft, never made up here. */
+export function lines(s: Settings, draft: Draft | null) {
   const first = (s.displayName.trim().split(/\s+/)[0] || "my owner");
-  const notes = s.standingNotes.trim();
   return {
-    // Non-negotiable: disclose first. The update is only what the user wrote.
+    // Non-negotiable: disclose first.
     update: `Hi everyone, I'm Penguin, ${first}'s AI assistant. ${first} is in another meeting, so I'm covering the update. `
-      + (notes || `I don't have an update prepared, so ${first} will share it after the call.`)
+      + (draft?.script ?? `I don't have an update prepared, so ${first} will share it after the call.`)
       + ` ${first} can follow up on anything after the call.`,
     defer: `Good question. I'll get ${first} to follow up on that after the call.`,
     ack: "Yes, I'm here. Go ahead.",
@@ -43,6 +43,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     private readonly settings: Settings,
     private readonly whisper: Whisper,
     private readonly paths: { preload: string; inject: string },
+    private readonly brain: { draft: Draft | null; answer: ((q: string, recent: string[]) => Promise<string>) | null },
   ) {
     super();
     this.platform = detectPlatform(url);
@@ -62,7 +63,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     const name = botName(s.displayName, this.platform);
     const first = s.displayName.trim().split(/\s+/)[0] ?? "";
     const names = [...new Set([s.displayName.trim(), first, ...s.aliases].filter(Boolean))];
-    const say = lines(s);
+    const say = lines(s, this.brain.draft);
     // Pre-synthesize so Penguin answers instantly when called on.
     const audio = { update: synthesize(say.update), defer: synthesize(say.defer), ack: synthesize(say.ack) };
     for (const a of Object.values(audio)) a.catch((e) => this.log(`speech output failed: ${e}`));
@@ -96,6 +97,22 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     wc.debugger.attach("1.3");
 
     const turn = new TurnDetector({ names });
+    const recent: string[] = [];
+    const remember = (line: string) => { recent.push(line); if (recent.length > 12) recent.shift(); };
+    // Facts-only answer when there's a draft; otherwise (or on any failure) defer.
+    const reply = async (question: string) => {
+      const answer = this.brain.answer;
+      if (!answer || !this.brain.draft?.facts.length) return audio.defer;
+      try {
+        const text = await answer(question, recent);
+        remember(`Penguin: ${text}`);
+        this.log(`Answer: ${text}`);
+        return synthesize(text);
+      } catch (e) {
+        this.log(`Couldn't answer (${e instanceof Error ? e.message : e}); deferring to you.`);
+        return audio.defer;
+      }
+    };
     const speak = async (what: Promise<Buffer>, label: string) => {
       turn.setSpeaking(true, Date.now());
       this.log(`Speaking: ${label}`);
@@ -107,9 +124,10 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
       onError: (e) => this.log(`speech recognition error: ${e}`),
       onUtterance: ({ text, sttMs }) => {
         const d = turn.onUtterance(text, Date.now());
+        remember(`Someone: ${text}`);
         this.emitEvent({ kind: "heard", text, action: d.action, sttMs });
         if (d.action === "give_update") { turn.markUpdateGiven(); void speak(audio.update, "the update"); }
-        else if (d.action === "answer") void speak(audio.defer, "deferring the question to you");
+        else if (d.action === "answer") void speak(reply(d.question), "answering from your work");
         else if (d.action === "acknowledge") void speak(audio.ack, "acknowledging");
       },
     });

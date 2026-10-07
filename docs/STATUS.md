@@ -37,6 +37,8 @@ Respond loop built in the spike: page audio → 16 kHz PCM → energy-gated utte
 
 **Desktop app started** (`desktop/`): Electron + React preferences window (name with enforced AI suffix, aliases, timezone, standing notes as the update, connection and voice placeholders, show-window toggle), menu bar icon, and "send Penguin to a meeting" with live status and transcript. The spike's join, listen, decide and speak loop is ported to TypeScript (`MeetingRunner`). Typecheck and build pass; the window renders. Not yet run against a real meeting from the app.
 
+**Desktop app: automatic updates and Discord-style UI.** Settings shrank to name, standup link and time, and source toggles (onboarding pre-fills the name from git). Sources: local git commits across repos, GitHub PRs and reviews via `gh`, and the user's own Claude Code prompts (opt-in, local; AI-session work is treated as in progress unless a commit or PR confirms it). Claude drafts the update and facts via `claude -p` (verified with synthetic activity: valid draft in about 10 s); live questions are answered from the facts only, otherwise Penguin defers. Scheduler prepares 15 minutes before and joins a minute before. Prompts are shared with the server (`src/core/brain/prompts.ts`). 40 tests pass. Not yet: a real prepare on the owner's data (run from the app), a real call from the app.
+
 ## Next (desktop)
 
 1. Teams: ACS prototype (needs an Azure account)
