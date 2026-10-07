@@ -30,6 +30,7 @@
     "esbuild": "^0.28.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "simple-icons": "^16.34.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.3"
   },
@@ -38,7 +39,7 @@
   "build": {
     "appId": "co.peguin.app",
     "productName": "Peguin",
-    "copyright": "\u00a9 Peguin",
+    "copyright": "© Peguin",
     "directories": {
       "output": "release",
       "buildResources": "build"

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { siClaude, siGit, siGithub, siGooglecalendar, siGooglemeet, siJira, siLinear, siZoom, type SimpleIcon } from "simple-icons";
 
 /** Small inline icons (24px grid, stroke follows currentColor). */
 const paths: Record<string, ReactNode> = {
@@ -16,6 +17,22 @@ export function Icon({ name, size = 20 }: { name: keyof typeof paths | string; s
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       {paths[name]}
     </svg>
+  );
+}
+
+const BRANDS: Record<string, SimpleIcon> = {
+  git: siGit, github: siGithub, claude_code: siClaude, calendar: siGooglecalendar,
+  linear: siLinear, jira: siJira, google_meet: siGooglemeet, zoom: siZoom,
+};
+
+/** A brand mark on its brand colour, readable in every theme. */
+export function BrandIcon({ id, size = 32 }: { id: string; size?: number }) {
+  const icon = BRANDS[id];
+  if (!icon) return null;
+  return (
+    <span className="brand-icon" style={{ width: size, height: size, background: `#${icon.hex}` }} title={icon.title} aria-hidden>
+      <svg viewBox="0 0 24 24" width={size * 0.58} height={size * 0.58} fill="#fff"><path d={icon.path} /></svg>
+    </span>
   );
 }
 

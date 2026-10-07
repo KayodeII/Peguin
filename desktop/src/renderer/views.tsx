@@ -4,7 +4,7 @@ import type { Account } from "../main/account";
 import type { Draft } from "../main/brain";
 import { botName } from "../main/meeting/platform";
 import type { Settings } from "../main/settings";
-import { Avatar, dayTime, Icon, Logo, message, Toggle, Typing } from "./ui";
+import { Avatar, BrandIcon, dayTime, Icon, Logo, message, Toggle, Typing } from "./ui";
 
 const SOURCE_INFO = {
   git: { name: "Git commits", desc: "Commits in repos on this computer." },
@@ -56,7 +56,7 @@ export function TodayView({ settings, draft, prepare, goSources }: { settings: S
               <div className="chips">
                 {d.reports.map((r) => (
                   <button key={r.id} className={`chip ${r.ok ? "" : "warn"}`} onClick={goSources} title={r.hint ?? r.summary}>
-                    {SOURCE_INFO[r.id as SourceKey]?.name ?? r.id}: {r.summary}
+                    <BrandIcon id={r.id} size={16} />{r.summary}
                   </button>
                 ))}
                 <span className="chip plain">Since {dayTime(d.since)}</span>
@@ -92,6 +92,7 @@ export function LiveView({ settings, live, join, leave }: { settings: Settings; 
           <div className="empty">
             <h2>Not in a meeting</h2>
             <p>The transcript shows up here.</p>
+            <div className="platforms"><BrandIcon id="google_meet" size={28} /><BrandIcon id="zoom" size={28} /></div>
           </div>
         )}
         {live.events.map((e, i) => {
@@ -134,6 +135,7 @@ export function SourcesView({ settings, draft, save, prepare }: { settings: Sett
           const r = report(id);
           return (
             <div key={id} className="row-card">
+              <BrandIcon id={id} />
               <div className="row-main">
                 <strong>{SOURCE_INFO[id].name}</strong>
                 <p>{SOURCE_INFO[id].desc}</p>
@@ -144,8 +146,8 @@ export function SourcesView({ settings, draft, save, prepare }: { settings: Sett
           );
         })}
         <h3 className="section-label">Coming soon</h3>
-        {["Calendar", "Linear", "Jira"].map((t) => (
-          <div key={t} className="row-card muted"><div className="row-main"><strong>{t}</strong></div><span className="tag">Soon</span></div>
+        {[["calendar", "Calendar"], ["linear", "Linear"], ["jira", "Jira"]].map(([id, t]) => (
+          <div key={id} className="row-card muted"><BrandIcon id={id!} /><div className="row-main"><strong>{t}</strong></div><span className="tag">Soon</span></div>
         ))}
       </div>
     </>
@@ -296,6 +298,7 @@ export function Onboarding({ settings, save, done }: { settings: Settings; save:
         <p className="section-label small">Sources</p>
         {(Object.keys(SOURCE_INFO) as SourceKey[]).map((id) => (
           <div key={id} className="row-card compact">
+            <BrandIcon id={id} size={28} />
             <div className="row-main"><strong>{SOURCE_INFO[id].name}</strong><p>{SOURCE_INFO[id].desc}</p></div>
             <Toggle on={sources[id]} onChange={(v) => setSources({ ...sources, [id]: v })} label={SOURCE_INFO[id].name} />
           </div>
