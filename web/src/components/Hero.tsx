@@ -17,17 +17,16 @@ const T = { sources: 500, write: 2300, called: 6200, speak: 6900, loop: 14000 };
 /** The opening scene: commits arrive, the update writes itself, then the meeting calls on Ada. */
 function Stage() {
   const still = reducedMotion();
-  const [t, setT] = useState(still ? T.speak + 1 : 0);
+  const [t, setT] = useState(0);
   const stage = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (still) return;
     const start = performance.now();
     let raf = 0;
     const tick = (now: number) => { setT((now - start) % T.loop); raf = requestAnimationFrame(tick); };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [still]);
+  }, []);
 
   // Layers drift with the cursor for a little depth.
   useEffect(() => {

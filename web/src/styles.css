@@ -460,10 +460,18 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-col
 .chirp-bubble { position: absolute; top: 14px; right: -42px; width: max-content; white-space: nowrap; padding: 5px 10px; border-radius: 12px 12px 12px 2px; background: var(--strong); color: var(--bg); font: 600 13px/1 var(--sans); opacity: 0; transform: translateY(6px) scale(.8); transform-origin: left bottom; transition: opacity .2s, transform .3s var(--ease); pointer-events: none; }
 .perched.chirping .chirp-bubble { opacity: 1; transform: none; }
 
+/* Reduced motion is calmer, not off: things fade in place instead of travelling,
+   and looping background motion stops. Typing, speaking bars and the demos stay. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
-  [data-reveal], .fade-up, .doc-sources li { opacity: 1; transform: none; }
-  .rise-mask > span { transform: none; }
+  [data-reveal] { transform: none; transition: opacity .9s var(--ease); }
+  .rise-mask > span { transform: none; opacity: 0; transition: opacity .9s var(--ease); }
+  .rise.in .rise-mask > span { opacity: 1; }
+  @keyframes fade-up { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes settle { from { opacity: 0; } }
+  @keyframes slide-in { from { opacity: 0; } }
+  .bg-waves path, .bg-rings span, .marquee-track { animation: none; }
+  .layer-1, .layer-2 { transform: none; }
+  .btn:hover:not(:disabled), .hp-launcher:hover { transform: none; }
 }
 
 /* ------------------------------------------------------------ help penguin */
@@ -552,9 +560,6 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-col
 .hc-sent .btn { margin-top: 12px; }
 @media (max-width: 560px) {
   .hc { right: 0; bottom: 0; width: 100%; height: min(86dvh, 640px); border-radius: 18px 18px 0 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .hp *, .hc, .hp-launcher { animation: none !important; transition: none !important; }
 }
 
 /* ------------------------------------------------------------ app showcase: grain gradient + scripted app */

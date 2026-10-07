@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { reducedMotion } from "../ui";
 
 /** A short two-note chirp, synthesised (no audio file). Only ever played on click. */
 export function chirp() {
@@ -35,12 +34,10 @@ export function Perched({ className }: { className?: string }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [look, setLook] = useState({ x: 0, y: 0 });
   const [chirping, setChirping] = useState(false);
-  const still = reducedMotion();
   const clip = `above-card-${useId().replace(/:/g, "")}`;
 
   // Eyes and tilt follow the pointer anywhere on the page.
   useEffect(() => {
-    if (still) return;
     let raf = 0;
     const move = (e: PointerEvent) => {
       if (raf) return;
@@ -56,11 +53,10 @@ export function Perched({ className }: { className?: string }) {
     };
     addEventListener("pointermove", move);
     return () => { removeEventListener("pointermove", move); cancelAnimationFrame(raf); };
-  }, [still]);
+  }, []);
 
   // A chirp bubble every few seconds, timed with a flap.
   useEffect(() => {
-    if (still) return;
     let t: ReturnType<typeof setTimeout>;
     const loop = () => {
       setChirping(true);
@@ -68,7 +64,7 @@ export function Perched({ className }: { className?: string }) {
     };
     t = setTimeout(loop, 1800);
     return () => clearTimeout(t);
-  }, [still]);
+  }, []);
 
   const say = () => { chirp(); setChirping(true); setTimeout(() => setChirping(false), 1100); };
   const px = look.x * 1.3, py = look.y * 1.1;

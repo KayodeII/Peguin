@@ -51,9 +51,6 @@ const STEPS: [number, (s: State) => State][] = [
   [3000, () => START],
 ];
 
-/** The end state, for reduced motion: the meeting, already covered. */
-const STILL: State = STEPS.slice(0, 15).reduce((s, [, f]) => f(s), START);
-
 export function AppShowcase() {
   return (
     <section className="showcase" data-bg="#ffffff">
@@ -76,7 +73,7 @@ function AppDemo() {
   const [scale, setScale] = useState(1);
   const [rise, setRise] = useState(reducedMotion() ? 1 : 0);
   const [visible, setVisible] = useState(false);
-  const [s, setS] = useState<State>(reducedMotion() ? STILL : START);
+  const [s, setS] = useState<State>(START);
   const [pos, setPos] = useState({ x: W * 0.62, y: H * 0.86 });
   const step = useRef(0);
 
@@ -92,9 +89,10 @@ function AppDemo() {
   // Rises and straightens as it scrolls in; the script only runs while on screen.
   useEffect(() => {
     const el = fit.current;
-    if (!el || reducedMotion()) return;
+    if (!el) return;
     const io = new IntersectionObserver(([e]) => setVisible(!!e?.isIntersecting), { threshold: 0.25 });
     io.observe(el);
+    if (reducedMotion()) return () => io.disconnect();
     let raf = 0;
     const update = () => {
       raf = 0;
@@ -212,7 +210,7 @@ function AppDemo() {
           )}
         </main>
 
-        {!reducedMotion() && (
+        {(
           <div className="ad-cursor" style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}>
             <span key={s.click} className="ad-ripple" />
             <svg width="22" height="22" viewBox="0 0 24 24"><path d="M5 3l14 8-6.5 1.5L10 19z" fill="#191919" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" /></svg>
@@ -261,9 +259,8 @@ function LineView({ line, speaking }: { line: Line; speaking: boolean }) {
 /** Text that appears word by word, like speech. */
 function Typed({ text, ms }: { text: string; ms: number }) {
   const words = text.split(" ");
-  const [n, setN] = useState(reducedMotion() ? words.length : 0);
+  const [n, setN] = useState(0);
   useEffect(() => {
-    if (reducedMotion()) return;
     const start = performance.now();
     let raf = 0;
     const tick = (t: number) => {

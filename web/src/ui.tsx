@@ -95,13 +95,18 @@ export function Title({ as: Tag = "h2", children, em, className }: { as?: "h1" |
   return <Tag className={className}>{children}{em && <> <em>{em}</em></>}</Tag>;
 }
 
+/**
+ * The visitor asked their device for less motion. Peguin treats that as "calmer",
+ * not "off": fades, typing and the scripted demos still play; travel (smooth
+ * scrolling, parallax, tilt, drifting backgrounds, the walk-in) is dropped.
+ */
 export const reducedMotion = () => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** Adds .in to every [data-reveal] element as it scrolls into view (once). Re-scans when `key` changes. */
 export function useRevealAll(key: unknown) {
   useEffect(() => {
     const els = [...document.querySelectorAll<HTMLElement>("[data-reveal]:not(.in)")];
-    if (reducedMotion() || !("IntersectionObserver" in window)) { els.forEach((e) => e.classList.add("in")); return; }
+    if (!("IntersectionObserver" in window)) { els.forEach((e) => e.classList.add("in")); return; }
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
     }, { rootMargin: "0px 0px -10% 0px", threshold: 0.12 });
@@ -116,7 +121,7 @@ export function useInView<T extends Element>(threshold = 0.3): [React.RefObject<
   const [seen, setSeen] = useState(false);
   useEffect(() => {
     if (!ref.current || seen) return;
-    if (reducedMotion()) { setSeen(true); return; }
+    if (!("IntersectionObserver" in window)) { setSeen(true); return; }
     const io = new IntersectionObserver(([e]) => { if (e?.isIntersecting) { setSeen(true); io.disconnect(); } }, { threshold });
     io.observe(ref.current);
     return () => io.disconnect();
@@ -130,7 +135,6 @@ export function CountUp({ to, suffix = "", duration = 1200 }: { to: number; suff
   const [n, setN] = useState(0);
   useEffect(() => {
     if (!seen) return;
-    if (reducedMotion()) { setN(to); return; }
     const start = performance.now();
     let raf = 0;
     const tick = (t: number) => {
@@ -154,9 +158,8 @@ export function Img({ photo, className, eager }: { photo: { src: string; alt: st
  */
 export function useScrollProgress<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
   const ref = useRef<T>(null);
-  const [p, setP] = useState(reducedMotion() ? 1 : 0);
+  const [p, setP] = useState(0);
   useEffect(() => {
-    if (reducedMotion()) return;
     let raf = 0;
     const update = () => {
       raf = 0;
