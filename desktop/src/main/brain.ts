@@ -1,12 +1,13 @@
-// Drafts the update and answers follow-ups. For now this runs through the
-// Claude Code CLI on the user's machine (their existing Claude login); the
-// Penguin account's server-side Claude replaces it for everyone else.
+// Drafts the update and answers follow-ups: through the Penguin account's
+// server-side Claude when subscribed, otherwise through the Claude Code CLI
+// with the user's own Claude login (development and power users).
 import { app } from "electron";
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { answerContext, answerSystem, draftSystem, draftUser, parseDraft } from "../../../src/core/brain/prompts.js";
+import { cloudAnswer, cloudDraft, offlineLicense } from "./account.js";
 import { gatherContext, type SourceReport } from "./context/index.js";
 import type { Settings } from "./settings.js";
 
@@ -15,6 +16,7 @@ export type Draft = {
   facts: string[];
   generatedAt: string;
   since: string;
+  via: "account" | "claude_cli";
   reports: SourceReport[];
   activityCount: number;
 };
@@ -49,9 +51,16 @@ export function loadDraft(): Draft | null {
 /** Gather today's work, have Claude write the spoken update + facts, and keep it. */
 export async function prepareDraft(s: Settings): Promise<Draft> {
   const ctx = await gatherContext(s.sources, s.timezone);
-  const prompt = `${draftSystem(s.displayName)}\n\n${draftUser(s.displayName, ctx.activity, "", ctx.failed)}`;
-  const { script, facts } = parseDraft(await claude(prompt, 120000));
-  const draft: Draft = { script, facts, generatedAt: new Date().toISOString(), since: ctx.since, reports: ctx.reports, activityCount: ctx.activity.length };
+  const subscribed = !!(await offlineLicense());
+  // Only titles, statuses and times leave the machine; never code.
+  const activity = ctx.activity.map(({ source, kind, title, status, at }) => ({ source, kind, title, status, at }));
+  const { script, facts } = subscribed
+    ? await cloudDraft(s.displayName, activity, ctx.failed)
+    : parseDraft(await claude(`${draftSystem(s.displayName)}\n\n${draftUser(s.displayName, activity, "", ctx.failed)}`, 120000));
+  const draft: Draft = {
+    script, facts, generatedAt: new Date().toISOString(), since: ctx.since, reports: ctx.reports,
+    activityCount: ctx.activity.length, via: subscribed ? "account" : "claude_cli",
+  };
   mkdirSync(path.dirname(draftFile()), { recursive: true });
   writeFileSync(`${draftFile()}.tmp`, JSON.stringify(draft, null, 2));
   renameSync(`${draftFile()}.tmp`, draftFile());
@@ -59,9 +68,9 @@ export async function prepareDraft(s: Settings): Promise<Draft> {
 }
 
 /** A spoken answer from the facts only; the prompt makes Claude defer otherwise. */
-export function answerQuestion(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
-  const prompt = `${answerSystem(s.displayName)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`;
-  return claude(prompt, 25000);
+export async function answerQuestion(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
+  if (await offlineLicense()) return cloudAnswer(s.displayName, draft?.facts ?? [], draft?.script, recent, question);
+  return claude(`${answerSystem(s.displayName)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000);
 }
 
 /** Is this draft from today (in the user's timezone)? */

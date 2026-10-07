@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { Account } from "../main/account";
 import type { Draft } from "../main/brain";
 import type { AppEvent } from "../main/index";
 import { botName } from "../main/meeting/platform";
@@ -24,17 +25,20 @@ export function App() {
   const [live, setLive] = useState<LiveState>({ status: "ended", events: [] });
   const [next, setNext] = useState<{ label: string } | null>(null);
   const [toast, setToast] = useState("");
+  const [account, setAccount] = useState<Account | null>(null);
 
   const refreshNext = useCallback(() => { void window.penguin.nextStandup().then(setNext); }, []);
 
   useEffect(() => {
     void window.penguin.getSettings().then(setSettings);
     void window.penguin.getDraft().then((d: DraftState) => setDraft(d));
+    void window.penguin.getAccount().then(setAccount);
     refreshNext();
     return window.penguin.onEvent((raw) => {
       const e = raw as AppEvent;
       if (e.kind === "draft") setDraft({ draft: e.draft, preparing: e.preparing, error: e.error });
       if (e.kind === "log") setToast(e.text);
+      if (e.kind === "account") { setAccount(e.account); if (e.error) setToast(e.error); }
       if (e.kind === "meeting") {
         setLive((prev) => ({
           status: e.event.kind === "status" ? e.event.status : prev.status,
@@ -103,7 +107,7 @@ export function App() {
         {view === "today" && <TodayView settings={settings} draft={draft} prepare={prepare} goSources={() => setView("sources")} />}
         {view === "live" && <LiveView settings={settings} live={live} join={(u) => window.penguin.join(u).catch((e: unknown) => setToast(message(e)))} leave={() => void window.penguin.leave()} />}
         {view === "sources" && <SourcesView settings={settings} draft={draft.draft} save={save} prepare={prepare} />}
-        {view === "settings" && <SettingsView settings={settings} save={save} preview={(n) => botName(n, "google_meet")} />}
+        {view === "settings" && <SettingsView settings={settings} save={save} preview={(n) => botName(n, "google_meet")} account={account} />}
       </main>
 
       {!settings.onboarded && <Onboarding settings={settings} save={save} done={() => { void prepare(); setView("today"); }} />}

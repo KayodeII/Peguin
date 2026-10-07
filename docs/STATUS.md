@@ -39,6 +39,8 @@ Respond loop built in the spike: page audio → 16 kHz PCM → energy-gated utte
 
 **Desktop app: automatic updates and Discord-style UI.** Settings shrank to name, standup link and time, and source toggles (onboarding pre-fills the name from git). Sources: local git commits across repos, GitHub PRs and reviews via `gh`, and the user's own Claude Code prompts (opt-in, local; AI-session work is treated as in progress unless a commit or PR confirms it). Claude drafts the update and facts via `claude -p` (verified with synthetic activity: valid draft in about 10 s); live questions are answered from the facts only, otherwise Penguin defers. Scheduler prepares 15 minutes before and joins a minute before. Prompts are shared with the server (`src/core/brain/prompts.ts`). 40 tests pass. Not yet: a real prepare on the owner's data (run from the app), a real call from the app.
 
+**Phase 2: accounts, billing, server-side Claude.** `cloud/` Worker + D1 (email link and Google sign-in, desktop PKCE sign-in via `penguin://`, Stripe checkout, portal and webhooks, Ed25519 licences, `/api/draft` and `/api/answer` on claude-opus-5 with refusal fallbacks and daily caps), verified locally with a 25-step end-to-end script. `web/` site (landing, pricing, sign-in, account, app hand-off), served by the Worker. Desktop: Account section (sign in through the browser, plan status, sign out), app token in the OS keychain, offline licence check; drafting and answers use the account when subscribed, else the Claude CLI. 46 tests pass. Not yet: deployed; real Stripe, Google, Resend and Anthropic keys; desktop-to-cloud sign-in run in a browser; pricing is a placeholder.
+
 ## Next (desktop)
 
 1. Teams: ACS prototype (needs an Azure account)

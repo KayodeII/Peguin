@@ -4,7 +4,9 @@ Electron + React, styled after Discord's layout. Runs in the menu bar. Nothing t
 
 Set your standup link and time once and turn on auto-join: Penguin prepares 15 minutes before and joins just before it starts (`src/main/scheduler.ts`).
 
-Drafting and answers currently run through the Claude Code CLI (`claude -p`) with your own Claude login; the Penguin account's server-side Claude replaces this.
+Signed in with an active plan, drafting and answers go through your Penguin account's server-side Claude (`cloud/`); only activity titles, statuses and times are sent, never code. Otherwise they run through the Claude Code CLI (`claude -p`) with your own Claude login.
+
+Account: Settings → Sign in opens the browser at `<cloud>/app/connect` (PKCE). The website hands back `penguin://auth?code=…`; the app swaps it for an app token, stored encrypted with the OS keychain (`safeStorage`), and keeps a signed licence (`license.txt`) that it checks offline with the public key in `src/main/account.ts`. Cloud URL: `PENGUIN_CLOUD_URL` (default `http://localhost:8787`, i.e. `cd cloud && npm run dev`).
 
 ```bash
 cd desktop

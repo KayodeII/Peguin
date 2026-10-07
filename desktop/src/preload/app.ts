@@ -9,6 +9,9 @@ const api = {
   nextStandup: () => ipcRenderer.invoke("standup:next"),
   join: (url: string) => ipcRenderer.invoke("meeting:join", url),
   leave: () => ipcRenderer.invoke("meeting:leave"),
+  getAccount: () => ipcRenderer.invoke("account:get"),
+  signIn: () => ipcRenderer.invoke("account:signin"),
+  signOut: () => ipcRenderer.invoke("account:signout"),
   onEvent: (cb: (e: unknown) => void) => {
     const h = (_e: unknown, ev: unknown) => cb(ev);
     ipcRenderer.on("app:event", h);

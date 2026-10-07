@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { DraftState, LiveState } from "./App";
+import type { Account } from "../main/account";
 import type { Draft } from "../main/brain";
 import { botName } from "../main/meeting/platform";
 import type { Settings } from "../main/settings";
@@ -153,7 +154,7 @@ export function SourcesView({ settings, draft, save, prepare }: { settings: Sett
 
 /* ---------------------------------------------------------------- Settings */
 
-export function SettingsView({ settings, save, preview }: { settings: Settings; save: (s: Settings) => Promise<Settings>; preview: (n: string) => string }) {
+export function SettingsView({ settings, save, preview, account }: { settings: Settings; save: (s: Settings) => Promise<Settings>; preview: (n: string) => string; account: Account | null }) {
   const [s, setS] = useState(settings);
   const [aliases, setAliases] = useState(settings.aliases.join(", "));
   const [error, setError] = useState("");
@@ -168,6 +169,9 @@ export function SettingsView({ settings, save, preview }: { settings: Settings; 
     <>
       <ChannelHeader name="settings" />
       <div className="scroll narrow">
+        <h3 className="section-label">Account</h3>
+        <AccountCard account={account} />
+
         <h3 className="section-label">My profile</h3>
         <div className="field-grid">
           <label>Name<input value={s.displayName} maxLength={40} onChange={(e) => setS({ ...s, displayName: e.target.value })} /></label>
@@ -210,6 +214,27 @@ export function SettingsView({ settings, save, preview }: { settings: Settings; 
         </div>
       )}
     </>
+  );
+}
+
+const PLAN: Record<string, string> = { active: "Active", trialing: "Free trial", past_due: "Payment failed", canceled: "Canceled" };
+
+function AccountCard({ account }: { account: Account | null }) {
+  const [waiting, setWaiting] = useState(false);
+  useEffect(() => { if (account) setWaiting(false); }, [account]);
+  if (!account) return (
+    <div className="row-card">
+      <div className="row-main"><strong>Not signed in</strong><p>{waiting ? "Finish signing in in your browser." : "Sign in to use your plan's Claude for updates and answers."}</p></div>
+      <button className="btn primary" onClick={() => { setWaiting(true); void window.penguin.signIn(); }}>Sign in</button>
+    </div>
+  );
+  const plan = account.status ? PLAN[account.status] ?? account.status : "No plan";
+  return (
+    <div className="row-card">
+      <Avatar name={account.email} />
+      <div className="row-main"><strong>{account.email}</strong><p className={account.entitled ? "ok" : "warn"}>{plan}{account.entitled ? "" : " · start a plan on the website"}</p></div>
+      <button className="btn ghost" onClick={() => void window.penguin.signOut()}>Sign out</button>
+    </div>
   );
 }
 

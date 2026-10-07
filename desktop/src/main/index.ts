@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, Tray } from "electron";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { completeSignIn, refreshAccount, signOut, startSignIn, type Account } from "./account.js";
 import { answerQuestion, isFresh, loadDraft, prepareDraft, type Draft } from "./brain.js";
 import { meetingPaths, MeetingRunner, type MeetingEvent } from "./meeting/runner.js";
 import { nextStandup, startScheduler } from "./scheduler.js";
@@ -23,6 +24,11 @@ app.setName("Penguin"); // before ready: menu name and app-data folder
 if (process.env.PENGUIN_USER_DATA) app.setPath("userData", process.env.PENGUIN_USER_DATA); // dev: separate profile
 if (!app.requestSingleInstanceLock()) app.quit();
 
+// penguin:// links (sign-in hand-off). In development the Electron binary is
+// registered with this project folder as its argument.
+if (process.defaultApp) app.setAsDefaultProtocolClient("penguin", process.execPath, [path.resolve(process.argv[1] ?? ".")]);
+else app.setAsDefaultProtocolClient("penguin");
+
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let whisper: Promise<Whisper> | null = null;
@@ -32,7 +38,8 @@ let preparing: Promise<Draft> | null = null;
 export type AppEvent =
   | { kind: "meeting"; event: MeetingEvent }
   | { kind: "draft"; draft: Draft | null; preparing: boolean; error?: string }
-  | { kind: "log"; text: string };
+  | { kind: "log"; text: string }
+  | { kind: "account"; account: Account | null; error?: string };
 
 function send(e: AppEvent) {
   if (win && !win.isDestroyed()) win.webContents.send("app:event", e);
@@ -95,6 +102,18 @@ async function join(url: string) {
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+let account: Account | null = null;
+async function updateAccount(fn: () => Promise<Account | null>) {
+  try { account = await fn(); send({ kind: "account", account }); }
+  catch (e) { send({ kind: "account", account, error: message(e) }); }
+}
+function handleUrl(url: string) {
+  if (!url.startsWith("penguin://")) return;
+  openWindow();
+  void updateAccount(async () => (await completeSignIn(url)) ?? account);
+}
+app.on("open-url", (e, url) => { e.preventDefault(); app.isReady() ? handleUrl(url) : app.once("ready", () => handleUrl(url)); });
+
 ipcMain.handle("settings:get", () => loadSettings());
 ipcMain.handle("settings:save", (_e, s: unknown) => saveSettings(s));
 ipcMain.handle("draft:get", () => ({ draft: loadDraft(), preparing: !!preparing }));
@@ -102,6 +121,9 @@ ipcMain.handle("draft:prepare", () => prepare());
 ipcMain.handle("standup:next", () => nextStandup(loadSettings()));
 ipcMain.handle("meeting:join", (_e, url: string) => join(url));
 ipcMain.handle("meeting:leave", () => { meeting?.stop(); meeting = null; });
+ipcMain.handle("account:get", () => account);
+ipcMain.handle("account:signin", () => startSignIn());
+ipcMain.handle("account:signout", () => updateAccount(async () => { await signOut(); return null; }));
 
 app.whenReady().then(() => {
   tray = new Tray(nativeImage.createEmpty());
@@ -115,6 +137,8 @@ app.whenReady().then(() => {
     { label: "Quit Penguin", role: "quit" },
   ]));
   openWindow();
+  void updateAccount(refreshAccount);
+  setInterval(() => void updateAccount(refreshAccount), 6 * 3600 * 1000);
   startScheduler({
     settings: loadSettings,
     prepare,
@@ -124,7 +148,11 @@ app.whenReady().then(() => {
   app.on("activate", openWindow);
 });
 
-app.on("second-instance", openWindow);
+// Windows and Linux deliver penguin:// links as an argument to a second instance.
+app.on("second-instance", (_e, argv) => {
+  const url = argv.find((a) => a.startsWith("penguin://"));
+  if (url) handleUrl(url); else openWindow();
+});
 // Keep running in the menu bar when the window closes.
 app.on("window-all-closed", () => {});
 app.on("will-quit", () => {
