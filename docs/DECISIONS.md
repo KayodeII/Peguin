@@ -2,6 +2,16 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: One Cloudflare Worker for the website and the API
+
+`cloud/` is a single Worker with D1. It serves the website (`web/dist`, Workers static assets, Cloudflare's successor to Pages) and the API on one origin, so session cookies stay first-party and there's one deploy.
+- **Sign-in:** email links (Resend; printed to the console in dev) and Google. Sessions are random tokens stored hashed, in an HttpOnly SameSite=Lax cookie; cookie-authenticated writes must be JSON (CSRF).
+- **Desktop sign-in:** `/app/connect` with a PKCE S256 challenge, returning to `penguin://auth` with a one-time code that only the app's verifier can redeem, for a revocable app token.
+- **Billing:** Stripe over REST (no SDK). Webhooks are signature-checked with a 5-minute window, applied once per event id, and always re-read the subscription from Stripe, since events arrive out of order. `past_due` keeps working for 3 days.
+- **Licences:** Ed25519-signed, at most 30 days, plus 3 offline days past the period end. The private JWK is a Worker secret; the public key ships in the app. JWKs are imported without `alg`, because Node and Workers disagree on its value.
+- **Claude:** `claude-opus-5` through the official SDK, with server-side refusal fallbacks (`fallbacks: "default"`). Drafts use high effort; live answers use low effort for speed. Daily per-user caps. Same prompts as the desktop (`src/core/brain/prompts.ts`).
+- The old server default `claude-sonnet-5-5` wasn't a valid model ID; it's now `claude-opus-5`.
+
 ## 2026-10-07: Product shape: desktop app first, then website and payments
 
 - **Build order:** the real desktop app (Electron + React) with a preferences window first, then the website, sign-up and Stripe on Cloudflare, then opt-in voice cloning.

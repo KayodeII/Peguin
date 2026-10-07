@@ -1,0 +1,12 @@
+# Copy to .dev.vars for `npm run dev`. Without these, sign-in links are printed
+# to the console and paid features return a clear error.
+ANTHROPIC_API_KEY=
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_ID=price_...
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+RESEND_API_KEY=
+EMAIL_FROM=Penguin <hello@yourdomain.com>
+# npm run keys:license prints both keys
+LICENSE_PRIVATE_JWK=

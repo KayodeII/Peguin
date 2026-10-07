@@ -30,7 +30,7 @@ Owner: Mujeeb Adebowale, senior backend/full-stack engineer (TypeScript, Node, G
 
 - Node 20+ (ESM, `"type": "module"`), TypeScript strict with `noUncheckedIndexedAccess`, NodeNext modules. **Relative imports must end in `.js`.**
 - Express 5 (api), `ws` (realtime), BullMQ on ioredis (queue and schedules), `pg` (raw SQL, no ORM), zod (env and request validation), pino (logs)
-- Anthropic SDK (`CLAUDE_MODEL`, default `claude-sonnet-5-5`), Deepgram (streaming STT `nova-3` + TTS Aura)
+- Anthropic SDK (`CLAUDE_MODEL`, default `claude-opus-5`), Deepgram (streaming STT `nova-3` + TTS Aura)
 - Meeting bots: Recall.ai (default) or Attendee (open source, self-hostable), switched with `BOT_PROVIDER`
 - Tests: vitest. No test DB needed for unit tests; external services are mocked.
 
@@ -52,6 +52,7 @@ src/
     speech/         deepgram.ts (openListener, speak)
 public/agent.html   page the bot loads in the call: its camera, mic and speaker
 desktop/            Electron + React desktop app (see desktop/README.md); reuses src/realtime/turn.ts
+cloud/              Cloudflare Worker + D1: accounts, Stripe, licences, server-side Claude; serves web/dist
 spikes/             throwaway experiments, not part of the build
 migrations/         numbered .sql files, applied once each, in order
 test/               *.test.ts
