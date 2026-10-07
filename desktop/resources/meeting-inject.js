@@ -1,11 +1,11 @@
 // Runs in the meeting page's own world (every frame). Three jobs:
-//  1. Penguin's voice and avatar replace the mic and camera (getUserMedia).
+//  1. Peguin's voice and avatar replace the mic and camera (getUserMedia).
 //     Same for every platform.
 //  2. Everyone else's audio is tapped: from WebRTC tracks (Meet, Teams) or,
 //     as a fallback, from whatever the page plays through Web Audio (Zoom's
 //     browser client may decode audio itself). Same for every platform.
 //  3. A per-platform driver fills in the name and joins with the camera off
-//     and the mic muted; Penguin unmutes only while it speaks.
+//     and the mic muted; Peguin unmutes only while it speaks.
 (() => {
   const bridge = window.__penguin;
   if (!bridge || window.__penguinInjected) return;
@@ -15,7 +15,7 @@
   const log = (msg) => bridge.log(frame === "top" ? msg : `[${frame}] ${msg}`);
   const ctx = new AudioContext({ sampleRate: 48000 });
 
-  // Penguin's window is hidden, and Meet pauses joining on hidden pages.
+  // Peguin's window is hidden, and Meet pauses joining on hidden pages.
   // Report the page as visible and swallow visibility changes.
   Object.defineProperty(Document.prototype, "visibilityState", { get: () => "visible", configurable: true });
   Object.defineProperty(Document.prototype, "hidden", { get: () => false, configurable: true });
@@ -44,14 +44,14 @@
       const s = new MediaStream();
       if (c.audio) voice.stream.getAudioTracks().forEach((t) => s.addTrack(t.clone()));
       if (c.video) camera.getVideoTracks().forEach((t) => s.addTrack(t.clone()));
-      log(`page asked for ${[c.audio && "mic", c.video && "camera"].filter(Boolean).join(" + ")}; gave Penguin's`);
+      log(`page asked for ${[c.audio && "mic", c.video && "camera"].filter(Boolean).join(" + ")}; gave Peguin's`);
       return s;
     };
     const device = (deviceId, kind, label) => ({ deviceId, kind, label, groupId: "penguin", toJSON() { return this; } });
     md.enumerateDevices = async () => [
-      device("penguin-mic", "audioinput", "Penguin voice"),
-      device("penguin-cam", "videoinput", "Penguin camera"),
-      device("penguin-out", "audiooutput", "Penguin speaker"),
+      device("penguin-mic", "audioinput", "Peguin voice"),
+      device("penguin-cam", "videoinput", "Peguin camera"),
+      device("penguin-out", "audiooutput", "Peguin speaker"),
     ];
   }
 
@@ -165,7 +165,7 @@
   };
 
   // 3. Platform drivers ---------------------------------------------------------
-  // Penguin joins with the camera off and the mic muted, unmutes only while
+  // Peguin joins with the camera off and the mic muted, unmutes only while
   // it speaks, then mutes again. Every control is found by its label, so each
   // call is idempotent: "mic on" does nothing if the mic is already on.
   // state(): "in_call" | "waiting" | "blocked" | null (still joining)

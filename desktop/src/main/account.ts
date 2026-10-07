@@ -1,5 +1,5 @@
-// The user's Penguin account: sign-in through the browser (PKCE, returning via
-// penguin://), the app token (encrypted with the OS keychain), the signed
+// The user's Peguin account: sign-in through the browser (PKCE, returning via
+// peguin://), the app token (encrypted with the OS keychain), the signed
 // licence (checked offline), and the server-side Claude endpoints.
 import { app, safeStorage, shell } from "electron";
 import { createHash, randomBytes } from "node:crypto";
@@ -45,7 +45,7 @@ async function cloud<T>(pathname: string, init: { method?: string; body?: unknow
     signal: AbortSignal.timeout(120000),
   });
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw Object.assign(new Error(data.error ?? `Penguin server returned ${res.status}`), { status: res.status });
+  if (!res.ok) throw Object.assign(new Error(data.error ?? `Peguin server returned ${res.status}`), { status: res.status });
   return data;
 }
 
@@ -58,7 +58,7 @@ export async function startSignIn(): Promise<void> {
   await shell.openExternal(`${CLOUD_URL}/app/connect?challenge=${challenge}&state=${state}`);
 }
 
-/** Handles penguin://auth?code=…&state=… from the browser. */
+/** Handles peguin://auth?code=…&state=… from the browser. */
 export async function completeSignIn(url: string): Promise<Account | null> {
   const u = new URL(url);
   if (u.hostname !== "auth" || !pending) return null;
@@ -66,7 +66,7 @@ export async function completeSignIn(url: string): Promise<Account | null> {
   if (!code || u.searchParams.get("state") !== pending.state) throw new Error("That sign-in didn't come from this app. Try signing in again.");
   const { verifier } = pending;
   pending = null;
-  const { token } = await cloud<{ token: string }>("/api/app/token", { body: { code, verifier, label: `Penguin on ${process.platform}` }, token: null });
+  const { token } = await cloud<{ token: string }>("/api/app/token", { body: { code, verifier, label: `Peguin on ${process.platform}` }, token: null });
   saveToken(token);
   return refreshAccount();
 }

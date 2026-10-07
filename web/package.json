@@ -2,7 +2,7 @@
   "name": "penguin-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Penguin website: landing, pricing, sign-in and account. Served by the cloud Worker.",
+  "description": "Peguin website: landing, pricing, sign-in and account. Served by the cloud Worker.",
   "type": "module",
   "scripts": {
     "dev": "vite",

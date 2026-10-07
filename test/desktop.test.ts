@@ -45,7 +45,7 @@ describe("bot name and links", () => {
     expect(botName("Mujeeb (AI)", "zoom")).toBe("Mujeeb (AI)");
     expect(botName("Mujeeb - AI", "zoom")).toBe("Mujeeb (AI)");
     expect(botName("Mujeeb (Lagos)", "teams")).toBe("Mujeeb Lagos - AI"); // Teams forbids parentheses
-    expect(botName("", "google_meet")).toBe("Penguin (AI)");
+    expect(botName("", "google_meet")).toBe("Peguin (AI)");
   });
   it("opens Zoom's browser client and keeps the passcode", () => {
     expect(webClientUrl("https://us05web.zoom.us/j/8123?pwd=abc", "zoom")).toBe("https://us05web.zoom.us/wc/join/8123?pwd=abc");

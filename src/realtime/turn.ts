@@ -1,15 +1,15 @@
 /**
- * Decides when Penguin should speak. Pure logic, no I/O, fully unit-tested.
+ * Decides when Peguin should speak. Pure logic, no I/O, fully unit-tested.
  *
- * Inputs are finalised utterances from speech-to-text. Penguin speaks when:
+ * Inputs are finalised utterances from speech-to-text. Peguin speaks when:
  *  1. someone hands the floor to the user by name ("Mujeeb, you're up",
  *     "Mujeeb?", "what about Mujeeb") and the update hasn't been given; or
  *  2. after the update, every time the user is called by name: a question
  *     ("Mujeeb, any blockers?") is answered, a fresh handoff ("Mujeeb, you're
  *     up") repeats the update, and a bare call ("Hey Mujeeb.") is acknowledged
- *     so the next question comes to Penguin. Being talked about ("Mujeeb did
+ *     so the next question comes to Peguin. Being talked about ("Mujeeb did
  *     great", "Thanks Mujeeb") is not being called.
- *  3. an unnamed question within the follow-up window right after Penguin
+ *  3. an unnamed question within the follow-up window right after Peguin
  *     finished (capped by maxFollowUps, since those are guesses).
  * It stays silent while it is talking and for a short tail after, so it never
  * reacts to its own voice echoing back from the call.
@@ -24,7 +24,7 @@ export type Decision =
 export type TurnOptions = {
   names: string[];              // the user's name plus aliases
   followUpWindowMs?: number;    // questions right after the update count as follow-ups
-  echoTailMs?: number;          // ignore audio this long after Penguin stops
+  echoTailMs?: number;          // ignore audio this long after Peguin stops
   maxFollowUps?: number;       // cap on unnamed follow-ups; named questions are always answered
 };
 
@@ -141,7 +141,7 @@ export class TurnDetector {
 
   get hasGivenUpdate() { return this.updateGiven; }
 
-  /** Call when Penguin starts/stops playing audio into the call. */
+  /** Call when Peguin starts/stops playing audio into the call. */
   setSpeaking(on: boolean, now: number) {
     this.speaking = on;
     if (!on) this.lastSpokeEndedAt = now;
@@ -167,7 +167,7 @@ export class TurnDetector {
 
     if (!isQuestion(t) || this.followUps >= this.o.maxFollowUps) return { action: "none" };
     const inWindow = now - this.lastSpokeEndedAt <= this.o.followUpWindowMs;
-    // "Sarah, what about you?" right after Penguin finishes is the floor moving
+    // "Sarah, what about you?" right after Peguin finishes is the floor moving
     // on, not a follow-up for us.
     const handsToSomeoneElse = HANDOFF.some((r) => r.test(normalize(t)));
     if (inWindow && !handsToSomeoneElse) {

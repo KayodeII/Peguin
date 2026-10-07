@@ -6,12 +6,12 @@ import { z } from "zod";
 
 const Time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour time like 09:30");
 
-/** The few things Penguin needs; everything else it works out. */
+/** The few things Peguin needs; everything else it works out. */
 export const Settings = z.object({
   displayName: z.string().trim().max(40).default(""),
   aliases: z.array(z.string().trim().min(1).max(40)).max(10).default([]),
   timezone: z.string().default(Intl.DateTimeFormat().resolvedOptions().timeZone),
-  /** The recurring standup Penguin attends for you. Calendar sync replaces this later. */
+  /** The recurring standup Peguin attends for you. Calendar sync replaces this later. */
   standup: z.object({
     url: z.string().trim().default(""),
     time: Time.default("09:30"),

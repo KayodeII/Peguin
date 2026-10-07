@@ -1,5 +1,5 @@
 // PRs the user opened or reviewed, through the GitHub CLI's existing login.
-// (The Penguin account's GitHub connection replaces this for users without gh.)
+// (The Peguin account's GitHub connection replaces this for users without gh.)
 import { sh } from "./exec.js";
 import type { Activity, SourceResult } from "./types.js";
 

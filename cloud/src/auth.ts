@@ -76,8 +76,8 @@ export async function emailStart(env: Env, req: Request): Promise<Response> {
   await env.DB.prepare("INSERT INTO magic_links (token_hash, email, next, expires_at) VALUES (?, ?, ?, ?)")
     .bind(await sha256(token), email.trim().toLowerCase(), safeNext(next), now() + LINK_MINUTES * 60).run();
   const link = `${env.APP_ORIGIN}/auth/email/verify?token=${token}`;
-  const sent = await sendEmail(env, email, "Sign in to Penguin",
-    `Sign in to Penguin:\n\n${link}\n\nThe link works once and expires in ${LINK_MINUTES} minutes. If you didn't ask for it, ignore this email.`);
+  const sent = await sendEmail(env, email, "Sign in to Peguin",
+    `Sign in to Peguin:\n\n${link}\n\nThe link works once and expires in ${LINK_MINUTES} minutes. If you didn't ask for it, ignore this email.`);
   if (!sent) console.log(`[dev] sign-in link for ${email}: ${link}`);
   return json({ ok: true, ...(sent ? {} : { devLink: env.APP_ORIGIN.startsWith("http://localhost") ? link : undefined }) });
 }
@@ -139,20 +139,20 @@ export async function signOut(env: Env, req: Request): Promise<Response> {
 
 /**
  * The app opens /app/connect?challenge=<S256 of a verifier>&state=<random> in the browser.
- * Once signed in, the browser is sent to penguin://auth with a one-time code, which the
+ * Once signed in, the browser is sent to peguin://auth with a one-time code, which the
  * app swaps (with its verifier) for an app token. A code caught by another app is useless
  * without the verifier.
  */
 export async function appConnect(env: Env, req: Request, url: URL): Promise<Response> {
   const challenge = url.searchParams.get("challenge") ?? "";
   const state = url.searchParams.get("state") ?? "";
-  if (!/^[A-Za-z0-9_-]{43}$/.test(challenge) || !/^[A-Za-z0-9_-]{16,128}$/.test(state)) throw new HttpError(400, "This sign-in link is incomplete. Start again from the Penguin app.");
+  if (!/^[A-Za-z0-9_-]{43}$/.test(challenge) || !/^[A-Za-z0-9_-]{16,128}$/.test(state)) throw new HttpError(400, "This sign-in link is incomplete. Start again from the Peguin app.");
   const user = await sessionUser(env, req);
   if (!user) return redirect(`/signin?next=${encodeURIComponent(url.pathname + url.search)}`);
   const code = randomToken();
   await env.DB.prepare("INSERT INTO app_codes (code_hash, user_id, challenge, expires_at) VALUES (?, ?, ?, ?)")
     .bind(await sha256(code), user.id, challenge, now() + CODE_MINUTES * 60).run();
-  return redirect(`/connected?to=${encodeURIComponent(`penguin://auth?code=${code}&state=${state}`)}`);
+  return redirect(`/connected?to=${encodeURIComponent(`peguin://auth?code=${code}&state=${state}`)}`);
 }
 
 export async function appToken(env: Env, req: Request): Promise<Response> {
@@ -165,7 +165,7 @@ export async function appToken(env: Env, req: Request): Promise<Response> {
   if (!row) throw new HttpError(400, "This sign-in code expired or was already used. Sign in again from the app.");
   const token = randomToken();
   await env.DB.prepare("INSERT INTO app_tokens (token_hash, user_id, label, created_at) VALUES (?, ?, ?, ?)")
-    .bind(await sha256(token), row.user_id, (label ?? "Penguin desktop").slice(0, 60), now()).run();
+    .bind(await sha256(token), row.user_id, (label ?? "Peguin desktop").slice(0, 60), now()).run();
   return json({ token });
 }
 

@@ -1,6 +1,6 @@
-# Penguin cloud
+# Peguin cloud
 
-One Cloudflare Worker with D1: sign-in (email link, Google), desktop app sign-in (`penguin://` + PKCE), Stripe subscriptions, signed licences, and server-side Claude for drafts and live answers. It also serves the website from `../web/dist`.
+One Cloudflare Worker with D1: sign-in (email link, Google), desktop app sign-in (`peguin://` + PKCE), Stripe subscriptions, signed licences, and server-side Claude for drafts and live answers. It also serves the website from `../web/dist`.
 
 ```bash
 cd cloud

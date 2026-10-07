@@ -19,12 +19,12 @@ export type MeetingEvent =
 
 const SIGN_IN_HOSTS = /^(login\.microsoftonline\.com|login\.live\.com|accounts\.google\.com)$/;
 
-/** The fixed words Penguin says. The update itself is the prepared draft, never made up here. */
+/** The fixed words Peguin says. The update itself is the prepared draft, never made up here. */
 export function lines(s: Settings, draft: Draft | null) {
   const first = (s.displayName.trim().split(/\s+/)[0] || "my owner");
   return {
     // Non-negotiable: disclose first.
-    update: `Hi everyone, I'm Penguin, ${first}'s AI assistant. ${first} is in another meeting, so I'm covering the update. `
+    update: `Hi everyone, I'm Peguin, ${first}'s AI assistant. ${first} is in another meeting, so I'm covering the update. `
       + (draft?.script ?? `I don't have an update prepared, so ${first} will share it after the call.`)
       + ` ${first} can follow up on anything after the call.`,
     defer: `Good question. I'll get ${first} to follow up on that after the call.`,
@@ -64,7 +64,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     const first = s.displayName.trim().split(/\s+/)[0] ?? "";
     const names = [...new Set([s.displayName.trim(), first, ...s.aliases].filter(Boolean))];
     const say = lines(s, this.brain.draft);
-    // Pre-synthesize so Penguin answers instantly when called on.
+    // Pre-synthesize so Peguin answers instantly when called on.
     const audio = { update: synthesize(say.update), defer: synthesize(say.defer), ack: synthesize(say.ack) };
     for (const a of Object.values(audio)) a.catch((e) => this.log(`speech output failed: ${e}`));
 
@@ -90,7 +90,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     });
     wc.on("will-navigate", (e) => {
       if (SIGN_IN_HOSTS.test(new URL(e.url).hostname) || /zoom\.us\/signin/.test(e.url)) {
-        e.preventDefault(); this.log("Blocked a sign-in page: Penguin only joins as a guest.");
+        e.preventDefault(); this.log("Blocked a sign-in page: Peguin only joins as a guest.");
       }
     });
     // Typing through the DevTools protocol works in a hidden window; insertText freezes it.
@@ -105,7 +105,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
       if (!answer || !this.brain.draft?.facts.length) return audio.defer;
       try {
         const text = await answer(question, recent);
-        remember(`Penguin: ${text}`);
+        remember(`Peguin: ${text}`);
         this.log(`Answer: ${text}`);
         return synthesize(text);
       } catch (e) {
@@ -150,7 +150,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     on("mtg:pcm", (_e, buf: ArrayBuffer) => onPcm(buf));
     on("mtg:in-call", () => this.setStatus("in_call", `Joined as "${name}". Muted until someone calls ${first || "you"}.`));
     on("mtg:playback-ended", () => turn.setSpeaking(false, Date.now()));
-    on("mtg:ended", () => { this.setStatus("ended", "The call ended or Penguin was removed."); this.stop(); });
+    on("mtg:ended", () => { this.setStatus("ended", "The call ended or Peguin was removed."); this.stop(); });
     on("mtg:level", () => {});
 
     win.on("closed", () => { this.setStatus("ended"); this.cleanup(); });

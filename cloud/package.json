@@ -2,7 +2,7 @@
   "name": "penguin-cloud",
   "version": "0.1.0",
   "private": true,
-  "description": "Penguin accounts, billing, licences and server-side Claude (Cloudflare Worker + D1).",
+  "description": "Peguin accounts, billing, licences and server-side Claude (Cloudflare Worker + D1).",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

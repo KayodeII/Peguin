@@ -64,7 +64,7 @@ export function TodayView({ settings, draft, prepare, goSources }: { settings: S
             </div>
           </article>
         )}
-        {draft.preparing && <Typing text="Penguin is writing" />}
+        {draft.preparing && <Typing text="Peguin is writing" />}
         {draft.error && <div className="notice error">{draft.error}</div>}
       </div>
     </>
@@ -98,7 +98,7 @@ export function LiveView({ settings, live, join, leave }: { settings: Settings; 
           if (e.kind === "heard") return (
             <div key={i} className="line">
               <Avatar name="Meeting" /><div><div className="msg-head"><strong>Meeting</strong></div><p className="msg-text">{e.text}</p>
-                {ACTION[e.action] && <p className="system">→ Penguin {ACTION[e.action]}</p>}</div>
+                {ACTION[e.action] && <p className="system">→ Peguin {ACTION[e.action]}</p>}</div>
             </div>
           );
           if (e.kind === "log" && /^(Answer|Speaking)/.test(e.text)) return (
@@ -285,7 +285,7 @@ export function Onboarding({ settings, save, done }: { settings: Settings; save:
     <div className="modal-backdrop">
       <div className="modal" role="dialog" aria-labelledby="welcome">
         <div className="modal-art"><Logo size={56} /></div>
-        <h2 id="welcome">Welcome to Penguin</h2>
+        <h2 id="welcome">Welcome to Peguin</h2>
         <p className="modal-sub">Your standup, covered.</p>
         <label>Name<input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} /></label>
         <p className="hint">Joins as <strong>{botName(name, "google_meet")}</strong></p>

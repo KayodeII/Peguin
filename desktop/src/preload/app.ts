@@ -19,4 +19,4 @@ const api = {
   },
 };
 contextBridge.exposeInMainWorld("penguin", api);
-export type PenguinApi = typeof api;
+export type PeguinApi = typeof api;

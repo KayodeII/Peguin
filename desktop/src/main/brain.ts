@@ -1,4 +1,4 @@
-// Drafts the update and answers follow-ups: through the Penguin account's
+// Drafts the update and answers follow-ups: through the Peguin account's
 // server-side Claude when subscribed, otherwise through the Claude Code CLI
 // with the user's own Claude login (development and power users).
 import { app } from "electron";

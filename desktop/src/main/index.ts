@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Tray } from "electron";
-import { writeFileSync } from "node:fs";
+import { existsSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { completeSignIn, refreshAccount, signOut, startSignIn, type Account } from "./account.js";
@@ -20,14 +20,18 @@ app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 // Meeting sites reject unknown browsers; present as plain Chrome.
 app.userAgentFallback = app.userAgentFallback.replace(/ (Electron|penguin-desktop)\/\S+/g, "");
 
-app.setName("Penguin"); // before ready: menu name and app-data folder
+// Before ready: sets the menu name and the app-data folder. Settings from
+// before the rename (folder "Penguin") move over once.
+const legacyData = app.getPath("userData").replace(/[^/\\]+$/, "Penguin");
+app.setName("Peguin");
+if (!process.env.PENGUIN_USER_DATA && existsSync(legacyData) && !existsSync(app.getPath("userData"))) renameSync(legacyData, app.getPath("userData"));
 if (process.env.PENGUIN_USER_DATA) app.setPath("userData", process.env.PENGUIN_USER_DATA); // dev: separate profile
 if (!app.requestSingleInstanceLock()) app.quit();
 
-// penguin:// links (sign-in hand-off). In development the Electron binary is
+// peguin:// links (sign-in hand-off). In development the Electron binary is
 // registered with this project folder as its argument.
-if (process.defaultApp) app.setAsDefaultProtocolClient("penguin", process.execPath, [path.resolve(process.argv[1] ?? ".")]);
-else app.setAsDefaultProtocolClient("penguin");
+if (process.defaultApp) app.setAsDefaultProtocolClient("peguin", process.execPath, [path.resolve(process.argv[1] ?? ".")]);
+else app.setAsDefaultProtocolClient("peguin");
 
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -56,7 +60,7 @@ function windowBackground(): string {
 function openWindow() {
   if (win && !win.isDestroyed()) { win.show(); win.focus(); return; }
   win = new BrowserWindow({
-    width: 1180, height: 760, minWidth: 900, minHeight: 600, title: "Penguin", show: false,
+    width: 1180, height: 760, minWidth: 900, minHeight: 600, title: "Peguin", show: false,
     backgroundColor: windowBackground(), titleBarStyle: "hiddenInset", trafficLightPosition: { x: 14, y: 14 },
     webPreferences: { preload: path.join(outDir, "preload/app.cjs"), sandbox: true, contextIsolation: true },
   });
@@ -86,12 +90,12 @@ function prepare(): Promise<Draft> {
 
 async function join(url: string) {
   const settings = loadSettings();
-  if (!settings.displayName.trim()) throw new Error("Add your name in Settings first, so Penguin knows when it's called.");
+  if (!settings.displayName.trim()) throw new Error("Add your name in Settings first, so Peguin knows when it's called.");
   meeting?.stop();
   let draft = loadDraft();
   if (!isFresh(draft, settings.timezone)) {
     send({ kind: "log", text: "Preparing today's update before joining…" });
-    draft = await prepare().catch(() => draft); // join anyway: Penguin says the update will follow
+    draft = await prepare().catch(() => draft); // join anyway: Peguin says the update will follow
   }
   whisper ??= startWhisper(appRoot);
   whisper.catch(() => { whisper = null; });
@@ -115,7 +119,7 @@ async function updateAccount(fn: () => Promise<Account | null>) {
   catch (e) { send({ kind: "account", account, error: message(e) }); }
 }
 function handleUrl(url: string) {
-  if (!url.startsWith("penguin://")) return;
+  if (!url.startsWith("peguin://")) return;
   openWindow();
   void updateAccount(async () => (await completeSignIn(url)) ?? account);
 }
@@ -135,13 +139,13 @@ ipcMain.handle("account:signout", () => updateAccount(async () => { await signOu
 app.whenReady().then(() => {
   tray = new Tray(nativeImage.createEmpty());
   tray.setTitle("🐧"); // macOS menu bar; a proper icon comes with packaging
-  tray.setToolTip("Penguin");
+  tray.setToolTip("Peguin");
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "Open Penguin", click: openWindow },
+    { label: "Open Peguin", click: openWindow },
     { label: "Prepare today's update", click: () => void prepare().catch(() => {}) },
     { label: "Leave meeting", click: () => { meeting?.stop(); meeting = null; } },
     { type: "separator" },
-    { label: "Quit Penguin", role: "quit" },
+    { label: "Quit Peguin", role: "quit" },
   ]));
   openWindow();
   void updateAccount(refreshAccount);
@@ -155,9 +159,9 @@ app.whenReady().then(() => {
   app.on("activate", openWindow);
 });
 
-// Windows and Linux deliver penguin:// links as an argument to a second instance.
+// Windows and Linux deliver peguin:// links as an argument to a second instance.
 app.on("second-instance", (_e, argv) => {
-  const url = argv.find((a) => a.startsWith("penguin://"));
+  const url = argv.find((a) => a.startsWith("peguin://"));
   if (url) handleUrl(url); else openWindow();
 });
 // Keep running in the menu bar when the window closes.

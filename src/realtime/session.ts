@@ -45,7 +45,7 @@ export class MeetingSession {
 
   start() {
     if (this.meeting.update_given_at) this.turn.markUpdateGiven(); // reconnect after a node restart
-    // Synthesize the update now, so Penguin answers instantly when called on.
+    // Synthesize the update now, so Peguin answers instantly when called on.
     this.updateAudio = speak(this.updateText());
     this.updateAudio.catch((e) => this.l.error({ err: String(e) }, "pre-synthesis failed"));
     this.ackAudio = speak(MeetingSession.ACK);
@@ -104,7 +104,7 @@ export class MeetingSession {
     else if (d.action === "acknowledge") void this.acknowledge();
   }
 
-  /** Called by name with no question yet: let them know Penguin is listening. */
+  /** Called by name with no question yet: let them know Peguin is listening. */
   private async acknowledge() {
     this.busy = true;
     try {
@@ -151,7 +151,7 @@ export class MeetingSession {
       this.turn.setSpeaking(true, Date.now());
       this.sendPage({ type: "state", state: "speaking", text });
       this.page.send(audio, { binary: true });
-      this.record({ speaker: "Penguin", text, is_bot: true, at: new Date() });
+      this.record({ speaker: "Peguin", text, is_bot: true, at: new Date() });
       // Safety net if the page never reports back: ~2.5 words/sec + margin.
       const ms = (text.split(/\s+/).length / 2.5) * 1000 + 5000;
       this.onPlaybackDone = resolve;

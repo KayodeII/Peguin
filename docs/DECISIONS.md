@@ -5,13 +5,13 @@ Newest first. Add an entry when you make a choice a future agent might otherwise
 ## 2026-10-07: Notion-style themes; domain www.peguin.co
 
 - **Desktop look:** Discord's layout with Notion's colour and type by default. Themes in Settings → Appearance: System (follows the OS between Notion light and dark), Light, Dark, Midnight (Discord dark), plus five accents. Appearance saves instantly. Settings opens from one gear, in the user panel.
-- **Domain:** `https://www.peguin.co` is canonical and `peguin.co` redirects to it. The domain is spelled "peguin"; the product stays "Penguin". Installed builds talk to www.peguin.co; running from source talks to the local Worker unless `PENGUIN_CLOUD_URL` is set.
+- **Domain:** `https://www.peguin.co` is canonical and `peguin.co` redirects to it. Installed builds talk to www.peguin.co; running from source talks to the local Worker unless `PENGUIN_CLOUD_URL` is set.
 
 ## 2026-10-07: One Cloudflare Worker for the website and the API
 
 `cloud/` is a single Worker with D1. It serves the website (`web/dist`, Workers static assets, Cloudflare's successor to Pages) and the API on one origin, so session cookies stay first-party and there's one deploy.
 - **Sign-in:** email links (Resend; printed to the console in dev) and Google. Sessions are random tokens stored hashed, in an HttpOnly SameSite=Lax cookie; cookie-authenticated writes must be JSON (CSRF).
-- **Desktop sign-in:** `/app/connect` with a PKCE S256 challenge, returning to `penguin://auth` with a one-time code that only the app's verifier can redeem, for a revocable app token.
+- **Desktop sign-in:** `/app/connect` with a PKCE S256 challenge, returning to `peguin://auth` with a one-time code that only the app's verifier can redeem, for a revocable app token.
 - **Billing:** Stripe over REST (no SDK). Webhooks are signature-checked with a 5-minute window, applied once per event id, and always re-read the subscription from Stripe, since events arrive out of order. `past_due` keeps working for 3 days.
 - **Licences:** Ed25519-signed, at most 30 days, plus 3 offline days past the period end. The private JWK is a Worker secret; the public key ships in the app. JWKs are imported without `alg`, because Node and Workers disagree on its value.
 - **Claude:** `claude-opus-5` through the official SDK, with server-side refusal fallbacks (`fallbacks: "default"`). Drafts use high effort; live answers use low effort for speed. Daily per-user caps. Same prompts as the desktop (`src/core/brain/prompts.ts`).
@@ -20,11 +20,11 @@ Newest first. Add an entry when you make a choice a future agent might otherwise
 ## 2026-10-07: Product shape: desktop app first, then website and payments
 
 - **Build order:** the real desktop app (Electron + React) with a preferences window first, then the website, sign-up and Stripe on Cloudflare, then opt-in voice cloning.
-- **Sign-in:** Google plus a passwordless email link, handled by the Cloudflare Worker. The desktop app signs in by opening the browser and returning through a `penguin://` link.
+- **Sign-in:** Google plus a passwordless email link, handled by the Cloudflare Worker. The desktop app signs in by opening the browser and returning through a `peguin://` link.
 - **Web stack:** React + Vite on Cloudflare Pages; the Worker serves the API. The desktop app's UI uses the same React.
 - **Desktop build:** Vite for the React window, esbuild for the main process and preloads (electron-vite doesn't support Vite 8 yet).
 - **Display name** is a user preference, but the AI suffix is always added (" (AI)", or " - AI" on Teams).
-- **Connections:** users connect their calendar (to find standups and double-bookings) and GitHub/Linear/Jira (facts for the update). They don't connect Zoom, Meet or Teams logins: Penguin joins as a guest.
+- **Connections:** users connect their calendar (to find standups and double-bookings) and GitHub/Linear/Jira (facts for the update). They don't connect Zoom, Meet or Teams logins: Peguin joins as a guest.
 - **Turn-taking stays rule-based** (`src/realtime/turn.ts`): instant, free and testable. An LLM classifier for ambiguous cases may come later in the paid tier. The LLM's job is drafting the update and answering from facts.
 - **Voice cloning (later, opt-in):** only the account holder's own voice, recorded live in the app with a consent sentence (no uploads); disclosure stays in every meeting; deletable. Check model licences before choosing (several open models are non-commercial).
 
@@ -36,7 +36,7 @@ Decision:
 - **Teams:** join through **Azure Communication Services** (ACS), Microsoft's supported way for an external app to join a Teams meeting as a guest with a custom name, sending and receiving audio. The ACS web Calling SDK runs inside the Electron app, so the desktop architecture is unchanged. It's billed per minute (a few cents per standup; check current pricing), so it goes through the server and is covered by the subscription.
 - **Zoom:** the browser-client approach for the spike; the **Zoom Meeting SDK** for production. That needs Zoom Marketplace approval for joining meetings outside our own account.
 - **Google Meet:** browser guest join (no official route that can speak; see the first entry). Keep it, and watch for enforcement.
-- **Join rules for every driver:** one join click per 15 s, at most 3 per meeting, no retry loops. Never sign in to any account inside Penguin's window (sign-in pages are blocked). Test against real meetings only, one join per test.
+- **Join rules for every driver:** one join click per 15 s, at most 3 per meeting, no retry loops. Never sign in to any account inside Peguin's window (sign-in pages are blocked). Test against real meetings only, one join per test.
 
 ## 2026-10-07: Bot name suffix is " - AI" on Teams
 
@@ -47,10 +47,10 @@ Teams guest names allow only letters, numbers, spaces and `- ' . _ @`; "Mujeeb (
 Context: the main use case is covering a standup when the owner is double-booked, so their computer is already on and in a call. Recall, Deepgram and a hosted cluster all charge per use; running on the user's machine makes running costs close to zero.
 
 Decision:
-- **Penguin becomes an Electron app.** A hidden Chromium window joins the meeting's web client as a guest named "<owner> (AI)". It replaces `getUserMedia` with Penguin's voice and an avatar, and taps the other participants' WebRTC audio tracks. This is the same technique Recall and Attendee use, run locally. Electron rather than Tauri, because we need our own Chromium to inject audio.
+- **Peguin becomes an Electron app.** A hidden Chromium window joins the meeting's web client as a guest named "<owner> (AI)". It replaces `getUserMedia` with Peguin's voice and an avatar, and taps the other participants' WebRTC audio tracks. This is the same technique Recall and Attendee use, run locally. Electron rather than Tauri, because we need our own Chromium to inject audio.
 - **Local speech:** whisper.cpp (STT) and Piper (TTS). Local storage: SQLite. A local scheduler replaces BullMQ.
 - **A small server on the owner's Cloudflare domain:** a Worker for accounts, Stripe subscription webhooks and signed license tokens (Ed25519, about 30 days, with offline grace), plus D1, and R2 for installers. Drafting with Claude stays server-side, so the API key never ships in the client and the paid feature can't be cracked away.
-- **Live follow-ups:** answered by Claude through the server when subscribed and online. Otherwise Penguin defers to the owner (`FOLLOWUPS=defer`); a small local model never answers live questions (non-negotiable 2).
+- **Live follow-ups:** answered by Claude through the server when subscribed and online. Otherwise Peguin defers to the owner (`FOLLOWUPS=defer`); a small local model never answers live questions (non-negotiable 2).
 - **Kept as optional adapters, not the default:** the current server stack (Recall/Attendee, Deepgram, BullMQ, Postgres).
 
 Costs: Apple Developer Program for notarization and a Windows code-signing certificate before distribution; Stripe fees on revenue; a few cents of Claude per user. Local development needs neither signing nor paid keys.
@@ -92,4 +92,4 @@ The bot announces itself as the owner's AI assistant and its name ends in "(AI)"
 
 ## 2026-10-06: Name
 
-The app is named **Penguin** (the owner typed it once as "Peguin").
+Originally named "Penguin". Renamed to **Peguin** on 2026-10-07 to match the domain (peguin.co); every user-facing string, the bot's spoken introduction and the `peguin://` URL scheme use it. Internal identifiers (package names, `PENGUIN_*` env vars, the D1 database, the repo folder) keep "penguin" to avoid churn.

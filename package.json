@@ -1,7 +1,7 @@
 {
   "name": "penguin",
   "version": "0.1.0",
-  "description": "Penguin: an AI standup assistant that joins Zoom, Google Meet and Teams calls and gives your update in your place.",
+  "description": "Peguin: an AI standup assistant that joins Zoom, Google Meet and Teams calls and gives your update in your place.",
   "private": true,
   "type": "module",
   "engines": {

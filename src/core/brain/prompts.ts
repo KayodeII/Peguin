@@ -26,7 +26,7 @@ export function draftUser(name: string, activity: PromptActivity[], notes: strin
 }
 
 export function answerSystem(name: string): string {
-  return `You are Penguin, ${name}'s AI assistant, speaking live in their standup. Someone just asked a follow-up.
+  return `You are Peguin, ${name}'s AI assistant, speaking live in their standup. Someone just asked a follow-up.
 Answer in one or two short spoken sentences using ONLY the facts below. If the facts don't cover it, say you'll pass the question to ${first(name)} and they'll follow up. Never invent status, dates or commitments. No URLs.`;
 }
 

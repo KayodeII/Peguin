@@ -12,7 +12,7 @@ export function Home() {
         <Logo size={64} />
         <h1>Your standup, covered.</h1>
         <p className="lead">
-          Double-booked? Penguin reads what you shipped, writes a 40-second update, joins the call muted and
+          Double-booked? Peguin reads what you shipped, writes a 40-second update, joins the call muted and
           says it when it's your turn. It answers questions from your actual work and tells everyone it's an AI.
         </p>
         <div className="cta">
@@ -31,7 +31,7 @@ export function Home() {
       <section className="quote">
         <div className="bubble">
           <div className="who"><Logo size={22} /><strong>Ada (AI)</strong><em>AI</em></div>
-          <p>Hi everyone, I'm Penguin, Ada's AI assistant. Ada is in another meeting, so I'm covering the update. Yesterday Ada merged the payment-webhook retries and fixed the flaky invoice test. Today they're migrating the users table to the new auth schema. No blockers.</p>
+          <p>Hi everyone, I'm Peguin, Ada's AI assistant. Ada is in another meeting, so I'm covering the update. Yesterday Ada merged the payment-webhook retries and fixed the flaky invoice test. Today they're migrating the users table to the new auth schema. No blockers.</p>
         </div>
       </section>
     </>
@@ -42,7 +42,7 @@ export function Pricing() {
   return (
     <section className="narrow center">
       <h1>One plan</h1>
-      <p className="lead">Everything Penguin does, for one person.</p>
+      <p className="lead">Everything Peguin does, for one person.</p>
       <div className="card plan">
         <div className="price"><strong>{PRICE.amount}</strong>/{PRICE.period}</div>
         <ul>
@@ -139,7 +139,7 @@ export function Account() {
 
       <div className="card">
         <h3>Desktop app</h3>
-        <p>Penguin runs on your Mac. After installing, sign in from the app.</p>
+        <p>Peguin runs on your Mac. After installing, sign in from the app.</p>
         <button className="btn ghost" disabled title="Installers ship with the first release">Download for macOS</button>
       </div>
 
@@ -151,14 +151,14 @@ export function Account() {
 /** After /app/connect: hand the one-time code back to the desktop app. */
 export function Connected() {
   const to = new URLSearchParams(location.search).get("to") ?? "";
-  const valid = /^penguin:\/\/auth\?code=[A-Za-z0-9_-]+&state=[A-Za-z0-9_-]+$/.test(to);
+  const valid = /^peguin:\/\/auth\?code=[A-Za-z0-9_-]+&state=[A-Za-z0-9_-]+$/.test(to);
   useEffect(() => { if (valid) location.href = to; }, [to, valid]);
   return (
     <section className="narrow center">
       <Logo size={56} />
       <h1>{valid ? "Signed in" : "Something's off"}</h1>
-      <p className="lead">{valid ? "Return to the Penguin app. You can close this tab." : "Start sign-in again from the Penguin app."}</p>
-      {valid && <a className="btn" href={to}>Open Penguin</a>}
+      <p className="lead">{valid ? "Return to the Peguin app. You can close this tab." : "Start sign-in again from the Peguin app."}</p>
+      {valid && <a className="btn" href={to}>Open Peguin</a>}
     </section>
   );
 }

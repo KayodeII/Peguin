@@ -16,7 +16,7 @@ function App() {
   return (
     <>
       <header className="nav">
-        <Link to="/" className="brand"><Logo />Penguin</Link>
+        <Link to="/" className="brand"><Logo />Peguin</Link>
         <nav>
           <Link to="/pricing">Pricing</Link>
           <Link to="/account" className="btn small">Account</Link>
@@ -24,8 +24,8 @@ function App() {
       </header>
       <main>{page}</main>
       <footer className="foot">
-        <span>Penguin always tells the meeting it's an AI assistant.</span>
-        <span>© {new Date().getFullYear()} Penguin</span>
+        <span>Peguin always tells the meeting it's an AI assistant.</span>
+        <span>© {new Date().getFullYear()} Peguin</span>
       </footer>
     </>
   );

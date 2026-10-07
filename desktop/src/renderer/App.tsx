@@ -79,7 +79,7 @@ export function App() {
   return (
     <div className="app">
       <nav className="rail" aria-label="Sections">
-        <button className={`home ${view === "today" ? "active" : ""}`} onClick={() => setView("today")} title="Penguin" aria-label="Today"><Logo /></button>
+        <button className={`home ${view === "today" ? "active" : ""}`} onClick={() => setView("today")} title="Peguin" aria-label="Today"><Logo /></button>
         <div className="rail-sep" />
         {NAV.filter((n) => n.id !== "today").map((n) => (
           <button key={n.id} className={`rail-btn ${view === n.id ? "active" : ""}`} onClick={() => setView(n.id)} title={n.label} aria-label={n.label}>
@@ -90,7 +90,7 @@ export function App() {
       </nav>
 
       <aside className="sidebar">
-        <header className="sidebar-head">Penguin</header>
+        <header className="sidebar-head">Peguin</header>
         <div className="sidebar-body">
           <p className="side-label">Workspace</p>
           {NAV.map((n) => (

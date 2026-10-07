@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
-import type { PenguinApi } from "../preload/app";
+import type { PeguinApi } from "../preload/app";
 
 declare global {
-  interface Window { penguin: PenguinApi }
+  interface Window { penguin: PeguinApi }
 }

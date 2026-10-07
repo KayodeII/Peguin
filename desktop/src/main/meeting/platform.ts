@@ -23,7 +23,7 @@ export function webClientUrl(url: string, platform: Platform): string {
  * Teams only allows letters, numbers, spaces and - ' . _ @ in guest names.
  */
 export function botName(displayName: string, platform: Platform): string {
-  const base = displayName.replace(/\s*(\(AI\)|-\s*AI)\s*$/i, "").trim() || "Penguin";
+  const base = displayName.replace(/\s*(\(AI\)|-\s*AI)\s*$/i, "").trim() || "Peguin";
   if (platform === "teams") return `${base.replace(/[^\p{L}\p{N} '._@-]/gu, "").trim()} - AI`;
   return `${base} (AI)`;
 }

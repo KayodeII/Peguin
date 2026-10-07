@@ -111,7 +111,7 @@ describe("TurnDetector", () => {
     expect(say("Mujeeb, you're up again")).toBe("give_update");
   });
 
-  it("after an acknowledgement, the next unnamed question comes to Penguin", () => {
+  it("after an acknowledgement, the next unnamed question comes to Peguin", () => {
     const t = new TurnDetector({ names });
     t.markUpdateGiven();
     t.setSpeaking(false, 0);
