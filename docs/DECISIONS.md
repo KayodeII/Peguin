@@ -2,6 +2,10 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: Desktop install status and update checks
+
+The desktop app sends `x-peguin-version` on every cloud request; the Worker stores it on the app token (`app_tokens.app_version`). The account page shows "Installed" with the version and last use, "Update available" when `APP_LATEST_VERSION` is newer, or a download button. The app checks `/api/release` every six hours and shows an update card in the sidebar. `/download/mac` redirects to `APP_DOWNLOAD_URL`, so the .dmg can be hosted anywhere (GitHub Releases or R2) and a release is: upload the .dmg, bump the two vars, deploy. Auto-install (Squirrel/electron-updater) needs a signed app, so it waits for Apple signing.
+
 ## 2026-10-07: Help penguin, help chat and designed emails
 
 Support starts from the mascot: Peguin walks along the bottom of the page, rolls over, raises a "Need help?" flag and chirps (`web/src/components/HelpPenguin.tsx`). Visitors can send it away; a small corner button remains. The chat answers suggested FAQ questions locally and free-form ones through `/api/support/chat`, where Claude answers only from the site FAQ (`web/src/faq.ts`, shared with the page) and the live price, and marks anything else for handoff. Handoffs go to `/api/support/message`: stored in D1 and emailed only to `SUPPORT_INBOX`, never to the visitor's address, so the public form can't be used as a spam relay. Both endpoints are rate limited per hashed IP. Emails (sign-in, welcome on first sign-in, support inbox) share one table-based, inline-styled layout in `cloud/src/email.ts` with PNG art under `web/public/email/`, because Gmail drops SVG.

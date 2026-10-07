@@ -24,7 +24,8 @@
     "CLAUDE_MODEL": "claude-opus-5",
     "TRIAL_DAYS": "14",
     "DRAFTS_PER_DAY": "20",
-    "ANSWERS_PER_DAY": "200"
+    "ANSWERS_PER_DAY": "200",
+    "APP_LATEST_VERSION": "0.1.0" // bump with each desktop release; set APP_DOWNLOAD_URL to its .dmg
   }
   // Secrets (wrangler secret put, or .dev.vars locally): ANTHROPIC_API_KEY, PAYSTACK_SECRET_KEY,
   // PAYSTACK_PLAN_CODE, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, RESEND_API_KEY, EMAIL_FROM, LICENSE_PRIVATE_JWK

@@ -1,4 +1,5 @@
 import { b64url, randomToken, sha256 } from "./crypto.js";
+import { VERSION_RE } from "../../src/core/version.js";
 import { sendEmail, signInEmail, welcomeEmail } from "./email.js";
 import { HttpError, need, type Env } from "./env.js";
 import { body, cookie, json, now, readCookie, redirect, safeNext } from "./http.js";
@@ -56,7 +57,11 @@ export async function appUser(env: Env, req: Request): Promise<User | null> {
     `SELECT ${USER_COLS} FROM app_tokens t JOIN users u ON u.id = t.user_id
      WHERE t.token_hash = ? AND t.revoked_at IS NULL`,
   ).bind(hash).first<User>();
-  if (user) await env.DB.prepare("UPDATE app_tokens SET last_used_at = ? WHERE token_hash = ?").bind(now(), hash).run();
+  if (user) {
+    const v = req.headers.get("x-peguin-version");
+    await env.DB.prepare("UPDATE app_tokens SET last_used_at = ?, app_version = COALESCE(?, app_version) WHERE token_hash = ?")
+      .bind(now(), v && VERSION_RE.test(v) ? v : null, hash).run();
+  }
   return user;
 }
 

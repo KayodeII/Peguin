@@ -4,6 +4,9 @@ export type Me = {
   subscription: { status: string; current_period_end: number | null } | null;
   trial_ends_at: number | null;
   entitled: boolean;
+  /** The desktop install this account last used, if it has ever signed in. */
+  app: { version: string | null; last_seen: number | null } | null;
+  release: { version: string; available: boolean };
 };
 
 /** JSON in, JSON out; throws the server's plain-sentence error. */

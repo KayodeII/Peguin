@@ -104,9 +104,10 @@ function Walker({ onOpen, onDismiss }: { onOpen: () => void; onDismiss: () => vo
 
   const flagUp = phase === "flag" || hover;
   const side = hover ? x.current > innerWidth / 2 : flagLeft;
+  const profile = !flagUp && (phase === "walk" || phase === "roll"); // seen from the side while moving
 
   return (
-    <div ref={box} className={`hp ${phase} ${flagUp ? "flag-up" : ""} ${side ? "flag-left" : "flag-right"} ${chirping ? "chirping" : ""}`}
+    <div ref={box} className={`hp ${phase} ${profile ? "profile" : ""} ${flagUp ? "flag-up" : ""} ${side ? "flag-left" : "flag-right"} ${chirping ? "chirping" : ""}`}
       style={{ ["--dir" as string]: dir }}
       onPointerEnter={() => { setHover(true); setFlagLeft(x.current > innerWidth / 2); }} onPointerLeave={() => setHover(false)}>
       <button className="hp-dismiss" onClick={onDismiss} aria-label="Send Peguin away"><Icon name="close" size={12} /></button>
@@ -114,15 +115,40 @@ function Walker({ onOpen, onDismiss }: { onOpen: () => void; onDismiss: () => vo
         onFocus={() => setHover(true)} onBlur={() => setHover(false)}>
         <span className="hp-flag" aria-hidden><i className="hp-pole" /><span className="hp-cloth">Need help?</span></span>
         <span className="hp-chirp" aria-hidden>chirp!</span>
+        <PenguinSide />
         <PenguinSprite />
       </button>
     </div>
   );
 }
 
+/** Side profile, facing right; flipped with --dir when walking left. */
+function PenguinSide() {
+  return (
+    <svg className="hp-sprite hp-side" viewBox="0 0 80 100" width={W} height={80} aria-hidden>
+      <g className="hp-roller">
+        <g className="hp-sbody">
+          <ellipse className="hp-sfoot hp-sfoot-back" cx="37" cy="94" rx="10" ry="4" fill="#e0912a" />
+          <path d="M19 78 L7 90 L22 88 Z" fill="#191919" />
+          <ellipse cx="38" cy="56" rx="22" ry="35" fill="#191919" />
+          <ellipse cx="47" cy="63" rx="12" ry="26" fill="#f4f1ea" />
+          <circle cx="48" cy="36" r="5" fill="#fff" />
+          <circle cx="50" cy="36.5" r="2.4" fill="#191919" />
+          <circle cx="51" cy="35.5" r=".8" fill="#fff" />
+          <path className="hp-beak-top" d="M57 40 L69 43.5 L57 47 Z" fill="#f2a93b" />
+          <ellipse cx="52" cy="47" rx="3.4" ry="2" fill="#f4a3a3" opacity=".55" />
+          <path className="hp-sflip" d="M34 50 C26 58 24 72 27 84 C29 88 33 87 34 82 C35 72 37 62 40 56 Z" fill="#0b0b0b" />
+          <ellipse className="hp-sfoot hp-sfoot-front" cx="45" cy="94" rx="10" ry="4" fill="#f2a93b" />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/** Facing the viewer: standing, holding the flag. */
 function PenguinSprite() {
   return (
-    <svg className="hp-sprite" viewBox="0 0 80 100" width={W} height={80} aria-hidden>
+    <svg className="hp-sprite hp-front" viewBox="0 0 80 100" width={W} height={80} aria-hidden>
       <g className="hp-roller">
         <ellipse className="hp-foot hp-foot-l" cx="29" cy="94" rx="9" ry="4.5" fill="#f2a93b" />
         <ellipse className="hp-foot hp-foot-r" cx="51" cy="94" rx="9" ry="4.5" fill="#f2a93b" />
@@ -150,7 +176,7 @@ function PenguinSprite() {
 type Msg = { role: "user" | "assistant"; text: string; handoff?: boolean };
 type View = "chat" | "contact" | "sent";
 
-const GREETING: Msg = { role: "assistant", text: "Hi, I'm Peguin's help assistant, an AI. Ask me about the app, pricing or privacy. If I can't answer, I'll pass it to the team." };
+const GREETING: Msg = { role: "assistant", text: "Ask me anything about Peguin. I'm an AI and only answer from our help pages. If I don't know, you can message the team." };
 const SUGGESTED = faq().filter((_, i) => [0, 1, 3, 7].includes(i));
 
 function HelpChat({ onClose, dismissed, onBringBack }: { onClose: () => void; dismissed: boolean; onBringBack: () => void }) {
@@ -190,7 +216,7 @@ function HelpChat({ onClose, dismissed, onBringBack }: { onClose: () => void; di
       setMsgs([...next, { role: "assistant", text: r.text, handoff: r.handoff }]);
     } catch (e) {
       const status = (e as { status?: number }).status;
-      const text = status === 429 ? (e as Error).message : "I can't answer that right now. Send it to the team and they'll reply by email.";
+      const text = status === 429 ? (e as Error).message : "I can't answer right now. You can message the team instead.";
       setMsgs([...next, { role: "assistant", text, handoff: true }]);
     } finally { setBusy(false); }
   }
@@ -208,7 +234,7 @@ function HelpChat({ onClose, dismissed, onBringBack }: { onClose: () => void; di
     <section className="hc" role="dialog" aria-label="Peguin help">
       <header className="hc-head">
         <span className="hc-avatar"><Logo size={26} /></span>
-        <div><strong>Peguin help</strong><span>{view === "chat" ? "Answers from our docs, or a person by email" : "A person reads every message"}</span></div>
+        <strong>{view === "chat" ? "Help" : "Message the team"}</strong>
         <button className="hc-close" onClick={onClose} aria-label="Close help"><Icon name="close" size={16} /></button>
       </header>
 
@@ -218,12 +244,15 @@ function HelpChat({ onClose, dismissed, onBringBack }: { onClose: () => void; di
             {msgs.map((m, i) => (
               <div key={i} className={`hc-msg ${m.role}`}>
                 <p>{m.text}</p>
-                {m.handoff && <button className="hc-handoff" onClick={toContact}>Send this to the team<Icon name="arrow" size={14} /></button>}
+                {m.handoff && <button className="hc-handoff" onClick={toContact}>Message the team</button>}
               </div>
             ))}
             {busy && <div className="hc-msg assistant typing" aria-label="Typing"><i /><i /><i /></div>}
             {msgs.length === 1 && (
-              <div className="hc-chips">{SUGGESTED.map((f) => <button key={f.q} onClick={() => void send(f.q)}>{f.q}</button>)}</div>
+              <div className="hc-common">
+                <p>Common questions</p>
+                {SUGGESTED.map((f) => <button key={f.q} onClick={() => void send(f.q)}>{f.q}</button>)}
+              </div>
             )}
           </div>
           <form className="hc-input" onSubmit={(e) => { e.preventDefault(); void send(input); }}>
@@ -233,7 +262,7 @@ function HelpChat({ onClose, dismissed, onBringBack }: { onClose: () => void; di
             <button className="hc-send" disabled={!input.trim() || busy} aria-label="Send"><Icon name="arrow" size={18} /></button>
           </form>
           <footer className="hc-foot">
-            <button onClick={toContact}>Talk to a person</button>
+            <button onClick={toContact}>Message the team</button>
             {dismissed && <button onClick={onBringBack}>Let Peguin walk again</button>}
           </footer>
         </>
@@ -241,7 +270,7 @@ function HelpChat({ onClose, dismissed, onBringBack }: { onClose: () => void; di
 
       {view === "contact" && (
         <form className="hc-form" onSubmit={contact} data-lenis-prevent>
-          <p className="muted">Tell us what's going on. The team replies by email, usually within a day.</p>
+          <p className="muted">A person reads this and replies to your email.</p>
           {error && <div className="error" role="alert">{error}</div>}
           <label>Your email<input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" /></label>
           <label>Message<textarea ref={field} required rows={5} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} /></label>
@@ -253,8 +282,8 @@ function HelpChat({ onClose, dismissed, onBringBack }: { onClose: () => void; di
       {view === "sent" && (
         <div className="hc-sent">
           <PenguinSprite />
-          <h3>Sent</h3>
-          <p className="muted">We'll reply to {email}.</p>
+          <h3>Message sent</h3>
+          <p className="muted">The team will reply to {email}.</p>
           <button className="btn ghost" onClick={() => setView("chat")}>Back to chat</button>
         </div>
       )}

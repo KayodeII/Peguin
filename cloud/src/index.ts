@@ -4,6 +4,7 @@ import { answer, draft } from "./claude.js";
 import { HttpError, type Env } from "./env.js";
 import { json } from "./http.js";
 import { issueLicense } from "./license.js";
+import { downloadMac, installedApp, latestRelease, releaseRoute } from "./release.js";
 import { supportChat, supportMessage } from "./support.js";
 
 type Handler = (env: Env, req: Request, url: URL) => Promise<Response>;
@@ -22,10 +23,15 @@ const routes: Record<string, Handler> = {
   "POST /api/app/token": (env, req) => appToken(env, req),
   "POST /api/app/signout": (env, req) => appSignOut(env, req),
 
+  "GET /api/release": async (env) => releaseRoute(env),
+  "GET /download/mac": async (env) => downloadMac(env),
   "GET /api/plan": async (env) => json({ ...(await currentPlan(env)), trialDays: Number(env.TRIAL_DAYS) }, 200, { "cache-control": "public, max-age=300" }),
   "GET /api/me": authed(async (env, _req, user) => {
     const sub = await subscriptionOf(env, user.id);
-    return json({ email: user.email, name: user.name, subscription: sub, trial_ends_at: user.trial_ends_at, entitled: isEntitled(sub, user.trial_ends_at) });
+    return json({
+      email: user.email, name: user.name, subscription: sub, trial_ends_at: user.trial_ends_at, entitled: isEntitled(sub, user.trial_ends_at),
+      app: await installedApp(env, user.id), release: latestRelease(env),
+    });
   }),
   "POST /api/billing/checkout": authed((env, _req, user) => checkout(env, user)),
   "POST /api/billing/portal": authed((env, _req, user) => portal(env, user)),
@@ -51,7 +57,7 @@ export default {
     if (url.hostname === "peguin.co") return Response.redirect(`https://www.peguin.co${url.pathname}${url.search}`, 301);
     const route = routes[`${req.method} ${url.pathname}`];
     if (!route) {
-      if (/^\/(api|auth|app|webhooks)\//.test(url.pathname)) return json({ error: "Not found." }, 404);
+      if (/^\/(api|auth|app|webhooks|download)\//.test(url.pathname)) return json({ error: "Not found." }, 404);
       return env.ASSETS.fetch(req);
     }
     try {

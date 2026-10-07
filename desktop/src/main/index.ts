@@ -1,7 +1,7 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, shell, Tray } from "electron";
 import { existsSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { completeSignIn, refreshAccount, signOut, startSignIn, type Account } from "./account.js";
+import { checkForUpdate, completeSignIn, refreshAccount, signOut, startSignIn, type Account, type Update } from "./account.js";
 import { answerQuestion, isFresh, loadDraft, prepareDraft, type Draft } from "./brain.js";
 import { meetingPaths, MeetingRunner, type MeetingEvent } from "./meeting/runner.js";
 import { nextStandup, startScheduler } from "./scheduler.js";
@@ -42,13 +42,20 @@ let tray: Tray | null = null;
 let whisper: Promise<Whisper> | null = null;
 let meeting: MeetingRunner | null = null;
 let preparing: Promise<Draft> | null = null;
+let update: Update | null = null;
+
+async function refreshUpdate() {
+  update = await checkForUpdate();
+  send({ kind: "update", update });
+}
 
 export type AppEvent =
   | { kind: "meeting"; event: MeetingEvent }
   | { kind: "draft"; draft: Draft | null; preparing: boolean; error?: string }
   | { kind: "log"; text: string }
   | { kind: "account"; account: Account | null; error?: string }
-  | { kind: "model"; progress: number; error?: string };
+  | { kind: "model"; progress: number; error?: string }
+  | { kind: "update"; update: Update | null };
 
 function send(e: AppEvent) {
   if (win && !win.isDestroyed()) win.webContents.send("app:event", e);
@@ -145,6 +152,8 @@ ipcMain.handle("standup:next", () => nextStandup(loadSettings()));
 ipcMain.handle("meeting:join", (_e, url: string) => join(url));
 ipcMain.handle("meeting:leave", () => { meeting?.stop(); meeting = null; });
 ipcMain.handle("account:get", () => account);
+ipcMain.handle("update:get", () => update);
+ipcMain.handle("update:open", () => { if (update) void shell.openExternal(update.url); });
 ipcMain.handle("account:signin", () => startSignIn());
 ipcMain.handle("account:signout", () => updateAccount(async () => { await signOut(); return null; }));
 
@@ -164,6 +173,8 @@ app.whenReady().then(() => {
   void speechModel().catch(() => {});
   void updateAccount(refreshAccount);
   setInterval(() => void updateAccount(refreshAccount), 6 * 3600 * 1000);
+  void refreshUpdate();
+  setInterval(() => void refreshUpdate(), 6 * 3600 * 1000);
   startScheduler({
     settings: loadSettings,
     prepare,

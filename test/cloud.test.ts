@@ -5,6 +5,7 @@ import { signEd25519, verifyEd25519 } from "../cloud/src/crypto.js";
 import { escapeHtml, signInEmail, supportInboxEmail } from "../cloud/src/email.js";
 import { safeNext } from "../cloud/src/http.js";
 import { HANDOFF, parseReply, supportSystem } from "../cloud/src/support.js";
+import { compareVersions, isNewer } from "../src/core/version.js";
 
 describe("Paystack webhook signatures", () => {
   const secret = "sk_test_abc";
@@ -78,11 +79,13 @@ describe("help chat", () => {
   });
 
   it("grounds the prompt in the site FAQ and the live price", () => {
-    const s = supportSystem(14, "The plan costs NGN 7,500 per month.");
+    const s = supportSystem(14, "The plan costs NGN 7,500 per month.", false);
     expect(s).toContain("Is there a Windows version?");
     expect(s).toContain("14-day free trial");
     expect(s).toContain("NGN 7,500");
     expect(s).toContain(HANDOFF);
+    expect(s).toContain("isn't publicly downloadable");
+    expect(supportSystem(14, "", true)).toContain("account page");
   });
 });
 
@@ -100,5 +103,14 @@ describe("emails", () => {
     expect(m.html).toContain(link);
     expect(m.text).toContain(link);
     expect(escapeHtml(`"&'`)).toBe("&quot;&amp;&#39;");
+  });
+});
+
+describe("versions", () => {
+  it("compares release numbers numerically", () => {
+    expect(isNewer("0.10.0", "0.9.3")).toBe(true);
+    expect(isNewer("0.1.0", "0.1.0")).toBe(false);
+    expect(isNewer("0.1.0", "0.2.0")).toBe(false);
+    expect(compareVersions("1.0.0", "1.0")).toBe(0);
   });
 });

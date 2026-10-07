@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type JSX } from "react";
+import { isNewer } from "../../../src/core/version";
 import { api, formatPrice, getMe, type Me } from "../api";
 import { Faq, PricingCard, TRIAL_DAYS, usePlan } from "../components/Sections";
 import { Perched } from "../components/Perched";
@@ -119,18 +120,41 @@ export function Account() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-row">
-          <div>
-            <h3>Desktop app</h3>
-            <p>Peguin runs on your Mac. Install it, then sign in from Settings in the app.</p>
-          </div>
-          <button className="btn ghost" disabled title="Available with the first public release"><Icon name="laptop" size={16} />Download for Mac</button>
-        </div>
-      </div>
+      <DesktopCard app={me.app} release={me.release} />
 
       <button className="link" onClick={() => void signOut()}>Sign out</button>
     </section>
+  );
+}
+
+function ago(t: number): string {
+  const days = Math.floor((Date.now() / 1000 - t) / 86400);
+  return days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+}
+
+function DesktopCard({ app, release }: Pick<Me, "app" | "release">) {
+  const download = <a className="btn" href="/download/mac"><Icon name="laptop" size={16} />Download for Mac</a>;
+  let line: string, action: JSX.Element | null;
+  if (app && app.version && isNewer(release.version, app.version)) {
+    line = `Version ${release.version} is out. This Mac has ${app.version}.`;
+    action = release.available ? <a className="btn" href="/download/mac">Update to {release.version}</a> : null;
+  } else if (app) {
+    line = `Installed${app.version ? `, version ${app.version}` : ""}. Last used ${app.last_seen ? ago(app.last_seen) : "recently"}.`;
+    action = null;
+  } else {
+    line = release.available ? "Install it, then sign in from Settings in the app." : "The download opens here with the first public release.";
+    action = release.available ? download : <button className="btn ghost" disabled><Icon name="laptop" size={16} />Download for Mac</button>;
+  }
+  return (
+    <div className="card">
+      <div className="card-row">
+        <div>
+          <h3>Desktop app {app && <span className={`pill ${app.version && isNewer(release.version, app.version) ? "live" : "ok"}`}>{app.version && isNewer(release.version, app.version) ? "Update available" : "Installed"}</span>}</h3>
+          <p>{line}</p>
+        </div>
+        {action}
+      </div>
+    </div>
   );
 }
 

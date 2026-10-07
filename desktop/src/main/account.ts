@@ -6,6 +6,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { PromptActivity } from "../../../src/core/brain/prompts.js";
+import { isNewer } from "../../../src/core/version.js";
 
 /** Production for installed builds; the local Worker (cd cloud && npm run dev) when running from source. */
 export const CLOUD_URL = (process.env.PENGUIN_CLOUD_URL ?? (app.isPackaged ? "https://www.peguin.co" : "http://localhost:8787")).replace(/\/$/, "");
@@ -42,7 +43,11 @@ async function cloud<T>(pathname: string, init: { method?: string; body?: unknow
   const token = init.token === undefined ? loadToken() : init.token;
   const res = await fetch(`${CLOUD_URL}${pathname}`, {
     method: init.method ?? (init.body === undefined ? "GET" : "POST"),
-    headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(init.body === undefined ? {} : { "content-type": "application/json" }) },
+    headers: {
+      "x-peguin-version": app.getVersion(),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+    },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     signal: AbortSignal.timeout(120000),
   });
@@ -126,3 +131,13 @@ export const cloudDraft = (name: string, activity: PromptActivity[], failed: str
 
 export const cloudAnswer = (name: string, facts: string[], script: string | undefined, recent: string[], question: string) =>
   cloud<{ text: string }>("/api/answer", { body: { name, facts, script, recent, question } }).then((r) => r.text);
+
+export type Update = { version: string; url: string };
+
+/** A newer release than this build, or null. Never throws: an update check mustn't break the app. */
+export async function checkForUpdate(): Promise<Update | null> {
+  try {
+    const r = await cloud<{ version: string; available: boolean }>("/api/release", { token: null });
+    return r.available && isNewer(r.version, app.getVersion()) ? { version: r.version, url: `${CLOUD_URL}/download/mac` } : null;
+  } catch { return null; }
+}

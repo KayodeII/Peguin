@@ -12,6 +12,8 @@ const api = {
   getAccount: () => ipcRenderer.invoke("account:get"),
   signIn: () => ipcRenderer.invoke("account:signin"),
   signOut: () => ipcRenderer.invoke("account:signout"),
+  getUpdate: () => ipcRenderer.invoke("update:get"),
+  openUpdate: () => ipcRenderer.invoke("update:open"),
   onEvent: (cb: (e: unknown) => void) => {
     const h = (_e: unknown, ev: unknown) => cb(ev);
     ipcRenderer.on("app:event", h);

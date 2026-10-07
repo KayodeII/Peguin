@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Account } from "../main/account";
+import type { Account, Update } from "../main/account";
 import type { Draft } from "../main/brain";
 import type { AppEvent } from "../main/index";
 import { botName } from "../main/meeting/platform";
@@ -27,6 +27,7 @@ export function App() {
   const [toast, setToast] = useState("");
   const [account, setAccount] = useState<Account | null>(null);
   const [model, setModel] = useState<{ progress: number; error?: string } | null>(null);
+  const [update, setUpdate] = useState<Update | null>(null);
 
   const refreshNext = useCallback(() => { void window.penguin.nextStandup().then(setNext); }, []);
 
@@ -34,12 +35,14 @@ export function App() {
     void window.penguin.getSettings().then(setSettings);
     void window.penguin.getDraft().then((d: DraftState) => setDraft(d));
     void window.penguin.getAccount().then(setAccount);
+    void window.penguin.getUpdate().then(setUpdate);
     refreshNext();
     return window.penguin.onEvent((raw) => {
       const e = raw as AppEvent;
       if (e.kind === "draft") setDraft({ draft: e.draft, preparing: e.preparing, error: e.error });
       if (e.kind === "log") setToast(e.text);
       if (e.kind === "account") { setAccount(e.account); if (e.error) setToast(e.error); }
+      if (e.kind === "update") setUpdate(e.update);
       if (e.kind === "model") setModel(e.progress >= 1 && !e.error ? null : { progress: e.progress, error: e.error });
       if (e.kind === "meeting") {
         setLive((prev) => ({
@@ -101,6 +104,15 @@ export function App() {
               {n.id === "live" && inCall && <span className="live-pill">LIVE</span>}
             </button>
           ))}
+          {update && (
+            <>
+              <p className="side-label">Update</p>
+              <div className="side-card">
+                <strong>Peguin {update.version} is out</strong>
+                <button className="link" onClick={() => void window.penguin.openUpdate()}>Download the update</button>
+              </div>
+            </>
+          )}
           {model && (
             <>
               <p className="side-label">Speech recognition</p>
