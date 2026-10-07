@@ -1,8 +1,13 @@
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, useEffect, useState, type JSX } from "react";
 import { createRoot } from "react-dom/client";
-import { Account, Connected, Home, Pricing, SignIn } from "./pages";
+import { Footer, Nav } from "./components/Sections";
+import { Account, Connected, Pricing, SignIn } from "./pages/Account";
+import { Home } from "./pages/Home";
 import "./styles.css";
-import { Link, Logo } from "./ui";
+import { scrollToHash } from "./ui";
+
+const PAGES: Record<string, () => JSX.Element | null> = { "/pricing": Pricing, "/signin": SignIn, "/account": Account, "/connected": Connected };
+const TITLES: Record<string, string> = { "/pricing": "Pricing", "/signin": "Sign in", "/account": "Account", "/connected": "Signed in" };
 
 function App() {
   const [path, setPath] = useState(location.pathname);
@@ -11,22 +16,17 @@ function App() {
     addEventListener("popstate", on);
     return () => removeEventListener("popstate", on);
   }, []);
-  const page = path === "/pricing" ? <Pricing /> : path === "/signin" ? <SignIn /> : path === "/account" ? <Account />
-    : path === "/connected" ? <Connected /> : <Home />;
+  useEffect(() => {
+    document.title = TITLES[path] ? `${TITLES[path]} · Peguin` : "Peguin · Your standup, covered";
+    if (location.hash) requestAnimationFrame(() => scrollToHash(location.hash));
+  }, [path]);
+  const Page = PAGES[path] ?? Home;
+  const bare = path === "/signin" || path === "/connected";
   return (
     <>
-      <header className="nav">
-        <Link to="/" className="brand"><Logo />Peguin</Link>
-        <nav>
-          <Link to="/pricing">Pricing</Link>
-          <Link to="/account" className="btn small">Account</Link>
-        </nav>
-      </header>
-      <main>{page}</main>
-      <footer className="foot">
-        <span>Peguin always tells the meeting it's an AI assistant.</span>
-        <span>© {new Date().getFullYear()} Peguin</span>
-      </footer>
+      <Nav />
+      <main className={bare ? "bare" : ""}><Page /></main>
+      {!bare && <Footer />}
     </>
   );
 }

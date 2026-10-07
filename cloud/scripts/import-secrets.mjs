@@ -58,7 +58,7 @@ for (const [dest, names] of Object.entries(ALIASES)) {
   if (src) { found[dest] = env[src]; put(dest, env[src]); if (!names.includes(src)) console.log(`    (from ${src})`); }
   else console.log(`  not found: ${dest} (looked for ${names.join(", ")}${PATTERNS[dest] ? " and similar names" : ""})`);
 }
-put("EMAIL_FROM", "Peguin <hello@peguin.co>");
+put("EMAIL_FROM", "Peguin <no-reply@peguin.co>");
 
 if (flags.includes("--paystack")) {
   if (!found.PAYSTACK_SECRET_KEY) throw new Error("--paystack needs a Paystack secret key in the file.");

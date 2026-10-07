@@ -7,6 +7,6 @@ PAYSTACK_PLAN_CODE=PLN_...
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 RESEND_API_KEY=
-EMAIL_FROM=Peguin <hello@peguin.co>
+EMAIL_FROM=Peguin <no-reply@peguin.co>
 # npm run keys:license prints both keys
 LICENSE_PRIVATE_JWK=

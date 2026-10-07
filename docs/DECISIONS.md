@@ -2,6 +2,10 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: Website redesign modelled on Wispr Flow, Notion theme
+
+`web/` follows wisprflow.ai's structure: a short headline with an italic serif accent, an animated product demo (a standup where Peguin is called and speaks), a "works with" strip, a before/after (raw commits to a 40-second update), features, how it works, privacy, pricing, FAQ, a final call to action, and a multi-column footer. Colours and type stay Notion's, with dark mode from the OS. **No invented social proof:** no customer logos, testimonials, stats or certifications until they're real. The demos use the example name "Ada". Sign-in emails come from `no-reply@peguin.co`.
+
 ## 2026-10-07: Paystack instead of Stripe; our own 14-day trial
 
 - **Billing is Paystack** (the owner is in Lagos; a Paystack key already exists). Checkout initialises a transaction with the plan (`PAYSTACK_PLAN_CODE`), which creates the subscription on payment. Manage billing uses Paystack's manage-subscription link.
