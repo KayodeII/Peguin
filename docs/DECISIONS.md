@@ -2,6 +2,15 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-07: Notion neutrals, no AI-slop patterns, motion-led website
+
+Replaces the warm "coffee" palette below. The owner wanted it closer to Notion and the site to feel alive like wisprflow.ai, without the generic look of AI-made sites.
+- **Palette:** Notion's neutrals (white, `#F7F6F3`, ink `#37352F`, `#191919` for dark bands) plus one accent, tomato `#C8432F` (white text 4.9:1), and Notion's soft block colours for tiles. No browns or creams.
+- **Removed as AI-slop tells** (per published checklists): serif-italic accent words, badges and all-caps labels above headings, gradients and colored card borders, decorative blobs, numbered 1-2-3 steps, stat banner rows, identical icon cards, em dashes and words like seamless/leverage/unlock. Headlines are plain, specific sentences in one typeface.
+- **Motion:** Lenis smooth scroll; word-by-word headline rises; a hero intro (commits arrive in a Notion-style page, the update writes itself, the meeting calls on Ada, a waveform plays) with cursor parallax; a scroll-linked section where noise is struck out, related work is grouped and the update writes itself; a pinned "one morning" window that changes from 09:15 to 09:33; photo parallax; a giant footer wordmark.
+- **Background animations tied to the product:** a dot grid with ripples like sound in a room (reacts to the cursor), drifting waveforms on the dark demo band, expanding voice rings on the final call to action. All pause off-screen and switch off for reduced motion.
+- No photo credits in the footer (the Unsplash licence doesn't require them; `web/src/photos.ts` keeps the sources).
+
 ## 2026-10-07: Brand palette and a bolder, photo-led website
 
 - **Palette:** warm and nostalgic rather than black. Terracotta `#B4552C` is the brand colour (white text 4.9:1), with sage `#3F7A71`, butter `#F2D589`, cream paper `#FAF5EC` and espresso `#2A211C` for dark sections. Bold bands keep these exact colours in dark mode; accent text lightens instead.

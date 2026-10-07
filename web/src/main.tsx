@@ -1,10 +1,19 @@
+import Lenis from "lenis";
 import { StrictMode, useEffect, useState, type JSX } from "react";
 import { createRoot } from "react-dom/client";
 import { Footer, Nav } from "./components/Sections";
 import { Account, Connected, Pricing, SignIn } from "./pages/Account";
 import { Home } from "./pages/Home";
 import "./styles.css";
-import { scrollToHash, useRevealAll } from "./ui";
+import { reducedMotion, scrollToHash, useRevealAll } from "./ui";
+
+// Smooth, slightly weighted scrolling (off for reduced motion).
+if (!reducedMotion()) {
+  const lenis = new Lenis({ lerp: 0.1, smoothWheel: true });
+  (window as unknown as { __lenis: Lenis }).__lenis = lenis;
+  const raf = (t: number) => { lenis.raf(t); requestAnimationFrame(raf); };
+  requestAnimationFrame(raf);
+}
 
 const PAGES: Record<string, () => JSX.Element | null> = { "/pricing": Pricing, "/signin": SignIn, "/account": Account, "/connected": Connected };
 const TITLES: Record<string, string> = { "/pricing": "Pricing", "/signin": "Sign in", "/account": "Account", "/connected": "Signed in" };

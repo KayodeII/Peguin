@@ -10,9 +10,15 @@ export function navigate(to: string) {
   requestAnimationFrame(() => scrollToHash(url.hash));
 }
 
+type Smooth = { scrollTo: (target: number | HTMLElement, opts?: { offset?: number; immediate?: boolean }) => void };
+const smooth = () => (window as unknown as { __lenis?: Smooth }).__lenis;
+
 export function scrollToHash(hash: string) {
-  if (!hash) return scrollTo({ top: 0 });
-  document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  const el = hash ? document.getElementById(hash.slice(1)) : null;
+  const lenis = smooth();
+  if (lenis) return lenis.scrollTo(el ?? 0, { offset: -72, immediate: !hash });
+  if (!el) return scrollTo({ top: 0 });
+  el.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth" });
 }
 
 export function Link({ to, className, children, onClick }: { to: string; className?: string; children: ReactNode; onClick?: () => void }) {
@@ -105,13 +111,13 @@ export function useRevealAll(key: unknown) {
 }
 
 /** True once the element has been on screen. */
-export function useInView<T extends Element>(): [React.RefObject<T | null>, boolean] {
+export function useInView<T extends Element>(threshold = 0.3): [React.RefObject<T | null>, boolean] {
   const ref = useRef<T>(null);
   const [seen, setSeen] = useState(false);
   useEffect(() => {
     if (!ref.current || seen) return;
     if (reducedMotion()) { setSeen(true); return; }
-    const io = new IntersectionObserver(([e]) => { if (e?.isIntersecting) { setSeen(true); io.disconnect(); } }, { threshold: 0.3 });
+    const io = new IntersectionObserver(([e]) => { if (e?.isIntersecting) { setSeen(true); io.disconnect(); } }, { threshold });
     io.observe(ref.current);
     return () => io.disconnect();
   }, [seen]);
@@ -140,4 +146,68 @@ export function CountUp({ to, suffix = "", duration = 1200 }: { to: number; suff
 
 export function Img({ photo, className, eager }: { photo: { src: string; alt: string }; className?: string; eager?: boolean }) {
   return <img src={photo.src} alt={photo.alt} className={className} loading={eager ? "eager" : "lazy"} decoding="async" />;
+}
+
+/**
+ * Scroll progress through a tall element: 0 when its top reaches the top of the
+ * viewport, 1 when its bottom reaches the bottom. Drives sticky, scroll-linked scenes.
+ */
+export function useScrollProgress<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
+  const ref = useRef<T>(null);
+  const [p, setP] = useState(reducedMotion() ? 1 : 0);
+  useEffect(() => {
+    if (reducedMotion()) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const el = ref.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const travel = r.height - innerHeight;
+      setP(travel <= 0 ? (r.top < innerHeight / 2 ? 1 : 0) : Math.min(1, Math.max(0, -r.top / travel)));
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(update); };
+    update();
+    addEventListener("scroll", on, { passive: true });
+    addEventListener("resize", on);
+    return () => { removeEventListener("scroll", on); removeEventListener("resize", on); cancelAnimationFrame(raf); };
+  }, []);
+  return [ref, p];
+}
+
+/** Gentle vertical parallax: the element drifts by up to `amount` px as it crosses the viewport. */
+export function useParallax<T extends HTMLElement>(amount = 40): React.RefObject<T | null> {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (reducedMotion()) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const el = ref.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const t = (r.top + r.height / 2 - innerHeight / 2) / innerHeight; // -1..1 around the centre
+      el.style.transform = `translate3d(0, ${(-t * amount).toFixed(1)}px, 0)`;
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(update); };
+    update();
+    addEventListener("scroll", on, { passive: true });
+    return () => { removeEventListener("scroll", on); cancelAnimationFrame(raf); };
+  }, [amount]);
+  return ref;
+}
+
+/** Headline that rises in word by word, each word sliding up from behind a mask. */
+export function Rise({ as: Tag = "h2", text, className, delay = 0 }: { as?: "h1" | "h2" | "p"; text: string; className?: string; delay?: number }) {
+  const [ref, seen] = useInView<HTMLHeadingElement>();
+  return (
+    <Tag ref={ref} className={`rise ${seen ? "in" : ""} ${className ?? ""}`} aria-label={text}>
+      {text.split(" ").map((w, i, all) => (
+        <span key={i}>
+          <span className="rise-mask" aria-hidden><span style={{ transitionDelay: `${delay + i * 45}ms` }}>{w}</span></span>
+          {i < all.length - 1 ? " " : ""}
+        </span>
+      ))}
+    </Tag>
+  );
 }

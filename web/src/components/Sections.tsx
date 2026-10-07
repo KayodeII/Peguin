@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { formatPrice, getPlan, type Plan } from "../api";
-import { PHOTOS } from "../photos";
 import { Icon, Link, Logo } from "../ui";
 
 export const TRIAL_DAYS = 14; // matches TRIAL_DAYS in cloud/wrangler.jsonc
@@ -13,10 +12,10 @@ export function usePlan(): Plan | null | undefined {
 }
 
 const INCLUDED = [
-  "Writes your update from git, GitHub and Claude Code",
-  "Joins Google Meet and Zoom on schedule",
-  "Answers questions from your work, defers the rest",
-  "Runs on your Mac; your code never leaves it",
+  "Updates written from git, GitHub and Claude Code",
+  "Joins Google Meet and Zoom on your schedule",
+  "Answers follow-ups from facts, defers the rest",
+  "Runs on your Mac, and your code stays there",
 ];
 
 export function PricingCard() {
@@ -33,7 +32,7 @@ export function PricingCard() {
           : plan === null ? <span className="price-fallback">{TRIAL_DAYS} days free, then one monthly plan</span>
           : <strong className="price-loading">&nbsp;</strong>}
       </div>
-      <p className="muted">One plan, everything included. No card for the trial.</p>
+      <p className="muted">Everything Peguin does. Cancel whenever you like.</p>
       <ul className="checks">{INCLUDED.map((t) => <li key={t}><Icon name="check" size={16} />{t}</li>)}</ul>
       <Link to="/signin?next=/account" className="btn wide">Start free trial</Link>
     </div>
@@ -104,7 +103,7 @@ export function Footer() {
       <div className="footer-inner">
         <div className="footer-brand">
           <Link to="/" className="wordmark"><Logo size={24} />Peguin</Link>
-          <p>Your standup, covered. Peguin always tells the meeting it's an AI assistant.</p>
+          <p>Peguin gives your standup update when you can't be there, and always tells the room it's an AI.</p>
         </div>
         <div>
           <h4>Product</h4>
@@ -119,15 +118,8 @@ export function Footer() {
           <Link to="/account">Sign in</Link>
         </div>
       </div>
-      <div className="footer-base">
-        <span>© {new Date().getFullYear()} Peguin</span>
-        <span className="credits">
-          Photos on <a href="https://unsplash.com" target="_blank" rel="noreferrer">Unsplash</a> by{" "}
-          {Object.values(PHOTOS).map((p, i, all) => (
-            <span key={p.src}><a href={p.url} target="_blank" rel="noreferrer">{p.by}</a>{i < all.length - 1 ? ", " : "."}</span>
-          ))}
-        </span>
-      </div>
+      <div className="footer-mark" aria-hidden>Peguin</div>
+      <div className="footer-base"><span>© {new Date().getFullYear()} Peguin</span><span>Made in Lagos</span></div>
     </footer>
   );
 }

@@ -1,70 +1,130 @@
+import { useEffect, useRef, useState } from "react";
 import { PHOTOS } from "../photos";
-import { Brand, Icon, Img, Link, Logo } from "../ui";
+import { Brand, Icon, Img, Link, Logo, reducedMotion, Rise } from "../ui";
+import { SoundField } from "./Backgrounds";
 import { TRIAL_DAYS } from "./Sections";
 
-/** Split hero: the pitch on the left; on the right, the owner in their other meeting while Peguin covers the standup. */
+const SOURCES = [
+  { id: "github", text: "Merged #482: retry payment webhooks" },
+  { id: "git", text: "fix(invoices): flaky test" },
+  { id: "claude_code", text: "Migrate users table to new auth schema" },
+];
+const UPDATE = "Yesterday Ada merged the payment webhook retries and fixed the flaky invoice test. Today they're moving the users table to the new auth schema. No blockers.";
+
+// Intro timeline, in ms from first paint.
+const T = { sources: 500, write: 2300, called: 6200, speak: 6900, loop: 14000 };
+
+/** The opening scene: commits arrive, the update writes itself, then the meeting calls on Ada. */
+function Stage() {
+  const still = reducedMotion();
+  const [t, setT] = useState(still ? T.speak + 1 : 0);
+  const stage = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (still) return;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => { setT((now - start) % T.loop); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [still]);
+
+  // Layers drift with the cursor for a little depth.
+  useEffect(() => {
+    const el = stage.current;
+    if (!el || still) return;
+    const move = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      el.style.setProperty("--mx", ((e.clientX - r.left) / r.width - 0.5).toFixed(3));
+      el.style.setProperty("--my", ((e.clientY - r.top) / r.height - 0.5).toFixed(3));
+    };
+    const reset = () => { el.style.setProperty("--mx", "0"); el.style.setProperty("--my", "0"); };
+    addEventListener("pointermove", move);
+    document.addEventListener("pointerleave", reset);
+    return () => { removeEventListener("pointermove", move); document.removeEventListener("pointerleave", reset); };
+  }, [still]);
+
+  const shown = SOURCES.filter((_, i) => t > T.sources + i * 420).length;
+  const chars = t < T.write ? 0 : Math.min(UPDATE.length, Math.floor((t - T.write) / 22));
+  const called = t > T.called;
+  const speaking = t > T.speak;
+
+  return (
+    <div className="stage" ref={stage}>
+      <figure className="stage-photo layer-1"><Img photo={PHOTOS.hero} eager /></figure>
+
+      <div className={`doc layer-2 ${speaking ? "speaking" : ""}`}>
+        <div className="doc-head">
+          <Logo size={20} />
+          <span className="doc-title">Ada's update</span>
+          <span className={`doc-state ${speaking ? "live" : ""}`}>
+            {speaking ? <><Icon name="mic" size={13} />Speaking</> : chars > 0 ? "Writing" : "Reading your work"}
+          </span>
+        </div>
+        <ul className="doc-sources">
+          {SOURCES.map((s, i) => (
+            <li key={s.id} className={i < shown ? "in" : ""}><Brand id={s.id} size={18} /><span>{s.text}</span></li>
+          ))}
+        </ul>
+        <p className="doc-text">
+          {UPDATE.slice(0, chars)}
+          {chars > 0 && chars < UPDATE.length && <span className="caret" />}
+        </p>
+        <div className={`doc-wave ${speaking ? "on" : ""}`} aria-hidden>
+          {Array.from({ length: 28 }, (_, i) => <i key={i} style={{ animationDelay: `${(i * 37) % 600}ms` }} />)}
+        </div>
+      </div>
+
+      <div className={`toast layer-3 ${called ? "in" : ""}`} aria-hidden>
+        <span className="toast-face">S</span>
+        <div><strong>Sarah</strong><span>Ada, you're up.</span></div>
+        <Brand id="google_meet" size={20} />
+      </div>
+    </div>
+  );
+}
+
 export function Hero() {
   return (
     <section className="hero">
-      <div className="hero-copy" data-reveal>
-        <span className="eyebrow"><span className="dot" />For engineers who are always double-booked</span>
-        <h1>Skip the standup, <em>keep the update.</em></h1>
-        <p className="lead">
-          Peguin writes your update from what you actually shipped, joins the call muted, and says it when someone calls
-          your name. As your AI assistant, never as you.
-        </p>
-        <div className="cta">
-          <Link to="/signin?next=/account" className="btn big">Start {TRIAL_DAYS}-day free trial</Link>
-          <Link to="/#demo" className="btn big ghost">Watch it work</Link>
-        </div>
-        <ul className="hero-points">
-          <li><Icon name="check" size={16} />No card needed</li>
-          <li><Icon name="check" size={16} />Google Meet and Zoom</li>
-          <li><Icon name="check" size={16} />Your code stays on your Mac</li>
-        </ul>
-      </div>
-
-      <div className="hero-art" data-reveal>
-        <div className="blob blob-a" aria-hidden />
-        <div className="blob blob-b" aria-hidden />
-        <figure className="hero-photo"><Img photo={PHOTOS.hero} eager /></figure>
-
-        <div className="float float-call" aria-hidden>
-          <span className="float-avatar s">S</span>
-          <div><strong>Sarah</strong><span>"Ada, you're up."</span></div>
-        </div>
-        <div className="float float-speak" aria-hidden>
-          <span className="float-logo"><Logo size={26} /></span>
-          <div>
-            <strong>Ada (AI) is speaking</strong>
-            <span className="wave">{Array.from({ length: 14 }, (_, i) => <i key={i} style={{ animationDelay: `${(i % 7) * 0.09}s` }} />)}</span>
+      <SoundField />
+      <div className="hero-inner">
+        <div className="hero-copy">
+          <Rise as="h1" text="Peguin gives your standup update when you can't be there." />
+          <p className="lead fade-up" style={{ animationDelay: "500ms" }}>
+            It reads what you shipped since yesterday, joins the call muted, and speaks when someone says your name.
+            The room always knows it's an AI.
+          </p>
+          <div className="cta fade-up" style={{ animationDelay: "700ms" }}>
+            <Link to="/signin?next=/account" className="btn big">Try it free for {TRIAL_DAYS} days</Link>
+            <Link to="/#demo" className="btn big ghost">See a standup it covered</Link>
           </div>
+          <p className="hero-note fade-up" style={{ animationDelay: "900ms" }}>Mac app. Works with Google Meet and Zoom. No card for the trial.</p>
         </div>
-        <div className="float float-status" aria-hidden>
-          <Icon name="micOff" size={14} />Muted · camera off until called
-        </div>
-        <div className="float float-meet" aria-hidden><Brand id="google_meet" size={22} /></div>
+        <Stage />
       </div>
     </section>
   );
 }
 
-const MARQUEE: { id: string; text: string }[] = [
-  { id: "google_meet", text: "Joins Google Meet" },
-  { id: "zoom", text: "Joins Zoom" },
-  { id: "git", text: "Reads your commits" },
-  { id: "github", text: "Reads your pull requests" },
-  { id: "claude_code", text: "Reads your Claude Code sessions" },
-  { id: "linear", text: "Linear, soon" },
-  { id: "jira", text: "Jira, soon" },
+const MARQUEE = [
+  { id: "google_meet", text: "Google Meet" },
+  { id: "zoom", text: "Zoom" },
+  { id: "git", text: "Git" },
+  { id: "github", text: "GitHub" },
+  { id: "claude_code", text: "Claude Code" },
+  { id: "linear", text: "Linear (soon)" },
+  { id: "jira", text: "Jira (soon)" },
 ];
 
-/** Infinite, pausable strip of integrations (duplicated once for a seamless loop). */
+/** Infinite strip of what Peguin works with; pauses on hover. */
 export function Marquee() {
-  const row = MARQUEE.map((m) => <li key={m.id}><Brand id={m.id} size={26} /><span>{m.text}</span></li>);
+  const item = (m: (typeof MARQUEE)[number], dup?: boolean) => (
+    <li key={`${m.id}${dup ? "-2" : ""}`} aria-hidden={dup}><Brand id={m.id} size={24} /><span>{m.text}</span></li>
+  );
   return (
     <section className="marquee" aria-label="Works with">
-      <ul className="marquee-track">{row}{MARQUEE.map((m) => <li key={`${m.id}-2`} aria-hidden><Brand id={m.id} size={26} /><span>{m.text}</span></li>)}</ul>
+      <ul className="marquee-track">{MARQUEE.map((m) => item(m))}{MARQUEE.map((m) => item(m, true))}</ul>
     </section>
   );
 }

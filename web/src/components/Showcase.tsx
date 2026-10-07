@@ -1,35 +1,19 @@
-import { useEffect, useState } from "react";
-import { PHOTOS } from "../photos";
-import { Brand, CountUp, Icon, Img, Logo, reducedMotion } from "../ui";
+import { useEffect, useState, type ReactNode } from "react";
+import { PHOTOS, type Photo } from "../photos";
+import { Brand, Icon, Img, Logo, reducedMotion, useParallax } from "../ui";
 
-/* ------------------------------------------------------------ bold numbers */
-
-/** Product facts, not vanity metrics. */
-export function Stats() {
-  return (
-    <section className="stats">
-      <div className="stats-inner">
-        <div data-reveal><strong><CountUp to={40} suffix="s" /></strong><span>to say what you shipped, grouped and plain</span></div>
-        <div data-reveal><strong><CountUp to={15} suffix=" min" /></strong><span>back every time a standup lands on a clash</span></div>
-        <div data-reveal><strong><CountUp to={0} /></strong><span>lines of your code leave your Mac</span></div>
-      </div>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------ alternating feature rows */
+/* ------------------------------------------------------------ feature rows */
 
 function CommitCard() {
   const items = [
     { s: "github", t: "Merged #482 Retry payment webhooks" },
     { s: "git", t: "fix(invoices): flaky test" },
-    { s: "claude_code", t: "\"migrate users table to new auth schema\"" },
+    { s: "claude_code", t: "Migrate users table to new auth schema" },
   ];
   return (
     <div className="ui-card commits">
-      <div className="ui-head"><Logo size={16} />Reading since yesterday 09:30</div>
-      <ul>{items.map((i, n) => <li key={n} style={{ animationDelay: `${n * 0.25}s` }}><Brand id={i.s} size={18} /><span>{i.t}</span></li>)}</ul>
-      <div className="ui-foot"><Icon name="sparkle" size={14} />Writing your update</div>
+      <div className="ui-head"><Logo size={16} />Since yesterday, 09:30</div>
+      <ul>{items.map((i, n) => <li key={n} style={{ animationDelay: `${n * 0.18}s` }}><Brand id={i.s} size={18} /><span>{i.t}</span></li>)}</ul>
     </div>
   );
 }
@@ -37,10 +21,10 @@ function CommitCard() {
 function CalledCard() {
   return (
     <div className="ui-card called">
-      <div className="bubble-them"><strong>Sarah</strong>Ada, you're up.</div>
-      <div className="bubble-ai">
-        <span className="wave">{Array.from({ length: 18 }, (_, i) => <i key={i} style={{ animationDelay: `${(i % 9) * 0.08}s` }} />)}</span>
-        <span className="unmuted"><Icon name="mic" size={13} />Unmuted for 38s</span>
+      <div className="said"><strong>Sarah</strong>Ada, you're up.</div>
+      <div className="speaking-line">
+        <span className="wave">{Array.from({ length: 22 }, (_, i) => <i key={i} style={{ animationDelay: `${(i * 41) % 600}ms` }} />)}</span>
+        <span className="pill live"><Icon name="mic" size={13} />Unmuted</span>
       </div>
     </div>
   );
@@ -49,103 +33,102 @@ function CalledCard() {
 function AnswerCard() {
   return (
     <div className="ui-card answer">
-      <div className="bubble-them"><strong>David</strong>Is the auth migration landing this week?</div>
-      <div className="bubble-ai text"><strong>Ada (AI)</strong>It's in progress. There's no date yet, so I'll get Ada to follow up.</div>
-      <div className="fact-chip"><Icon name="shield" size={13} />Answered from prepared facts only</div>
+      <div className="said"><strong>David</strong>Is the auth migration landing this week?</div>
+      <div className="said ai"><strong>Ada (AI)</strong>It's in progress. There's no date yet, so I'll get Ada to follow up.</div>
     </div>
   );
 }
 
-const ROWS = [
-  {
-    photo: PHOTOS.write, card: <CommitCard />, kicker: "Writes it for you",
-    title: <>Your day, <em>already summarised.</em></>,
-    body: "Peguin reads your commits, pull requests and the Claude Code sessions behind them, then writes a 40-second update in plain words. It knows a half-finished migration isn't done yet.",
-    points: ["Groups related work", "Drops chores and noise", "Never reads hashes or URLs aloud"],
-  },
-  {
-    photo: PHOTOS.speak, card: <CalledCard />, kicker: "Speaks only when called",
-    title: <>Quiet until <em>it's your turn.</em></>,
-    body: "It joins as \"Your name (AI)\", muted with the camera off. When someone says your name, even misheard or as a nickname you set, it unmutes, gives the update, and goes quiet again.",
-    points: ["Understands sound-alike names", "Ignores \"thanks, Ada\"", "Answers every time you're called"],
-  },
-  {
-    photo: PHOTOS.facts, card: <AnswerCard />, kicker: "Answers from facts",
-    title: <>Follow-ups, <em>handled honestly.</em></>,
-    body: "Questions get answers from the facts Peguin prepared, nothing else. When the answer isn't there, it says you'll follow up. It never guesses a date or invents a status.",
-    points: ["Facts-only answers", "Defers what it doesn't know", "Always introduces itself as AI"],
-  },
-];
+function Row({ photo, card, title, children, flip }: { photo: Photo; card: ReactNode; title: string; children: ReactNode; flip?: boolean }) {
+  const img = useParallax<HTMLDivElement>(30);
+  return (
+    <article className={`row ${flip ? "flip" : ""}`}>
+      <div className="row-art" data-reveal>
+        <div className="row-photo-wrap"><div ref={img} className="row-photo-inner"><Img photo={photo} className="row-photo" /></div></div>
+        {card}
+      </div>
+      <div className="row-copy" data-reveal>
+        <h3 className="row-title">{title}</h3>
+        {children}
+      </div>
+    </article>
+  );
+}
 
 export function FeatureRows() {
   return (
     <div className="rows">
-      {ROWS.map((r, i) => (
-        <article key={r.kicker} className={`row ${i % 2 ? "flip" : ""}`}>
-          <div className="row-art" data-reveal>
-            <Img photo={r.photo} className="row-photo" />
-            {r.card}
-          </div>
-          <div className="row-copy" data-reveal>
-            <span className="kicker">{r.kicker}</span>
-            <h3 className="row-title">{r.title}</h3>
-            <p>{r.body}</p>
-            <ul className="checks">{r.points.map((p) => <li key={p}><Icon name="check" size={16} />{p}</li>)}</ul>
-          </div>
-        </article>
-      ))}
+      <Row photo={PHOTOS.write} card={<CommitCard />} title="It writes the update from your actual work">
+        <p>Peguin reads your commits, pull requests and the Claude Code sessions behind them, then writes about 40 seconds of plain English. Chores and typo fixes get dropped. Half-finished work is described as in progress, because it is.</p>
+      </Row>
+      <Row flip photo={PHOTOS.speak} card={<CalledCard />} title="It stays muted until someone says your name">
+        <p>It joins as "Ada (AI)" with the camera off. When someone hands over to you, even if speech recognition hears "Mujib" for "Mujeeb", it unmutes and gives the update. "Thanks, Ada" doesn't count as being called.</p>
+      </Row>
+      <Row photo={PHOTOS.facts} card={<AnswerCard />} title="It answers from facts, or says you'll follow up">
+        <p>Follow-up questions get answers from what Peguin prepared and nothing else. If the answer isn't there, it says so and leaves it to you. It won't guess a date or make up a status to sound helpful.</p>
+      </Row>
     </div>
   );
 }
 
-/* ------------------------------------------------------------ bento */
+/* ------------------------------------------------------------ tiles: each shows a real piece of the product */
 
-export function Bento() {
+export function Tiles() {
   return (
-    <div className="bento">
-      <div className="tile-b big terracotta" data-reveal>
-        <Icon name="calendar" size={26} />
-        <h3>Shows up on schedule</h3>
-        <p>Set your standup once. Peguin prepares 15 minutes before and joins as it starts, every weekday you pick.</p>
-        <div className="week">{["M", "T", "W", "T", "F"].map((d, i) => <span key={i} className={i < 4 ? "on" : ""}>{d}</span>)}<span className="time">09:30</span></div>
+    <div className="tiles-grid">
+      <div className="tile-ui wide blue" data-reveal>
+        <div>
+          <h3>Set your standup once</h3>
+          <p>Pick the days and time. Peguin prepares 15 minutes before and joins when it starts.</p>
+        </div>
+        <div className="sched">
+          <div className="sched-days">{["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <span key={i} className={i < 5 ? "on" : ""}>{d}</span>)}</div>
+          <div className="sched-row"><span>Starts</span><strong>09:30</strong></div>
+          <div className="sched-row"><span>Join for me</span><span className="switch on" /></div>
+        </div>
       </div>
-      <div className="tile-b" data-reveal>
-        <Icon name="shield" size={24} />
-        <h3>Always says it's an AI</h3>
-        <p>"Hi everyone, I'm Peguin, Ada's AI assistant." In every meeting. Not a setting.</p>
+
+      <div className="tile-ui yellow" data-reveal>
+        <h3>Hears your name, even misheard</h3>
+        <div className="heard">
+          <p><span><mark>Mujib</mark>, you're up.</span><span className="tag ok">called</span></p>
+          <p><span>Thanks, <mark className="soft">Mujeeb</mark>.</span><span className="tag">ignored</span></p>
+        </div>
       </div>
-      <div className="tile-b butter" data-reveal>
-        <Icon name="ear" size={24} />
-        <h3>Knows your name</h3>
-        <p>Catches sound-alikes and nicknames, like "Mujib" for "Mujeeb". Ignores being talked about.</p>
+
+      <div className="tile-ui green" data-reveal>
+        <h3>Says it's an AI, first, every time</h3>
+        <div className="bubble-quote">"Hi everyone, I'm Peguin, Ada's AI assistant. Ada is in another meeting, so I'm covering the update."</div>
       </div>
-      <div className="tile-b sage" data-reveal>
-        <Icon name="laptop" size={24} />
-        <h3>Runs on your Mac</h3>
-        <p>Joining, listening and speech recognition happen on your computer.</p>
+
+      <div className="tile-ui purple" data-reveal>
+        <h3>Stays on your Mac</h3>
+        <div className="local">
+          <span><Icon name="laptop" size={18} />Joining, listening, speech recognition</span>
+          <span className="arrow-out">Only titles and statuses go to Claude to write the update</span>
+        </div>
       </div>
-      <div className="tile-b" data-reveal>
-        <Icon name="micOff" size={24} />
-        <h3>Never in the way</h3>
-        <p>Muted, camera off, hidden window. It unmutes only to speak.</p>
-      </div>
-      <div className="tile-b wide" data-reveal>
-        <Icon name="code" size={26} />
-        <h3>Made for how you work now</h3>
-        <p className="wide-p">If your day happens in Claude Code, Peguin reads those sessions too, and treats unfinished work as in progress, not done.</p>
-        <div className="mini-brands"><Brand id="git" size={24} /><Brand id="github" size={24} /><Brand id="claude_code" size={24} /><Brand id="linear" size={24} /><Brand id="jira" size={24} /></div>
+
+      <div className="tile-ui" data-reveal>
+        <div>
+          <h3>Reads where your work happens</h3>
+          <p>Commits, pull requests, and the Claude Code sessions where a lot of work starts now. Linear and Jira are next.</p>
+        </div>
+        <div className="source-stack">
+          {["git", "github", "claude_code", "linear", "jira"].map((id) => <Brand key={id} id={id} size={36} />)}
+        </div>
       </div>
     </div>
   );
 }
 
-/* ------------------------------------------------------------ personas (tabbed, auto-advancing) */
+/* ------------------------------------------------------------ who it's for */
 
 const PERSONAS = [
-  { id: "eng", label: "Engineers", icon: "code", photo: PHOTOS.engineers, title: <>Stay in flow, <em>still show up.</em></>, body: "Deep in a bug when standup starts? Peguin gives the update from your commits and PRs while you keep going.", note: "Your update, said for you while you stay heads-down." },
-  { id: "mgr", label: "Engineering managers", icon: "users", photo: PHOTOS.managers, title: <>Two meetings, <em>one of you.</em></>, body: "Your 1:1 runs over into the team standup. Peguin covers your update and takes the questions it can answer.", note: "No more choosing between your report and your team." },
-  { id: "fnd", label: "Founders", icon: "sparkle", photo: PHOTOS.founders, title: <>On a customer call, <em>still in standup.</em></>, body: "Customer call at 9:30? Your team still hears what you shipped yesterday, in your words, from your work.", note: "Your team keeps context even when you're out selling." },
-  { id: "rem", label: "Remote teams", icon: "globe", photo: PHOTOS.remote, title: <>Any time zone, <em>every standup.</em></>, body: "Standup lands at an awkward hour for you? Peguin attends from your Mac, so the team still gets your update.", note: "Your update gets there, whatever the hour where you are." },
+  { id: "eng", label: "Engineers", photo: PHOTOS.engineers, title: "Deep in a bug when standup starts", body: "Keep going. Peguin gives the update from your commits and pull requests, and your team hears what you did yesterday." },
+  { id: "mgr", label: "Engineering managers", photo: PHOTOS.managers, title: "Your 1:1 runs into the team standup", body: "Stay with your report. Peguin covers your update and answers what it can, and the rest waits for you." },
+  { id: "fnd", label: "Founders", photo: PHOTOS.founders, title: "A customer call at 9:30", body: "Take the call. Your team still hears what shipped, from the work itself, not from a note you wrote at midnight." },
+  { id: "rem", label: "Remote teams", photo: PHOTOS.remote, title: "Standup lands at an awkward hour", body: "If your Mac is on, Peguin can attend. Your teammates get your update whatever the time is where you are." },
 ];
 
 export function Personas() {
@@ -162,7 +145,7 @@ export function Personas() {
       <div className="tabs" role="tablist" aria-label="Who it's for">
         {PERSONAS.map((x, i) => (
           <button key={x.id} role="tab" aria-selected={i === active} className={i === active ? "on" : ""} onClick={() => { setActive(i); setPaused(true); }}>
-            <Icon name={x.icon} size={16} />{x.label}
+            {x.label}
             {i === active && !paused && <span className="tab-progress" key={active} />}
           </button>
         ))}
@@ -170,34 +153,10 @@ export function Personas() {
       <div className="persona" role="tabpanel" key={p.id}>
         <Img photo={p.photo} className="persona-photo" />
         <div className="persona-copy">
-          <h3 className="row-title">{p.title}</h3>
+          <h3>{p.title}</h3>
           <p>{p.body}</p>
-          <p className="callout"><Icon name="check" size={16} />{p.note}</p>
         </div>
       </div>
     </div>
-  );
-}
-
-/* ------------------------------------------------------------ how it works */
-
-const STEPS = [
-  { icon: "plug", title: "Connect once", body: "Install the Mac app, choose what Peguin may read, and paste your standup link." },
-  { icon: "clock", title: "It prepares", body: "Fifteen minutes before the call, Peguin reads what you did and writes your update." },
-  { icon: "mic", title: "It shows up", body: "It joins as \"Your name (AI)\", waits for your turn, speaks, and takes questions." },
-];
-
-export function Timeline() {
-  return (
-    <ol className="timeline">
-      {STEPS.map((s, i) => (
-        <li key={s.title} data-reveal style={{ transitionDelay: `${i * 120}ms` }}>
-          <span className="t-num">{i + 1}</span>
-          <span className="t-icon"><Icon name={s.icon} size={22} /></span>
-          <h3>{s.title}</h3>
-          <p>{s.body}</p>
-        </li>
-      ))}
-    </ol>
   );
 }
