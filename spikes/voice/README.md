@@ -164,6 +164,24 @@ The owner judged run 3 (60 sentences) "natural; flow and intonation need work, b
 - Gotcha: `turbo_v2.py` hangs at start-up when Hugging Face is unreachable (tokenizer check, no
   timeout). Run with `HF_HUB_OFFLINE=1`.
 
+### Fair comparison (`eval_ab.py`, `run_ab.sh`), 2026-10-08
+5 lines x 8 seeds = 40 clips per variant, one take per sentence, no re-check, whisper small.en,
+owner's name spellings ignored. Scored so far (run paused because the Mac got hot):
+
+| Variant | Word error | Word-perfect clips |
+|---|---|---|
+| base: zero-shot from the consent read-through (`gen/me.wav`) | 7.5% +/- 1.5 | 38% |
+| ft: LoRA on 60 sentences, patched ONNX | 10.7% +/- 2.2 (29% on "Thanks, will do"; 2-3% on answer/defer) | 38% |
+| **natural: zero-shot from ~15 s of the owner's standup-style recordings** | **3.9% +/- 0.9** | **72%** |
+
+The biggest gain is free: the reference clip should be natural standup talk, not a read script.
+Fine-tuning didn't win on accuracy (the owner heard it as more natural; that needs the blind test).
+Still to run: `avgvoice` (speaker fingerprint averaged over all 60 recordings, rescaled to the
+encoder's fixed norm 13.856; single-clip fingerprints only agree at cosine 0.60-0.85), `natavg`
+(natural + averaged), `head` (output layer only: FT_TARGETS=spkr_enc FT_SAVE_MODULES=speech_head
+FT_LORA_R=1), then a blind listening set. Resume with `bash run_ab.sh` after removing finished
+variants from its loop.
+
 ### Zero-shot comparison (same sample, same lines)
 - `zeroshot.py --model omnivoice|qwen`: OmniVoice (k2-fsa, Apache 2.0) in `vendor/venv-zs`,
   Qwen3-TTS 1.7B Base (Apache 2.0) in `vendor/venv-qwen` (their `transformers` versions

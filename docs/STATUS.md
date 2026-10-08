@@ -66,6 +66,8 @@ Local site (`cd cloud && npx wrangler dev`) and app (`cd desktop && PEGUIN_VOICE
 The owner wants the most natural speech possible. In `spikes/voice/` (README, v3):
 - All 60 training sentences recorded (3.8 minutes, `record_dataset.py`; the recorder now keeps one mic stream open because closing CoreAudio streams per sentence could hang).
 - Fine-tuning Chatterbox Turbo with LoRA on the Mac works (65 s for 10 epochs). Toolkit defaults produced gibberish; English settings (original tokenizer, frozen text embeddings, r=16, lr 5e-5) trained cleanly: intelligible from 21 sentences, and about the same by word check from all 60 (single takes; remaining slips look like sampling noise). The owner is comparing `gen/mujeeb`, `gen/ft-en-21` and `gen/ft-en-60` by ear.
+- Fair 40-clip comparison (README, "Fair comparison"): **a natural standup-style reference clip with no training (3.9% word error, 72% perfect) beats both today's read-through sample (7.5%, 38%) and the fine-tuned voice (10.7%, 38%)**. Cheapest product change: record the voice sample as natural talk. Remaining variants paused (Mac got hot).
+- The fine-tuned voice can be shipped without PyTorch: `patch_onnx.py` bakes the 12.6 MB LoRA into the ONNX files (96/97 weights) and the app's engine runs it in real time. Training itself would need a cloud GPU (opt-in upload) or an MLX-Swift helper.
 - OmniVoice and Qwen3-TTS (both Apache 2.0) are installed for a zero-shot comparison but haven't generated yet.
 - If fine-tuning wins, shipping it is unsolved: the app runs ONNX, so each user's merged model would need exporting (no script yet), and training would have to run inside the app.
 
