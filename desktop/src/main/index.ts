@@ -93,6 +93,9 @@ function openWindow() {
   if (snap) win.webContents.once("did-finish-load", () => setTimeout(async () => {
     const target = process.env.PENGUIN_SNAPSHOT_SCROLL;
     if (target) await win!.webContents.executeJavaScript(`document.querySelector(${JSON.stringify(target)})?.scrollIntoView({ block: "start" })`);
+    // PENGUIN_SNAPSHOT_PROBE=<js expression> prints its value (layout checks in development).
+    const probe = process.env.PENGUIN_SNAPSHOT_PROBE;
+    if (probe) console.log("probe:", JSON.stringify(await win!.webContents.executeJavaScript(probe)));
     await new Promise((r) => setTimeout(r, 300));
     writeFileSync(snap, (await win!.webContents.capturePage()).toPNG());
     app.exit(0);

@@ -40,7 +40,9 @@ input, select, textarea { font: inherit; color: var(--ink); background: var(--in
 input:focus, select:focus { outline: 2px solid var(--accent); }
 .boot { height: 100%; display: grid; place-items: center; background: var(--main); }
 
-.app { display: grid; grid-template-columns: 72px 240px 1fr; height: 100%; }
+/* One fixed-height row: without it the columns grow to fit their content and nothing can scroll. */
+.app { display: grid; grid-template-columns: 72px 240px 1fr; grid-template-rows: minmax(0, 1fr); height: 100%; }
+.app > * { min-height: 0; }
 
 /* Rail */
 .rail { background: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 0 12px; -webkit-app-region: drag; }
@@ -56,7 +58,8 @@ input:focus, select:focus { outline: 2px solid var(--accent); }
 /* Sidebar */
 .sidebar { background: var(--side); display: flex; flex-direction: column; min-width: 0; }
 .sidebar-head { height: 48px; display: flex; align-items: center; padding: 0 16px; font-weight: 600; color: var(--ink-strong); box-shadow: var(--shadow); -webkit-app-region: drag; }
-.sidebar-body { flex: 1; overflow: auto; padding: 8px; }
+.sidebar-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; scrollbar-width: none; }
+.sidebar-body::-webkit-scrollbar { display: none; }
 .side-label { margin: 16px 8px 4px; font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); }
 .channel { width: 100%; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 4px; color: var(--muted); text-align: left; }
 .channel:hover { background: var(--hover); color: var(--ink); }
@@ -87,7 +90,8 @@ input:focus, select:focus { outline: 2px solid var(--accent); }
 .channel-head .divider { width: 1px; height: 24px; background: var(--line); margin: 0 8px; }
 .channel-head p { margin: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .head-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; -webkit-app-region: no-drag; }
-.scroll { flex: 1; overflow: auto; padding: 20px 16px 96px; }
+.scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px 96px; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
 .scroll.narrow { max-width: 760px; width: 100%; margin: 0 auto; padding: 24px 24px 120px; }
 
 .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: 500; transition: background .15s; }
