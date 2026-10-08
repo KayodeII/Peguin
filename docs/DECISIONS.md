@@ -2,6 +2,12 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-08: The voice sample is natural talk, not a read script
+
+A 40-clip-per-variant comparison (word error with whisper small.en) and a blind listening test by the owner (`spikes/voice/README.md`, "Fair comparison") showed that the reference clip matters more than anything else tried: natural standup-style talk gave 3.9% word error and 72% word-perfect clips against 7.5% and 38% for the read-through script the app used. On sound, the owner rated it level with a voice fine-tuned on 60 recorded sentences (both beat the old sample). Fine-tuning works and can ship without PyTorch (`patch_onnx.py` bakes a 12.6 MB LoRA into the ONNX files), but it made very short lines worse and needs a training runtime or a cloud GPU, so it stays a possible later upgrade. Averaging the speaker fingerprint across clips and output-layer-only training didn't help.
+
+So the app records the consent sentence, then 15-20 seconds of the owner talking naturally about their work, and only the natural part becomes the voice reference.
+
 ## 2026-10-08: Standups from the owner's calendars
 
 The owner wanted calendars from wherever they live (Meet's Google Calendar, the Mac, Calendly and so on), so calendars are adapters behind one interface (`desktop/src/main/calendar/`), like activity sources:

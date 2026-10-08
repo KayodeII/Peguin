@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=../../desktop
-"$ROOT/build/whisper/whisper-server" -m "$ROOT/vendor/whisper.cpp/models/ggml-base.en.bin" --port 8178 >/dev/null 2>&1 &
+"$ROOT/build/whisper/whisper-server" -m "${WHISPER_MODEL:-vendor/whisper/ggml-small.en.bin}" --port 8178 >/dev/null 2>&1 &
 pid=$!; trap 'kill $pid' EXIT
 mkdir -p gen/16k
 vendor/venv/bin/python - "$1" <<'PY'
