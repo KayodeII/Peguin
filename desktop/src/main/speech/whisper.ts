@@ -63,6 +63,18 @@ async function transcribe(whisperUrl: string, pcm: Buffer, names: string[]): Pro
   return clean(body.text ?? "");
 }
 
+/** Transcribes 24 kHz float audio (Peguin's own speech), to check generated lines. */
+export function transcribeSamples(whisperUrl: string, samples: Float32Array, names: string[] = []): Promise<string> {
+  const n = Math.floor((samples.length * RATE) / 24000);
+  const pcm = Buffer.alloc(n * 2);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 24000) / RATE, j = Math.floor(x), f = x - j;
+    const v = (samples[j] ?? 0) * (1 - f) + (samples[j + 1] ?? 0) * f; // linear resample 24k -> 16k
+    pcm.writeInt16LE(Math.round(Math.max(-1, Math.min(1, v)) * 32767), i * 2);
+  }
+  return transcribe(whisperUrl, pcm, names);
+}
+
 export type Utterance = { text: string; sttMs: number; endedAt: number };
 
 /** Feed PCM chunks in; finished utterances come out in order, one at a time. */
@@ -71,14 +83,17 @@ export function createListener(opts: {
   names: string[];
   onUtterance: (u: Utterance) => void;
   onError: (e: unknown) => void;
+  /** Called once per utterance, as soon as someone has spoken for `sustainedMs` (talk-over detection). */
+  onSustainedSpeech?: () => void;
+  sustainedMs?: number;
 }): (chunk: ArrayBuffer) => void {
   let chunks: Buffer[] = [], preroll: Buffer[] = [];
-  let speaking = false, speechMs = 0, silentMs = 0, totalMs = 0;
+  let speaking = false, speechMs = 0, silentMs = 0, totalMs = 0, sustained = false;
   let queue = Promise.resolve();
 
   const finish = () => {
     const pcm = Buffer.concat(chunks), ms = speechMs;
-    chunks = []; speaking = false; speechMs = silentMs = totalMs = 0;
+    chunks = []; speaking = false; sustained = false; speechMs = silentMs = totalMs = 0;
     if (ms < MIN_SPEECH_MS) return;
     const endedAt = Date.now();
     queue = queue.then(async () => {
@@ -106,6 +121,7 @@ export function createListener(opts: {
     }
     totalMs += ms;
     if (voiced) { speechMs += ms; silentMs = 0; } else silentMs += ms;
+    if (!sustained && opts.onSustainedSpeech && speechMs >= (opts.sustainedMs ?? Infinity)) { sustained = true; opts.onSustainedSpeech(); }
     if (silentMs >= END_SILENCE_MS || totalMs >= MAX_UTTERANCE_MS) finish();
   };
 }

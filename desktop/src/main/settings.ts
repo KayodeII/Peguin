@@ -6,8 +6,38 @@ import { z } from "zod";
 
 const Time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour time like 09:30");
 
+/** A word and how it should sound, spelled for the voice model: { word: "Mujeeb", sayAs: "Moo-jeeb" }. */
+const Pronunciation = z.object({ word: z.string().trim().min(1).max(40), sayAs: z.string().trim().min(1).max(60) });
+
+const Voice = z.object({
+  mode: z.enum(["standard", "mine"]).default("standard"),
+  /** Names, products and terms the owner has taught Peguin to say. Nothing is built in. */
+  pronunciations: z.array(Pronunciation).max(40).default([]),
+  /** Silence between sentences, in seconds. */
+  pause: z.number().min(0.1).max(1).default(0.32),
+  /** 0.3 is steady and careful, 0.9 lively; higher drops more words. */
+  expressiveness: z.number().min(0.3).max(0.9).default(0.6),
+  /** How many times a prepared line is made again when a word comes back wrong (1 = no checking). */
+  attempts: z.number().int().min(1).max(5).default(3),
+});
+
+/** Older settings files: voice was "default", then { mode, namePronounced }. */
+function migrate(input: unknown): unknown {
+  if (!input || typeof input !== "object") return input;
+  const raw = input as Record<string, unknown>;
+  const voice = raw.voice;
+  if (typeof voice === "string") return { ...raw, voice: { mode: "standard" } };
+  if (voice && typeof voice === "object" && "namePronounced" in voice) {
+    const { namePronounced, ...rest } = voice as { namePronounced?: unknown };
+    const first = typeof raw.displayName === "string" ? raw.displayName.trim().split(/\s+/)[0] : "";
+    const said = typeof namePronounced === "string" ? namePronounced.trim() : "";
+    return { ...raw, voice: { ...rest, pronunciations: first && said ? [{ word: first, sayAs: said }] : [] } };
+  }
+  return input;
+}
+
 /** The few things Peguin needs; everything else it works out. */
-export const Settings = z.object({
+export const Settings = z.preprocess(migrate, z.object({
   displayName: z.string().trim().max(40).default(""),
   aliases: z.array(z.string().trim().min(1).max(40)).max(10).default([]),
   timezone: z.string().default(Intl.DateTimeFormat().resolvedOptions().timeZone),
@@ -27,10 +57,13 @@ export const Settings = z.object({
     theme: z.enum(["system", "light", "dark", "midnight"]).default("system"),
     accent: z.enum(["blue", "purple", "green", "orange", "pink"]).default("blue"),
   }).default({ theme: "system", accent: "blue" }),
-  voice: z.enum(["default"]).default("default"),
+  /** "standard" is the built-in voice; "mine" is the owner's own (opt-in, recorded in Settings). Every value is the owner's preference. */
+  voice: Voice.default(() => Voice.parse({})),
+  /** Stop speaking when someone talks over Peguin, and listen to them. */
+  stopWhenInterrupted: z.boolean().default(true),
   runHidden: z.boolean().default(true),
   onboarded: z.boolean().default(false),
-});
+}));
 export type Settings = z.infer<typeof Settings>;
 
 const file = () => path.join(app.getPath("userData"), "settings.json");

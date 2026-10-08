@@ -2,6 +2,25 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-08: Speak in sentences, stop when talked over
+
+- **Answers are spoken a sentence at a time.** The answer text is split into sentences and each is synthesised and sent as soon as it's ready; the meeting page queues the chunks and plays them back to back, keeping the mic on from the first chunk until the last ends (an end marker closes the turn). With the owner's voice this cuts the wait before Peguin starts talking roughly in half. Claude's text itself isn't streamed yet.
+- **Talking over Peguin stops it.** About 0.8 s of someone else's continuous speech while Peguin talks (short enough to feel polite, long enough to skip coughs and "mm-hm") stops playback at once, mutes, and drops anything still being prepared. What they say is heard straight away: `TurnDetector.interrupted(now)` ends the echo tail but keeps the follow-up window, so "wait, is that merged?" is answered and people talking among themselves aren't. It's a setting (on by default) because a participant's echo of Peguin could trigger it in some rooms.
+
+## 2026-10-08: Speaking in the owner's own voice, on their Mac
+
+Opt-in, in Settings > Voice. Chatterbox Turbo (Resemble AI, MIT) runs through onnxruntime-node in the Electron main process with the pure-JS `@huggingface/tokenizers`, so there is no Python and no cloud call; findings and timings are in `spikes/voice/README.md`.
+
+- **Model:** fp32 (3.3 GB), downloaded only when the owner turns the feature on, pinned to one revision with exact file sizes. q4 (721 MB) was as fast but garbled technical phrases.
+- **Sample:** recorded live in the app (no file upload, so nobody can clone a colleague from a recording), starting with a consent sentence; stored encrypted with `safeStorage`; deletable with every line made from it.
+- **Sounding human:** sampling instead of greedy decoding, one sentence at a time joined with pauses, Resemble's punctuation clean-up, loudness levelled.
+- **Nothing about how someone sounds is built in.** Every value is the owner's setting: a pronunciation list (any word, spelled how it sounds, each with "Hear it"), the pause between sentences (default 0.32 s), expressiveness (sampling temperature, default 0.6) and how many times prepared lines are redone (default 3). Previews read the owner's own latest update; the recording prompt is their latest update, or free talk about their work. Only the consent sentence is fixed, because it is the consent record. Model properties from Resemble's reference (top-k, top-p, repetition penalty) aren't preferences and stay in code.
+- **Checked by ear:** prepared lines (update, defer, acknowledgement) are transcribed with the app's whisper and regenerated, up to the owner's attempts setting, when the words come back wrong. Accented but correct speech scores 0.1-0.2 against off-the-shelf recognition, so the bar is 0.2, and the owner's aliases count as their name; a gained or lost negation ("can" heard as "can't") always fails. Live answers skip the check to stay quick.
+- **Ahead of time:** the update is made in the owner's voice right after it's prepared (about 25 s) and cached encrypted, so the meeting plays it instantly.
+- **Disclosure:** unchanged and still first, plus "speaking in <name>'s voice" when the own voice is on. If the own voice fails, Peguin falls back to the standard voice and drops that phrase.
+- **Prompts write for the ear** (short sentences, no stacked technical nouns, numbers as words), which helps both voices.
+- Not yet: Perth watermarking (the reference implementation needs PyTorch), streaming answers sentence by sentence, CoreML.
+
 ## 2026-10-07: Reduced motion means calmer, not off
 
 Visitors with "reduce motion" switched on (common on Windows, where turning off animation effects sets it) saw an almost static site. Now reduced motion keeps fades, typing, speaking bars, the hero scene, the scripted app demo and the perched penguin, and drops only travel: smooth scrolling, parallax, the showcase tilt, cursor-driven layer drift, looping background motion and the help penguin's walk-in. Reveals fade in place instead of sliding. The build also targets Safari 14 and Chrome 87 so older Macs and iPhones get the full site.

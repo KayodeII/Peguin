@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld("__penguin", {
   type: (text: string) => ipcRenderer.send("mtg:type", String(text)),
   playbackEnded: () => ipcRenderer.send("mtg:playback-ended"),
   onSpeak: (cb: (buf: Uint8Array) => void) => ipcRenderer.on("mtg:speak", (_e, buf: Uint8Array) => cb(buf)),
+  onSpeakEnd: (cb: () => void) => ipcRenderer.on("mtg:speak-end", () => cb()),
+  onStop: (cb: () => void) => ipcRenderer.on("mtg:stop", () => cb()),
 });
 
 void webFrame.executeJavaScript(ipcRenderer.sendSync("mtg:inject"));

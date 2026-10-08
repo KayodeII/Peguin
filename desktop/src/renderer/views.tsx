@@ -5,6 +5,7 @@ import type { Draft } from "../main/brain";
 import { botName } from "../main/meeting/platform";
 import type { Settings } from "../main/settings";
 import { Avatar, BrandIcon, dayTime, Icon, Logo, message, Toggle, Typing } from "./ui";
+import { VoiceSettings } from "./voice";
 
 const SOURCE_INFO = {
   git: { name: "Git commits", desc: "Commits in repos on this computer." },
@@ -162,8 +163,15 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
   const [error, setError] = useState("");
   // Appearance saves instantly; keep other unsaved edits when it does.
   useEffect(() => { setS((prev) => ({ ...prev, appearance: settings.appearance })); }, [settings.appearance]);
+  // The voice switch also saves instantly.
+  useEffect(() => { setS((prev) => ({ ...prev, voice: { ...prev.voice, mode: settings.voice.mode } })); }, [settings.voice.mode]);
   const setAppearance = (a: Partial<Settings["appearance"]>) => void save({ ...settings, appearance: { ...settings.appearance, ...a } });
-  const next = { ...s, aliases: [...new Set(aliases.split(",").map((a) => a.trim()).filter(Boolean))].slice(0, 10) };
+  const next = {
+    ...s,
+    aliases: [...new Set(aliases.split(",").map((a) => a.trim()).filter(Boolean))].slice(0, 10),
+    // Rows still being filled in aren't saved.
+    voice: { ...s.voice, pronunciations: s.voice.pronunciations.map((p) => ({ word: p.word.trim(), sayAs: p.sayAs.trim() })).filter((p) => p.word && p.sayAs) },
+  };
   const dirty = JSON.stringify(next) !== JSON.stringify(settings);
   const timezones = Intl.supportedValuesOf("timeZone");
   const st = s.standup;
@@ -179,7 +187,7 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
         <h3 className="section-label">My profile</h3>
         <div className="field-grid">
           <label>Name<input value={s.displayName} maxLength={40} onChange={(e) => setS({ ...s, displayName: e.target.value })} /></label>
-          <label>Also called<input value={aliases} placeholder="Mujib, MJ" onChange={(e) => setAliases(e.target.value)} /></label>
+          <label>Also called<input value={aliases} placeholder="Nicknames, or how people say your name" onChange={(e) => setAliases(e.target.value)} /></label>
         </div>
         <p className="hint">Joins as <strong>{preview(s.displayName)}</strong></p>
 
@@ -198,6 +206,10 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
           <div className="row-main"><strong>Auto-join</strong><p>Prepares 15 minutes before, joins at the start.</p></div>
           <Toggle on={st.auto} onChange={(v) => setStandup({ auto: v })} label="Join automatically" />
         </div>
+        <div className="row-card">
+          <div className="row-main"><strong>Stop when someone talks over Peguin</strong><p>It stops mid-sentence and listens, then answers if they asked it something.</p></div>
+          <Toggle on={s.stopWhenInterrupted} onChange={(v) => setS({ ...s, stopWhenInterrupted: v })} label="Stop when someone talks over Peguin" />
+        </div>
 
         <h3 className="section-label">Appearance</h3>
         <div className="themes" role="radiogroup" aria-label="Theme">
@@ -215,8 +227,8 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
           ))}
         </div>
 
-        <h3 className="section-label">Voice</h3>
-        <div className="row-card"><div className="row-main"><strong>Default voice</strong><p>Your own voice: coming soon.</p></div><span className="tag">Active</span></div>
+        <h3 className="section-label" id="voice">Voice</h3>
+        <VoiceSettings settings={settings} draft={s} setDraft={setS} save={save} />
 
         <h3 className="section-label">Advanced</h3>
         <label>Timezone<select value={s.timezone} onChange={(e) => setS({ ...s, timezone: e.target.value })}>{timezones.map((t) => <option key={t}>{t}</option>)}</select></label>

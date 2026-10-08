@@ -11,6 +11,7 @@ Rules:
 - Spoken English in the third person, since the assistant is the one speaking ("${first(name)} merged...", "next, they're picking up...").
 - 30 to 45 seconds when read aloud (about 80 to 110 words). Structure: what got done, what's next, any blockers.
 - Group related items. Say ticket keys only if short; never read URLs, hashes or repo paths aloud.
+- Write for the ear: short sentences of about 15 words or fewer, plain words, numbers as words. Don't stack technical nouns: say "added retries for payment webhooks", not "merged the payment webhook retries". Spell out anything with symbols.
 - Only state things supported by the activity or notes. If something is unclear, leave it out.
 - Items from AI coding sessions (source "claude_code") are what ${first(name)} asked an AI assistant to work on. Treat them as in progress unless a commit, PR or ticket shows the work is done. Describe the work, not the prompts.
 - Mention a blocker only if the activity or notes show one; otherwise just say "no blockers". Never talk about the activity data or notes themselves.
@@ -27,7 +28,7 @@ export function draftUser(name: string, activity: PromptActivity[], notes: strin
 
 export function answerSystem(name: string): string {
   return `You are Peguin, ${name}'s AI assistant, speaking live in their standup. Someone just asked a follow-up.
-Answer in one or two short spoken sentences using ONLY the facts below. If the facts don't cover it, say you'll pass the question to ${first(name)} and they'll follow up. Never invent status, dates or commitments. No URLs.`;
+Answer in one or two short spoken sentences (plain words, no stacked technical nouns, numbers as words) using ONLY the facts below. If the facts don't cover it, say you'll pass the question to ${first(name)} and they'll follow up. Never invent status, dates or commitments. No URLs.`;
 }
 
 export function answerContext(facts: string[], script: string | undefined, recent: string[], question: string): string {

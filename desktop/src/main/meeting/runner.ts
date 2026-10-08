@@ -7,8 +7,10 @@ import path from "node:path";
 import { TurnDetector } from "../../../../src/realtime/turn.js";
 import type { Draft } from "../brain.js";
 import type { Settings } from "../settings.js";
-import { synthesize } from "../speech/tts.js";
-import { createListener, type Whisper } from "../speech/whisper.js";
+import { synthesize, type SynthesizeOptions } from "../speech/tts.js";
+import { usingOwnVoice } from "../speech/voice/index.js";
+import { sentences } from "../speech/voice/text.js";
+import { createListener, transcribeSamples, type Whisper } from "../speech/whisper.js";
 import { outDir, resource } from "../paths.js";
 import { botName, detectPlatform, webClientUrl, type Platform } from "./platform.js";
 
@@ -18,16 +20,22 @@ export type MeetingEvent =
   | { kind: "log"; text: string }
   | { kind: "heard"; text: string; action: string; sttMs: number };
 
+/** How long someone must keep talking over Peguin before it stops (short enough to feel polite, long enough to skip coughs). */
+const INTERRUPT_AFTER_MS = 800;
+
 const SIGN_IN_HOSTS = /^(login\.microsoftonline\.com|login\.live\.com|accounts\.google\.com)$/;
 
-/** The fixed words Peguin says. The update itself is the prepared draft, never made up here. */
-export function lines(s: Settings, draft: Draft | null) {
+/**
+ * The fixed words Peguin says. The update itself is the prepared draft, never made up here.
+ * In the owner's own voice, the disclosure also says so.
+ */
+export function lines(s: Settings, draft: Draft | null, ownVoice = false) {
   const first = (s.displayName.trim().split(/\s+/)[0] || "my owner");
   return {
     // Non-negotiable: disclose first.
-    update: `Hi everyone, I'm Peguin, ${first}'s AI assistant. ${first} is in another meeting, so I'm covering the update. `
+    update: `Hi everyone, I'm Peguin, ${first}'s AI assistant${ownVoice ? `, speaking in ${first}'s voice` : ""}. ${first} is in another meeting, so I'm covering the update. `
       + (draft?.script ?? `I don't have an update prepared, so ${first} will share it after the call.`)
-      + ` ${first} can follow up on anything after the call.`,
+      + ` ${first} will follow up on anything else after the call.`,
     defer: `Good question. I'll get ${first} to follow up on that after the call.`,
     ack: "Yes, I'm here. Go ahead.",
   };
@@ -64,9 +72,22 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     const name = botName(s.displayName, this.platform);
     const first = s.displayName.trim().split(/\s+/)[0] ?? "";
     const names = [...new Set([s.displayName.trim(), first, ...s.aliases].filter(Boolean))];
-    const say = lines(s, this.brain.draft);
-    // Pre-synthesize so Peguin answers instantly when called on.
-    const audio = { update: synthesize(say.update), defer: synthesize(say.defer), ack: synthesize(say.ack) };
+    const own = usingOwnVoice(s);
+    const say = lines(s, this.brain.draft, own);
+    const standard = lines(s, this.brain.draft, false);
+    // In the owner's voice, the prepared lines are checked by ear (redone, up to their attempts setting, if a word comes out wrong);
+    // live answers skip the check to stay quick.
+    const voice = (standardText?: string): SynthesizeOptions => ({
+      settings: s, standardText,
+      check: (wav) => transcribeSamples(this.whisper.url, wav, names),
+      onFallback: (reason) => this.log(`Your voice wasn't available (${reason}); using the standard voice.`),
+    });
+    // Pre-synthesize so Peguin answers instantly when called on (usually already cached from preparing).
+    const audio = {
+      update: synthesize(say.update, voice(standard.update)),
+      defer: synthesize(say.defer, voice()),
+      ack: synthesize(say.ack, voice()),
+    };
     for (const a of Object.values(audio)) a.catch((e) => this.log(`speech output failed: ${e}`));
 
     const win = new BrowserWindow({
@@ -101,27 +122,51 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     const recent: string[] = [];
     const remember = (line: string) => { recent.push(line); if (recent.length > 12) recent.shift(); };
     // Facts-only answer when there's a draft; otherwise (or on any failure) defer.
-    const reply = async (question: string) => {
-      const answer = this.brain.answer;
-      if (!answer || !this.brain.draft?.facts.length) return audio.defer;
+    // Spoken a sentence at a time, so Peguin starts talking as soon as the first is ready.
+    async function* reply(question: string): AsyncGenerator<Buffer> {
+      const answer = self.brain.answer;
+      if (!answer || !self.brain.draft?.facts.length) { yield await audio.defer; return; }
+      let text: string;
       try {
-        const text = await answer(question, recent);
-        remember(`Peguin: ${text}`);
-        this.log(`Answer: ${text}`);
-        return synthesize(text);
+        text = await answer(question, recent);
       } catch (e) {
-        this.log(`Couldn't answer (${e instanceof Error ? e.message : e}); deferring to you.`);
-        return audio.defer;
+        self.log(`Couldn't answer (${e instanceof Error ? e.message : e}); deferring to you.`);
+        yield await audio.defer;
+        return;
       }
-    };
-    const speak = async (what: Promise<Buffer>, label: string) => {
+      remember(`Peguin: ${text}`);
+      self.log(`Answer: ${text}`);
+      for (const sentence of sentences(text)) yield await synthesize(sentence, { ...voice(), check: undefined });
+    }
+    const self = this;
+    const frames = () => wc.mainFrame.framesInSubtree;
+    // Each turn gets an id; talking over Peguin bumps it, which drops anything still being prepared.
+    let turnId = 0;
+    const speak = async (parts: Promise<Buffer> | AsyncIterable<Buffer>, label: string) => {
+      const id = ++turnId;
       turn.setSpeaking(true, Date.now());
       this.log(`Speaking: ${label}`);
-      const buf = await what;
-      for (const f of wc.mainFrame.framesInSubtree) f.send("mtg:speak", buf);
+      try {
+        for await (const buf of parts instanceof Promise ? [await parts] : parts) {
+          if (id !== turnId) return;
+          for (const f of frames()) f.send("mtg:speak", buf);
+        }
+      } catch (e) {
+        this.log(`speech output failed: ${e instanceof Error ? e.message : e}`);
+      }
+      if (id === turnId) for (const f of frames()) f.send("mtg:speak-end");
+    };
+    const interrupt = () => {
+      if (!s.stopWhenInterrupted || !turn.isSpeaking) return;
+      turnId++;
+      turn.interrupted(Date.now());
+      for (const f of frames()) f.send("mtg:stop");
+      this.log("Someone started talking, so Peguin stopped to listen.");
     };
     const onPcm = createListener({
       whisperUrl: this.whisper.url, names,
+      // About a second of someone else's voice while Peguin talks means they're talking over it.
+      onSustainedSpeech: interrupt, sustainedMs: INTERRUPT_AFTER_MS,
       onError: (e) => this.log(`speech recognition error: ${e}`),
       onUtterance: ({ text, sttMs }) => {
         const d = turn.onUtterance(text, Date.now());

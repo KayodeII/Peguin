@@ -18,6 +18,8 @@
     "dist:mac": "npm run build && bash scripts/build-whisper-release.sh && electron-builder --mac --arm64"
   },
   "dependencies": {
+    "@huggingface/tokenizers": "^0.2.0",
+    "onnxruntime-node": "^1.30.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -46,7 +48,9 @@
     },
     "files": [
       "out/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/onnxruntime-node/bin/napi-v*/linux/**",
+      "!node_modules/onnxruntime-node/bin/napi-v*/win32/**"
     ],
     "extraResources": [
       {
@@ -87,11 +91,17 @@
       "icon": "build/icon.icns",
       "identity": "-",
       "hardenedRuntime": false,
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "12.0",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Peguin records a short sample of your voice, only when you choose to, so it can speak in your voice in meetings."
+      }
     },
     "dmg": {
       "title": "Peguin ${version}",
       "artifactName": "Peguin-${version}-mac-${arch}.${ext}"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/onnxruntime-node/bin/**"
+    ]
   }
 }
