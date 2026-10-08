@@ -2,6 +2,18 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-08: Standups from the owner's calendars
+
+The owner wanted calendars from wherever they live (Meet's Google Calendar, the Mac, Calendly and so on), so calendars are adapters behind one interface (`desktop/src/main/calendar/`), like activity sources:
+
+- **Mac Calendar** through a small Swift EventKit helper (`desktop/native/calendar.swift`, bundled like whisper-server): every account added to macOS (Google, Exchange/Outlook, iCloud) at once, no OAuth app, no Google review, nothing leaves the Mac. macOS asks for permission once.
+- **Calendar links**: the private iCal address Google, Outlook and iCloud each offer, parsed with ical.js (recurrences, moved and removed occurrences, the calendar's own time zones).
+- **Calendly**: scheduled events via a personal access token.
+- Links and the Calendly token are read access to someone's calendar, so they're encrypted (`calendar.bin`), not in settings.json; the UI shows them masked.
+- A meeting is a standup when its title has one of the owner's words (editable; default standup, stand-up, stand up, daily, scrum) and it has a Meet, Zoom or Teams link (URL field, location or notes). The same meeting from two calendars is deduplicated by start and link. Meetings with a link that didn't match are listed with "Count as standup".
+- The scheduler attends the next calendar standup (prepare 15 minutes before, join a minute before, each occurrence once) and falls back to the fixed time. Calendars are cached for five minutes.
+- Not yet: direct "Connect Google" and "Connect Microsoft" (OAuth apps, Google's review for calendar scopes), which would also cover people who use neither the Mac's Calendar nor links.
+
 ## 2026-10-08: A recap after every meeting
 
 - The runner keeps a structured log as the meeting happens (`desktop/src/main/meeting/record.ts`): what was heard, what Peguin said (update, answers, deferrals, acknowledgements), interruptions, and every question with how it was handled.

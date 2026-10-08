@@ -6,7 +6,10 @@ import { answerQuestion, isFresh, loadDraft, prepareDraft, summarizeMeeting, typ
 import { deferredFollowUps, headline, mergeFollowUps, transcriptLines, worthKeeping, type MeetingRecord } from "./meeting/record.js";
 import { deleteAllMeetings, deleteMeeting, listMeetings, saveMeeting, setFollowUpDone } from "./meetings.js";
 import { lines, meetingPaths, MeetingRunner, type MeetingEvent } from "./meeting/runner.js";
-import { nextStandup, startScheduler } from "./scheduler.js";
+import { nextStandup, startScheduler, whenLabel } from "./scheduler.js";
+import { nextCalendarStandup, refreshCalendars, upcoming } from "./calendar/index.js";
+import { macCalendarAccess, requestMacCalendarAccess } from "./calendar/mac.js";
+import { loadCalendarSecrets, maskLink, saveCalendarSecrets } from "./calendar/secrets.js";
 import { loadSettings, saveSettings } from "./settings.js";
 import { fixPath, outDir, resource } from "./paths.js";
 import { ensureModel } from "./speech/model.js";
@@ -257,7 +260,49 @@ ipcMain.handle("settings:save", (_e, input: unknown) => {
 });
 ipcMain.handle("draft:get", () => ({ draft: loadDraft(), preparing: !!preparing }));
 ipcMain.handle("draft:prepare", () => prepare());
-ipcMain.handle("standup:next", () => nextStandup(loadSettings()));
+// The sidebar's "Next standup": from the calendars when they're on, else the fixed time.
+ipcMain.handle("standup:next", async () => {
+  const s = loadSettings();
+  const planned = await nextCalendarStandup(s).catch(() => null);
+  if (planned) return { label: whenLabel(planned.start, new Date(), s.timezone), title: planned.title, url: planned.url };
+  return nextStandup(s);
+});
+ipcMain.handle("calendar:status", async () => {
+  const s = loadSettings(), secrets = loadCalendarSecrets();
+  return { mac: { on: s.calendar.mac, access: await macCalendarAccess() }, links: secrets.links.map(maskLink), calendly: !!secrets.calendlyToken };
+});
+ipcMain.handle("calendar:mac-connect", async () => {
+  const access = await requestMacCalendarAccess();
+  const s = loadSettings();
+  if (access === "authorized") saveSettings({ ...s, calendar: { ...s.calendar, mac: true, enabled: true } });
+  refreshCalendars();
+  return access;
+});
+ipcMain.handle("calendar:mac-disconnect", () => {
+  const s = loadSettings();
+  saveSettings({ ...s, calendar: { ...s.calendar, mac: false } });
+  refreshCalendars();
+});
+ipcMain.handle("calendar:add-link", (_e, link: string) => {
+  const secrets = loadCalendarSecrets();
+  if (!/^(https?|webcal):\/\//i.test(String(link).trim())) throw new Error("That doesn't look like a calendar link. It should start with https:// or webcal://.");
+  saveCalendarSecrets({ ...secrets, links: [...secrets.links, String(link)] });
+  const s = loadSettings();
+  if (!s.calendar.enabled) saveSettings({ ...s, calendar: { ...s.calendar, enabled: true } });
+  refreshCalendars();
+});
+ipcMain.handle("calendar:remove-link", (_e, index: number) => {
+  const secrets = loadCalendarSecrets();
+  saveCalendarSecrets({ ...secrets, links: secrets.links.filter((_, i) => i !== Number(index)) });
+  refreshCalendars();
+});
+ipcMain.handle("calendar:set-calendly", (_e, token: string | null) => {
+  saveCalendarSecrets({ ...loadCalendarSecrets(), calendlyToken: token ? String(token) : null });
+  const s = loadSettings();
+  if (token && !s.calendar.enabled) saveSettings({ ...s, calendar: { ...s.calendar, enabled: true } });
+  refreshCalendars();
+});
+ipcMain.handle("calendar:upcoming", (_e, fresh?: boolean) => { if (fresh) refreshCalendars(); return upcoming(loadSettings()); });
 ipcMain.handle("meeting:join", (_e, url: string) => join(url));
 ipcMain.handle("meeting:leave", () => { meeting?.stop(); meeting = null; });
 ipcMain.handle("account:get", () => account);
@@ -306,6 +351,7 @@ app.whenReady().then(() => {
   setInterval(() => void refreshUpdate(), 6 * 3600 * 1000);
   startScheduler({
     settings: loadSettings,
+    calendarStandup: (s) => nextCalendarStandup(s),
     prepare,
     join,
     log: (text) => send({ kind: "log", text }),

@@ -13,6 +13,9 @@ const sourceRoot = path.resolve(outDir, "..");                                  
 /** A file shipped next to the app: extraResources when installed, desktop/resources from source. */
 export const resource = (name: string) => app.isPackaged ? path.join(process.resourcesPath, name) : path.join(sourceRoot, "resources", name);
 
+/** EventKit helper that reads the Mac's calendars (built by scripts/build-calendar-helper.sh). */
+export const calendarHelperPath = () => app.isPackaged ? path.join(process.resourcesPath, "calendar", "calendar-helper") : path.join(sourceRoot, "build/calendar/calendar-helper");
+
 export const WHISPER_MODEL = "base.en";
 export const MODEL_URL = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${WHISPER_MODEL}.bin`;
 

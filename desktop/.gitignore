@@ -3,3 +3,4 @@ out
 vendor
 release
 build/whisper
+build/calendar

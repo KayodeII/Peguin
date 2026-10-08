@@ -6,6 +6,7 @@ import { botName } from "../main/meeting/platform";
 import type { Settings } from "../main/settings";
 import { Avatar, BrandIcon, dayTime, Icon, Logo, message, Toggle, Typing } from "./ui";
 import { VoiceSettings } from "./voice";
+import { CalendarSettings } from "./calendars";
 
 const SOURCE_INFO = {
   git: { name: "Git commits", desc: "Commits in repos on this computer." },
@@ -203,6 +204,8 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
             ))}</div>
           </div>
         </div>
+        <h3 className="section-label small" id="calendars">Calendars</h3>
+        <CalendarSettings settings={settings} save={save} />
         <div className="row-card">
           <div className="row-main"><strong>Auto-join</strong><p>Prepares 15 minutes before, joins at the start.</p></div>
           <Toggle on={st.auto} onChange={(v) => setStandup({ auto: v })} label="Join automatically" />
