@@ -2,6 +2,13 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-08: A recap after every meeting
+
+- The runner keeps a structured log as the meeting happens (`desktop/src/main/meeting/record.ts`): what was heard, what Peguin said (update, answers, deferrals, acknowledgements), interruptions, and every question with how it was handled.
+- **Follow-ups never depend on a model.** Every question Peguin deferred (or that was still pending when the call ended) becomes a follow-up straight away. If the owner allows it (Settings > Recaps, on by default), Claude reads the transcript for a short summary and extra follow-ups; when it describes a deferred question, its more actionable wording replaces it, but nothing deferred is ever dropped. The prompt allows the transcript only and never names speakers, who aren't identified.
+- Recaps are kept encrypted on the Mac (shared `sealed.ts` helper) for the owner's chosen period (default 30 days), shown in `#recaps` with a follow-up checklist and an unread count, and announced with a notification. `/api/recap` on the Worker serves subscribers, capped at `RECAPS_PER_DAY`.
+- Slack posting is left for later: it needs a webhook URL per user and a decision about sharing transcripts with a workspace.
+
 ## 2026-10-08: Speak in sentences, stop when talked over
 
 - **Answers are spoken a sentence at a time.** The answer text is split into sentences and each is synthesised and sent as soon as it's ready; the meeting page queues the chunks and plays them back to back, keeping the mic on from the first chunk until the last ends (an end marker closes the turn). With the owner's voice this cuts the wait before Peguin starts talking roughly in half. Claude's text itself isn't streamed yet.

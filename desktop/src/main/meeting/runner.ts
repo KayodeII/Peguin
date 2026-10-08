@@ -13,6 +13,7 @@ import { sentences } from "../speech/voice/text.js";
 import { createListener, transcribeSamples, type Whisper } from "../speech/whisper.js";
 import { outDir, resource } from "../paths.js";
 import { botName, detectPlatform, webClientUrl, type Platform } from "./platform.js";
+import { MeetingLog, type MeetingRecord } from "./record.js";
 
 export type MeetingStatus = "joining" | "waiting" | "in_call" | "ended" | "failed";
 export type MeetingEvent =
@@ -41,11 +42,13 @@ export function lines(s: Settings, draft: Draft | null, ownVoice = false) {
   };
 }
 
-export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
+export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record: [MeetingRecord] }> {
   readonly platform: Platform;
   private win?: BrowserWindow;
   private status: MeetingStatus = "joining";
   private readonly detach: Array<() => void> = [];
+  /** What happened, for the recap; handed over once, when the meeting ends. */
+  private meeting?: MeetingLog;
 
   constructor(
     private readonly url: string,
@@ -119,22 +122,27 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     wc.debugger.attach("1.3");
 
     const turn = new TurnDetector({ names });
+    const log = new MeetingLog({ url: this.url, platform: this.platform, joinedAs: name });
+    this.meeting = log;
     const recent: string[] = [];
     const remember = (line: string) => { recent.push(line); if (recent.length > 12) recent.shift(); };
     // Facts-only answer when there's a draft; otherwise (or on any failure) defer.
     // Spoken a sentence at a time, so Peguin starts talking as soon as the first is ready.
     async function* reply(question: string): AsyncGenerator<Buffer> {
+      const q = log.asked(question);
       const answer = self.brain.answer;
-      if (!answer || !self.brain.draft?.facts.length) { yield await audio.defer; return; }
+      if (!answer || !self.brain.draft?.facts.length) { q.deferred(say.defer); yield await audio.defer; return; }
       let text: string;
       try {
         text = await answer(question, recent);
       } catch (e) {
         self.log(`Couldn't answer (${e instanceof Error ? e.message : e}); deferring to you.`);
+        q.deferred(say.defer);
         yield await audio.defer;
         return;
       }
       remember(`Peguin: ${text}`);
+      q.answered(text);
       self.log(`Answer: ${text}`);
       for (const sentence of sentences(text)) yield await synthesize(sentence, { ...voice(), check: undefined });
     }
@@ -161,6 +169,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
       turnId++;
       turn.interrupted(Date.now());
       for (const f of frames()) f.send("mtg:stop");
+      log.note("Someone talked over Peguin, so it stopped to listen");
       this.log("Someone started talking, so Peguin stopped to listen.");
     };
     const onPcm = createListener({
@@ -171,10 +180,11 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
       onUtterance: ({ text, sttMs }) => {
         const d = turn.onUtterance(text, Date.now());
         remember(`Someone: ${text}`);
+        log.heard(text);
         this.emitEvent({ kind: "heard", text, action: d.action, sttMs });
-        if (d.action === "give_update") { turn.markUpdateGiven(); void speak(audio.update, "the update"); }
+        if (d.action === "give_update") { turn.markUpdateGiven(); log.said("update", say.update); void speak(audio.update, "the update"); }
         else if (d.action === "answer") void speak(reply(d.question), "answering from your work");
-        else if (d.action === "acknowledge") void speak(audio.ack, "acknowledging");
+        else if (d.action === "acknowledge") { log.said("ack", say.ack); void speak(audio.ack, "acknowledging"); }
       },
     });
 
@@ -194,7 +204,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     });
     on("mtg:type", (_e, text: string) => { void wc.debugger.sendCommand("Input.insertText", { text }).catch(() => {}); });
     on("mtg:pcm", (_e, buf: ArrayBuffer) => onPcm(buf));
-    on("mtg:in-call", () => this.setStatus("in_call", `Joined as "${name}". Muted until someone calls ${first || "you"}.`));
+    on("mtg:in-call", () => { log.joined(); this.setStatus("in_call", `Joined as "${name}". Muted until someone calls ${first || "you"}.`); });
     on("mtg:playback-ended", () => turn.setSpeaking(false, Date.now()));
     on("mtg:ended", () => { this.setStatus("ended", "The call ended or Peguin was removed."); this.stop(); });
     on("mtg:level", () => {});
@@ -212,6 +222,9 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
 
   private cleanup() {
     while (this.detach.length) this.detach.pop()!();
+    const log = this.meeting;
+    this.meeting = undefined;
+    if (log) this.emit("record", log.end());
   }
 }
 

@@ -6,8 +6,8 @@ import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { answerContext, answerSystem, draftSystem, draftUser, parseDraft } from "../../../src/core/brain/prompts.js";
-import { cloudAnswer, cloudDraft, offlineLicense } from "./account.js";
+import { answerContext, answerSystem, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
+import { cloudAnswer, cloudDraft, cloudRecap, offlineLicense } from "./account.js";
 import { gatherContext, type SourceReport } from "./context/index.js";
 import type { Settings } from "./settings.js";
 
@@ -78,4 +78,10 @@ export function isFresh(d: Draft | null, timezone: string, now = new Date()): bo
   if (!d) return false;
   const day = (x: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(x);
   return day(new Date(d.generatedAt)) === day(now);
+}
+
+/** Summary and extra follow-ups for a meeting, from its transcript only (same routing as drafts). */
+export async function summarizeMeeting(s: Settings, lines: string[]): Promise<{ summary: string; followUps: string[] }> {
+  if (await offlineLicense()) return cloudRecap(s.displayName, lines);
+  return parseRecap(await claude(`${recapSystem(s.displayName)}\n\n${recapUser(lines)}`, 60000));
 }

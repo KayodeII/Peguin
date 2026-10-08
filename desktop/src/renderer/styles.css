@@ -234,3 +234,37 @@ input[type="range"] { padding: 0; border: 0; background: none; accent-color: var
 input[type="range"]:focus { outline: none; }
 .range-ends { display: flex; justify-content: space-between; font-size: 12px; font-weight: 400; color: var(--muted); text-transform: none; letter-spacing: 0; }
 .voice-modal .script .free { font-weight: 400; color: var(--muted); }
+
+/* Recaps */
+.recaps { flex: 1; min-height: 0; display: grid; grid-template-columns: 280px 1fr; }
+.recap-list { min-height: 0; overflow-y: auto; scrollbar-width: none; border-right: 1px solid var(--line); padding: 8px; }
+.recap-list::-webkit-scrollbar { display: none; }
+.recap-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border-radius: 6px; text-align: left; color: var(--muted); }
+.recap-item:hover { background: var(--hover); }
+.recap-item.active { background: var(--active); color: var(--ink); }
+.recap-item-main { flex: 1; min-width: 0; display: grid; line-height: 1.3; }
+.recap-item-main strong { color: var(--ink-strong); font-weight: 600; font-size: 13.5px; }
+.recap-item-main span { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--red); color: #fff; font-size: 12px; font-weight: 700; display: inline-grid; place-items: center; margin-left: auto; }
+.badge.count-badge { width: auto; min-width: 18px; height: 18px; padding: 0 4px; font-size: 11px; font-weight: 700; color: #fff; display: grid; place-items: center; border-width: 2px; }
+.empty-note { padding: 12px; color: var(--muted); font-size: 13px; }
+.recap-detail { padding: 24px 28px 96px; }
+.recap-head h2 { margin: 0; color: var(--ink-strong); font-size: 22px; }
+.recap-head p { margin: 4px 0 0; color: var(--muted); }
+.followups { list-style: none; margin: 0; padding: 0; }
+.followups li label { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 6px; font-size: 14.5px; color: var(--ink); text-transform: none; letter-spacing: 0; font-weight: 400; cursor: pointer; }
+.followups li label:hover { background: var(--hover); }
+.followups input { width: auto; margin-top: 3px; accent-color: var(--accent); }
+.followups label.done span { color: var(--muted); text-decoration: line-through; }
+.recap-summary { margin: 0; line-height: 1.6; }
+.muted-line { color: var(--muted); margin: 0; }
+.said-line { margin: 0 0 12px; }
+.said-line time { margin-left: 8px; color: var(--faint); font-size: 12px; }
+.said-line p { margin: 4px 0 0; }
+.transcript { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
+.transcript summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+.transcript p { margin: 6px 0; font-size: 13.5px; }
+.transcript time { color: var(--faint); font-size: 12px; margin-right: 8px; font-variant-numeric: tabular-nums; }
+.transcript strong { margin-right: 6px; color: var(--ink-strong); font-weight: 600; }
+.transcript .t-system { color: var(--muted); font-style: normal; }
+.recap-actions { margin-top: 24px; }

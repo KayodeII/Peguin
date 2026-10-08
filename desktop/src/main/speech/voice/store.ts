@@ -1,9 +1,10 @@
 // The owner's voice sample: recorded live in the app (never uploaded from a
 // file), encrypted with the macOS Keychain, kept only on this Mac, deletable.
-import { app, safeStorage } from "electron";
+import { app } from "electron";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { unseal, writeSealed } from "../../sealed.js";
 import { decodeWav, encodeWav, SAMPLE_RATE } from "./audio.js";
 
 /** Read aloud at the start of every recording. Recording it is the owner's consent. */
@@ -16,12 +17,6 @@ const sampleFile = () => path.join(dir(), "sample.bin");
 const consentFile = () => path.join(dir(), "consent.json");
 
 export type VoiceSampleInfo = { recordedAt: string; seconds: number; consent: string };
-
-function seal(data: Buffer): Buffer {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error("macOS Keychain isn't available, so your voice can't be stored safely.");
-  return safeStorage.encryptString(data.toString("base64"));
-}
-const unseal = (data: Buffer) => Buffer.from(safeStorage.decryptString(data), "base64");
 
 function writeAtomic(file: string, data: Buffer | string) {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -37,7 +32,7 @@ export function saveSample(samples: Float32Array): VoiceSampleInfo {
   for (const v of samples) peak = Math.max(peak, Math.abs(v));
   if (peak < 0.02) throw new Error("That recording is nearly silent. Check that Peguin can use your microphone, then try again.");
   const trimmed = samples.subarray(0, SAMPLE_RATE * MAX_SAMPLE_S);
-  writeAtomic(sampleFile(), seal(encodeWav(trimmed.map((v) => (v / peak) * 0.9))));
+  writeSealed(sampleFile(), encodeWav(trimmed.map((v) => (v / peak) * 0.9)));
   const info: VoiceSampleInfo = { recordedAt: new Date().toISOString(), seconds: Math.round(trimmed.length / SAMPLE_RATE), consent: CONSENT_SENTENCE };
   writeAtomic(consentFile(), JSON.stringify(info, null, 2));
   return info;

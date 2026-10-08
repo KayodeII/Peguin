@@ -7,20 +7,27 @@ import type { MeetingEvent, MeetingStatus } from "../main/meeting/runner";
 import type { Settings } from "../main/settings";
 import { Avatar, Icon, Logo, message } from "./ui";
 import { LiveView, Onboarding, SettingsView, SourcesView, TodayView } from "./views";
+import { RecapsView } from "./recaps";
+import type { MeetingRecord } from "../main/meeting/record";
 
-export type View = "today" | "live" | "sources" | "settings";
-const NAV: { id: View; label: string; icon: string }[] = [
-  { id: "today", label: "Today", icon: "today" },
-  { id: "live", label: "Live meeting", icon: "live" },
-  { id: "sources", label: "Sources", icon: "sources" },
+export type View = "today" | "live" | "recaps" | "sources" | "settings";
+const NAV: { id: View; label: string; icon: string; channel: string }[] = [
+  { id: "today", label: "Today", icon: "today", channel: "today" },
+  { id: "live", label: "Live meeting", icon: "live", channel: "live-meeting" },
+  { id: "recaps", label: "Recaps", icon: "recaps", channel: "recaps" },
+  { id: "sources", label: "Sources", icon: "sources", channel: "sources" },
 ];
+const VIEWS: View[] = ["today", "live", "recaps", "sources", "settings"];
 
 export type DraftState = { draft: Draft | null; preparing: boolean; error?: string };
 export type LiveState = { status: MeetingStatus; detail?: string; events: MeetingEvent[] };
 
 export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [view, setView] = useState<View>(() => (["today", "live", "sources", "settings"].includes(location.hash.slice(1)) ? location.hash.slice(1) as View : "today"));
+  const [view, setView] = useState<View>(() => (VIEWS.includes(location.hash.slice(1) as View) ? location.hash.slice(1) as View : "today"));
+  const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
+  const reloadMeetings = useCallback(() => { void window.penguin.meetings().then(setMeetings); }, []);
+  const openFollowUps = meetings.reduce((n, m) => n + (m.recap?.followUps.filter((f) => !f.done).length ?? 0), 0);
   const [draft, setDraft] = useState<DraftState>({ draft: null, preparing: false });
   const [live, setLive] = useState<LiveState>({ status: "ended", events: [] });
   const [next, setNext] = useState<{ label: string } | null>(null);
@@ -37,8 +44,11 @@ export function App() {
     void window.penguin.getAccount().then(setAccount);
     void window.penguin.getUpdate().then(setUpdate);
     refreshNext();
+    reloadMeetings();
     return window.penguin.onEvent((raw) => {
       const e = raw as AppEvent;
+      if (e.kind === "recaps") reloadMeetings();
+      if (e.kind === "show" && VIEWS.includes(e.view as View)) setView(e.view as View);
       if (e.kind === "draft") setDraft({ draft: e.draft, preparing: e.preparing, error: e.error });
       if (e.kind === "log") setToast(e.text);
       if (e.kind === "account") { setAccount(e.account); if (e.error) setToast(e.error); }
@@ -53,7 +63,7 @@ export function App() {
         if (e.event.kind === "status" && e.event.status === "joining") setView("live");
       }
     });
-  }, [refreshNext]);
+  }, [refreshNext, reloadMeetings]);
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(""), 4000); return () => clearTimeout(t); }, [toast]);
 
@@ -90,6 +100,7 @@ export function App() {
           <button key={n.id} className={`rail-btn ${view === n.id ? "active" : ""}`} onClick={() => setView(n.id)} title={n.label} aria-label={n.label}>
             <Icon name={n.icon} />
             {n.id === "live" && inCall && <span className="badge" />}
+            {n.id === "recaps" && openFollowUps > 0 && <span className="badge count-badge">{openFollowUps}</span>}
           </button>
         ))}
       </nav>
@@ -100,7 +111,8 @@ export function App() {
           <p className="side-label">Workspace</p>
           {NAV.map((n) => (
             <button key={n.id} className={`channel ${view === n.id ? "active" : ""}`} onClick={() => setView(n.id)}>
-              <Icon name="hash" size={18} />{n.id === "today" ? "today" : n.id === "live" ? "live-meeting" : "sources"}
+              <Icon name="hash" size={18} />{n.channel}
+              {n.id === "recaps" && openFollowUps > 0 && <span className="count">{openFollowUps}</span>}
               {n.id === "live" && inCall && <span className="live-pill">LIVE</span>}
             </button>
           ))}
@@ -143,6 +155,7 @@ export function App() {
         {view === "today" && <TodayView settings={settings} draft={draft} prepare={prepare} goSources={() => setView("sources")} />}
         {view === "live" && <LiveView settings={settings} live={live} join={(u) => window.penguin.join(u).catch((e: unknown) => setToast(message(e)))} leave={() => void window.penguin.leave()} />}
         {view === "sources" && <SourcesView settings={settings} draft={draft.draft} save={save} prepare={prepare} />}
+        {view === "recaps" && <RecapsView meetings={meetings} reload={reloadMeetings} keepDays={settings.recap.keepDays} />}
         {view === "settings" && <SettingsView settings={settings} save={save} preview={(n) => botName(n, "google_meet")} account={account} />}
       </main>
 
