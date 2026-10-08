@@ -131,6 +131,13 @@ in its own venv (`vendor/venv-ft`, torch 2.6, MPS). Patches made locally, needed
   payment webhook, retries" (zero-shot garbled it even with 3 takes). Still off:
   "Peguin" -> "Beguin"/"Peg Nguyen", "auth" -> "Aft", "Thanks, will do" -> "Thanks, we do".
   PyTorch generation on MPS is slow (113 s for a 22 s update); irrelevant if shipped via ONNX.
+- **Run 3, all 60 sentences (3.8 min of audio)**, same settings, `FT_PRE=../../gen/dataset/preprocess-en-60
+  FT_OUT=../../gen/finetune-en-60`: 150 steps in 157 s, loss 14.6 -> 10.7, peak 12.4 GB. Clips in
+  `gen/ft-en-60/`. Word check, one take per sentence: about the same as run 2 with different slips
+  ("Thanks, will do" now exact; "payment to a Kooks" for "payment webhooks", "after the code",
+  "Peguin" -> "begging"/"Peking"). With single takes the differences look like sampling noise; the
+  app's per-sentence whisper re-check would catch most of them, and "Peguin" needs a pronunciation
+  entry. Similarity to the owner has to be judged by ear (gen/mujeeb vs ft-en-21 vs ft-en-60).
 - Reproduce run 2: `cd vendor/chatterbox-finetuning`, then those env vars plus
   `FT_PRE=../../gen/dataset/preprocess-en FT_OUT=../../gen/finetune-en PYTORCH_ENABLE_MPS_FALLBACK=1 ../venv-ft/bin/python train.py`;
   generate with the same env and `../venv-ft/bin/python ../../ft_generate.py --out ../../gen/ft-en-21`;
