@@ -84,13 +84,26 @@ SENTENCES = [
 ]
 
 
+# One microphone stream for the whole session. Stopping and restarting a CoreAudio
+# stream for every sentence sometimes hangs inside AudioDeviceStop on macOS.
+_chunks: list = []
+_recording = False
+
+
+def _on_audio(indata, frames, t, status):
+    if _recording:
+        _chunks.append(indata.copy())
+
+
 def record_until_enter():
-    chunks = []
-    def cb(indata, frames, t, status):
-        chunks.append(indata.copy())
-    with sd.InputStream(samplerate=SR, channels=1, dtype="float32", callback=cb):
+    global _recording, _chunks
+    _chunks = []
+    _recording = True
+    try:
         input("  ● recording, press Enter to stop ")
-    return np.concatenate(chunks)[:, 0] if chunks else np.zeros(0, dtype=np.float32)
+    finally:
+        _recording = False
+    return np.concatenate(_chunks)[:, 0] if _chunks else np.zeros(0, dtype=np.float32)
 
 
 def trim(audio):
@@ -141,7 +154,13 @@ def finish(meta_path):
 
 
 if __name__ == "__main__":
+    stream = sd.InputStream(samplerate=SR, channels=1, dtype="float32", callback=_on_audio)
+    stream.start()
     try:
         main()
     except KeyboardInterrupt:
-        sys.exit("\nStopped. Run again to continue.")
+        print("\nStopped. Run again to continue.")
+    finally:
+        # Abort rather than stop: no waiting on CoreAudio at exit.
+        stream.abort(ignore_errors=True)
+        stream.close(ignore_errors=True)
