@@ -164,23 +164,28 @@ The owner judged run 3 (60 sentences) "natural; flow and intonation need work, b
 - Gotcha: `turbo_v2.py` hangs at start-up when Hugging Face is unreachable (tokenizer check, no
   timeout). Run with `HF_HUB_OFFLINE=1`.
 
-### Fair comparison (`eval_ab.py`, `run_ab.sh`), 2026-10-08
+### Fair comparison (`eval_ab.py`, `run_ab.sh`, `run_ab_gentle.sh`), 2026-10-08
 5 lines x 8 seeds = 40 clips per variant, one take per sentence, no re-check, whisper small.en,
-owner's name spellings ignored. Scored so far (run paused because the Mac got hot):
+owner's name spellings ignored. Per-line errors: answer / defer / "Thanks, will do" / numbers / update.
 
-| Variant | Word error | Word-perfect clips |
-|---|---|---|
-| base: zero-shot from the consent read-through (`gen/me.wav`) | 7.5% +/- 1.5 | 38% |
-| ft: LoRA on 60 sentences, patched ONNX | 10.7% +/- 2.2 (29% on "Thanks, will do"; 2-3% on answer/defer) | 38% |
-| **natural: zero-shot from ~15 s of the owner's standup-style recordings** | **3.9% +/- 0.9** | **72%** |
+| Variant | Word error | Word-perfect | Per line (%) |
+|---|---|---|---|
+| **natural**: zero-shot from ~15 s of the owner's standup-style recordings | **3.9% +/- 0.9** | **72%** | 0 / 4 / 0 / 12 / 4 |
+| natavg: natural + fingerprint averaged over 60 recordings | 4.6% +/- 1.1 | 65% | 0 / 1 / 4 / 12 / 6 |
+| base: zero-shot from the consent read-through (what ships today) | 7.5% +/- 1.5 | 38% | 6 / 6 / 8 / 11 / 7 |
+| avgvoice: base + averaged fingerprint | 8.5% +/- 2.0 | 45% | 5 / 4 / 17 / 10 / 6 |
+| ft: LoRA r=16 on 60 sentences, patched ONNX | 10.7% +/- 2.2 | 38% | 3 / 2 / 29 / 10 / 9 |
+| head: output layer only, patched ONNX | 13.8% +/- 3.0 | 40% | 5 / 3 / 39 / 16 / 6 |
 
-The biggest gain is free: the reference clip should be natural standup talk, not a read script.
-Fine-tuning didn't win on accuracy (the owner heard it as more natural; that needs the blind test).
-Still to run: `avgvoice` (speaker fingerprint averaged over all 60 recordings, rescaled to the
-encoder's fixed norm 13.856; single-clip fingerprints only agree at cosine 0.60-0.85), `natavg`
-(natural + averaged), `head` (output layer only: FT_TARGETS=spkr_enc FT_SAVE_MODULES=speech_head
-FT_LORA_R=1), then a blind listening set. Resume with `bash run_ab.sh` after removing finished
-variants from its loop.
+Conclusions:
+- **The reference clip is the lever.** Natural standup talk roughly halves errors vs a read script,
+  with no training. Product change: record the sample as natural talk (or pick the best natural
+  stretch from what the owner records).
+- Averaging the speaker fingerprint (single-clip fingerprints agree only at cosine 0.60-0.85;
+  averaged and rescaled to the fixed norm 13.856) doesn't help.
+- Both trained variants break very short lines ("Thanks, will do"); otherwise competitive, not better.
+- Blind listening set for naturalness: `gen/blind/NN-A.wav` / `NN-B.wav` (7 pairs: natural vs ft,
+  natural vs base, ft vs base, same update, shuffled); answers in `gen/blind-key.json`.
 
 ### Zero-shot comparison (same sample, same lines)
 - `zeroshot.py --model omnivoice|qwen`: OmniVoice (k2-fsa, Apache 2.0) in `vendor/venv-zs`,

@@ -129,7 +129,11 @@ class Turbo:
                 continue
             paths[name] = hf_hub_download(MODEL_ID, subfolder="onnx", filename=filename, local_dir=local)
             hf_hub_download(MODEL_ID, subfolder="onnx", filename=f"{filename}_data", local_dir=local)
-        self.s = {k: onnxruntime.InferenceSession(p, providers=["CPUExecutionProvider"]) for k, p in paths.items()}
+        opts = onnxruntime.SessionOptions()
+        # PEGUIN_ORT_THREADS caps CPU cores (cooler, a little slower); default: onnxruntime decides.
+        if os.environ.get("PEGUIN_ORT_THREADS"):
+            opts.intra_op_num_threads = int(os.environ["PEGUIN_ORT_THREADS"])
+        self.s = {k: onnxruntime.InferenceSession(p, opts, providers=["CPUExecutionProvider"]) for k, p in paths.items()}
         self.tok = AutoTokenizer.from_pretrained(MODEL_ID)
         self.kv = [x for x in self.s["language_model"].get_inputs() if "past_key_values" in x.name]
 
