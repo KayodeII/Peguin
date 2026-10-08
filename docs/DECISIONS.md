@@ -2,6 +2,11 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-08: Speak in sentences, stop when talked over
+
+- **Answers are spoken a sentence at a time.** The answer text is split into sentences and each is synthesised and sent as soon as it's ready; the meeting page queues the chunks and plays them back to back, keeping the mic on from the first chunk until the last ends (an end marker closes the turn). With the owner's voice this cuts the wait before Peguin starts talking roughly in half. Claude's text itself isn't streamed yet.
+- **Talking over Peguin stops it.** About 0.8 s of someone else's continuous speech while Peguin talks (short enough to feel polite, long enough to skip coughs and "mm-hm") stops playback at once, mutes, and drops anything still being prepared. What they say is heard straight away: `TurnDetector.interrupted(now)` ends the echo tail but keeps the follow-up window, so "wait, is that merged?" is answered and people talking among themselves aren't. It's a setting (on by default) because a participant's echo of Peguin could trigger it in some rooms.
+
 ## 2026-10-08: Speaking in the owner's own voice, on their Mac
 
 Opt-in, in Settings > Voice. Chatterbox Turbo (Resemble AI, MIT) runs through onnxruntime-node in the Electron main process with the pure-JS `@huggingface/tokenizers`, so there is no Python and no cloud call; findings and timings are in `spikes/voice/README.md`.

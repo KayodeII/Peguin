@@ -270,28 +270,63 @@
     .filter((s) => s.track?.kind === "audio")
     .map((s) => `${s.track.enabled ? "enabled" : "DISABLED"}/${s.track.readyState}`);
 
-  bridge.onSpeak(async (bytes) => {
+  // Speech arrives as one or more WAV chunks (a sentence each), then an end
+  // marker. Chunks play back to back in order; the mic is on from the first
+  // chunk until the last one finishes. A stop (someone talked over Peguin)
+  // cuts it off at once.
+  let active = false, ended = false, stopped = false, pending = 0, nextAt = 0, peak = 0, sources = [];
+  let chain = Promise.resolve();
+  const meter = new Float32Array(voiceMeter.fftSize);
+  let sampler = 0;
+  const finish = (why) => {
+    active = false; speaking = false; clearInterval(sampler);
+    driver.micOff();
+    log(`${why}; our voice peak level was ${peak.toFixed(3)} (0 means silence went out); muted again`);
+  };
+  const maybeDone = () => {
+    if (active && ended && pending === 0) { finish("finished speaking"); bridge.playbackEnded(); }
+  };
+  const play = async (bytes) => {
     if (state !== "in_call") return; // only the frame that's in the meeting speaks
-    speaking = true; // also stops the housekeeping loop from muting us mid-sentence
-    try {
+    if (!active) {
+      active = true; ended = false; stopped = false; pending = 0; peak = 0; sources = [];
+      speaking = true; // also stops the housekeeping loop from muting us mid-sentence
       if (driver.micOn()) await new Promise((r) => setTimeout(r, 600)); // let the unmute land
       if (ctx.state === "suspended") await ctx.resume();
       log(`audio context: ${ctx.state}; outgoing WebRTC audio senders: ${senders().join(", ") || "none (may be non-WebRTC)"}`);
+      nextAt = ctx.currentTime;
+      sampler = setInterval(() => { voiceMeter.getFloatTimeDomainData(meter); for (const v of meter) peak = Math.max(peak, Math.abs(v)); }, 100);
+    }
+    pending++;
+    try {
       const buf = await ctx.decodeAudioData(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+      if (!active) return; // stopped while decoding
       const src = ctx.createBufferSource();
       src.buffer = buf; src.connect(voice); src.connect(voiceMeter);
-      let peak = 0;
-      const meter = new Float32Array(voiceMeter.fftSize);
-      const sample = setInterval(() => {
-        voiceMeter.getFloatTimeDomainData(meter);
-        for (const v of meter) peak = Math.max(peak, Math.abs(v));
-      }, 100);
-      src.onended = () => {
-        clearInterval(sample); speaking = false; driver.micOff();
-        log(`our voice peak level was ${peak.toFixed(3)} (0 means silence went out); muted again`);
-        bridge.playbackEnded();
-      };
-      src.start();
-    } catch (e) { speaking = false; driver.micOff(); log(`playback failed: ${e}`); bridge.playbackEnded(); }
+      const at = Math.max(ctx.currentTime + 0.02, nextAt);
+      nextAt = at + buf.duration;
+      sources.push(src);
+      src.onended = () => { sources = sources.filter((x) => x !== src); pending--; maybeDone(); };
+      src.start(at);
+    } catch (e) {
+      pending--; log(`playback failed: ${e}`); maybeDone();
+    }
+  };
+  bridge.onSpeak((bytes) => { chain = chain.then(() => play(bytes)); });
+  bridge.onSpeakEnd(() => {
+    chain = chain.then(() => {
+      if (state !== "in_call" || stopped) return; // after a stop the turn is already free
+      ended = true;
+      if (active) maybeDone();
+      else bridge.playbackEnded(); // nothing played (every chunk failed): still free the turn
+    });
+  });
+  bridge.onStop(() => {
+    chain = chain.then(() => {
+      if (!active) return;
+      for (const src of sources) { src.onended = null; try { src.stop(); } catch { /* already done */ } }
+      sources = []; pending = 0; stopped = true;
+      finish("stopped: someone started talking");
+    });
   });
 })();

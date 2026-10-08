@@ -59,6 +59,8 @@ export const Settings = z.preprocess(migrate, z.object({
   }).default({ theme: "system", accent: "blue" }),
   /** "standard" is the built-in voice; "mine" is the owner's own (opt-in, recorded in Settings). Every value is the owner's preference. */
   voice: Voice.default(() => Voice.parse({})),
+  /** Stop speaking when someone talks over Peguin, and listen to them. */
+  stopWhenInterrupted: z.boolean().default(true),
   runHidden: z.boolean().default(true),
   onboarded: z.boolean().default(false),
 }));

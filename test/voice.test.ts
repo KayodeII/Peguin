@@ -115,3 +115,39 @@ describe("own voice: settings and disclosure", () => {
     expect(lines(s, null, true).update).toMatch(/^Hi everyone, I'm Peguin, Mujeeb's AI assistant, speaking in Mujeeb's voice\. /);
   });
 });
+
+describe("talking over Peguin", async () => {
+  const { createListener } = await import("../desktop/src/main/speech/whisper.js");
+  // 100 ms chunks of 16 kHz PCM16: a tone (voice) or silence.
+  const chunk = (voiced: boolean) => {
+    const a = new Int16Array(1600);
+    if (voiced) for (let i = 0; i < a.length; i++) a[i] = Math.round(Math.sin(i / 5) * 6000);
+    return a.buffer;
+  };
+  const listener = () => {
+    let fired = 0;
+    const feed = createListener({
+      whisperUrl: "http://127.0.0.1:9", names: [], onUtterance: () => {}, onError: () => {},
+      onSustainedSpeech: () => { fired++; }, sustainedMs: 800,
+    });
+    return { feed, fired: () => fired };
+  };
+
+  it("fires once someone has talked for 0.8 s, and only once per utterance", () => {
+    const l = listener();
+    for (let i = 0; i < 7; i++) l.feed(chunk(true));
+    expect(l.fired()).toBe(0);
+    l.feed(chunk(true));
+    expect(l.fired()).toBe(1);
+    for (let i = 0; i < 10; i++) l.feed(chunk(true));
+    expect(l.fired()).toBe(1);
+  });
+
+  it("ignores a cough or a short 'mm-hm'", () => {
+    const l = listener();
+    for (let i = 0; i < 3; i++) l.feed(chunk(true));
+    for (let i = 0; i < 8; i++) l.feed(chunk(false)); // utterance ends
+    for (let i = 0; i < 3; i++) l.feed(chunk(true));
+    expect(l.fired()).toBe(0);
+  });
+});

@@ -55,6 +55,39 @@ describe("TurnDetector", () => {
     expect(d).toEqual({ action: "answer", question: "is the dispute webhook PR merged?" });
   });
 
+  it("hears someone who talked over Peguin straight away, with no echo tail", () => {
+    const t = new TurnDetector({ names });
+    t.markUpdateGiven();
+    t.setSpeaking(true, 1000);
+    t.interrupted(5000); // they started talking and Peguin stopped
+    const d = t.onUtterance("Mujeeb, sorry, is the dispute webhook PR merged?", 5600);
+    expect(d).toEqual({ action: "answer", question: "Mujeeb, sorry, is the dispute webhook PR merged?" });
+  });
+
+  it("an interruption doesn't make Peguin answer people talking among themselves", () => {
+    const t = new TurnDetector({ names });
+    t.markUpdateGiven();
+    t.setSpeaking(true, 1000);
+    t.interrupted(5000);
+    expect(t.onUtterance("Sorry, Sarah, can you share your screen?", 5600).action).toBe("none");
+  });
+
+  it("answers an unnamed follow-up from someone who interrupted", () => {
+    const t = new TurnDetector({ names });
+    t.markUpdateGiven();
+    t.setSpeaking(true, 1000);
+    t.interrupted(5000);
+    expect(t.onUtterance("wait, is the dispute webhook PR merged?", 5600).action).toBe("answer");
+  });
+
+  it("a normal finish still keeps the echo tail", () => {
+    const t = new TurnDetector({ names });
+    t.markUpdateGiven();
+    t.setSpeaking(true, 1000);
+    t.setSpeaking(false, 5000);
+    expect(t.onUtterance("Mujeeb, is the dispute webhook PR merged?", 5600).action).toBe("none");
+  });
+
   it("does not treat the floor moving on as a follow-up", () => {
     const t = new TurnDetector({ names });
     t.markUpdateGiven();

@@ -140,11 +140,22 @@ export class TurnDetector {
   }
 
   get hasGivenUpdate() { return this.updateGiven; }
+  get isSpeaking() { return this.speaking; }
 
   /** Call when Peguin starts/stops playing audio into the call. */
   setSpeaking(on: boolean, now: number) {
     this.speaking = on;
     if (!on) this.lastSpokeEndedAt = now;
+  }
+
+  /**
+   * Someone talked over Peguin and it stopped. What they're saying is a person,
+   * not an echo of Peguin, so it's heard straight away (no echo tail), and an
+ * unnamed follow-up ("wait, is that merged?") still counts.
+   */
+  interrupted(now: number) {
+    this.speaking = false;
+    this.lastSpokeEndedAt = now - this.o.echoTailMs; // tail already over; the follow-up window still runs
   }
 
   markUpdateGiven() { this.updateGiven = true; }

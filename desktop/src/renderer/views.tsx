@@ -206,6 +206,10 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
           <div className="row-main"><strong>Auto-join</strong><p>Prepares 15 minutes before, joins at the start.</p></div>
           <Toggle on={st.auto} onChange={(v) => setStandup({ auto: v })} label="Join automatically" />
         </div>
+        <div className="row-card">
+          <div className="row-main"><strong>Stop when someone talks over Peguin</strong><p>It stops mid-sentence and listens, then answers if they asked it something.</p></div>
+          <Toggle on={s.stopWhenInterrupted} onChange={(v) => setS({ ...s, stopWhenInterrupted: v })} label="Stop when someone talks over Peguin" />
+        </div>
 
         <h3 className="section-label">Appearance</h3>
         <div className="themes" role="radiogroup" aria-label="Theme">
