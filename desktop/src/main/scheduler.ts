@@ -27,6 +27,26 @@ export function due(s: Settings, now: Date, done: { prepared?: string; joined?: 
   return null;
 }
 
+/** A specific standup from a calendar: one occurrence, with its own link. */
+export type Planned = { id: string; url: string; start: number; title?: string };
+
+/** What should happen for a calendar standup right now (prepare 15 min before, join a minute before, up to 10 min late). */
+export function dueFor(p: Planned, now: Date, done: { prepared: Set<string>; joined: Set<string> }): "prepare" | "join" | null {
+  const t = now.getTime(), m = 60_000;
+  if (t >= p.start - JOIN_MINUTES * m && t < p.start + 10 * m && !done.joined.has(p.id)) return "join";
+  if (t >= p.start - PREP_MINUTES * m && t < p.start - JOIN_MINUTES * m && !done.prepared.has(p.id)) return "prepare";
+  return null;
+}
+
+/** "Today at 09:30", "Tomorrow at 09:30", "Friday at 09:30", in the owner's timezone. */
+export function whenLabel(start: number, now: Date, timeZone: string): string {
+  const day = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone }).format(d);
+  const at = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(start));
+  const diff = Math.round((Date.parse(day(new Date(start))) - Date.parse(day(now))) / 86_400_000);
+  const name = diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "long" }).format(new Date(start));
+  return `${name} at ${at}`;
+}
+
 /** Next standup start, for the UI ("Tomorrow 09:30"). */
 export function nextStandup(s: Settings, now = new Date()): { label: string } | null {
   const { url, time, days } = s.standup;
@@ -44,23 +64,35 @@ export function nextStandup(s: Settings, now = new Date()): { label: string } | 
 
 export function startScheduler(opts: {
   settings: () => Settings;
+  /** The next standup from the owner's calendars, when calendars are on (null otherwise). */
+  calendarStandup: (s: Settings) => Promise<Planned | null>;
   prepare: () => Promise<unknown>;
   join: (url: string) => Promise<unknown>;
   log: (msg: string) => void;
 }) {
   const done: { prepared?: string; joined?: string } = {};
+  const calendarDone = { prepared: new Set<string>(), joined: new Set<string>() };
   let busy = false;
   const tick = async () => {
     if (busy) return;
-    const s = opts.settings();
-    const action = due(s, new Date(), done);
-    if (!action) return;
     busy = true;
-    const today = localClock(new Date(), s.timezone).date;
     try {
+      const s = opts.settings();
+      if (!s.standup.auto) return;
+      // A standup in the calendar wins; the fixed time is the fallback.
+      const planned = await opts.calendarStandup(s).catch(() => null);
+      if (planned) {
+        const action = dueFor(planned, new Date(), calendarDone);
+        if (action === "prepare") { calendarDone.prepared.add(planned.id); opts.log(`Preparing your update for ${planned.title || "your standup"}`); await opts.prepare(); }
+        if (action === "join") { calendarDone.joined.add(planned.id); opts.log(`Joining ${planned.title || "your standup"}`); await opts.join(planned.url); }
+        return;
+      }
+      const action = due(s, new Date(), done);
+      if (!action) return;
+      const today = localClock(new Date(), s.timezone).date;
       if (action === "prepare") { done.prepared = today; opts.log("Preparing today's update"); await opts.prepare(); }
       else { done.joined = today; opts.log("Joining your standup"); await opts.join(s.standup.url); }
-    } catch (e) { opts.log(`Scheduled ${action} failed: ${e instanceof Error ? e.message : e}`); }
+    } catch (e) { opts.log(`Scheduled step failed: ${e instanceof Error ? e.message : e}`); }
     finally { busy = false; }
   };
   const timer = setInterval(() => void tick(), 20000);

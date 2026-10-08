@@ -51,7 +51,7 @@ src/
     brain/          claude.ts (draft, follow-up, recap prompts), slack.ts
     speech/         deepgram.ts (openListener, speak)
 public/agent.html   page the bot loads in the call: its camera, mic and speaker
-desktop/            Electron + React desktop app (see desktop/README.md); reuses src/realtime/turn.ts
+desktop/            Electron + React desktop app; reuses src/realtime/turn.ts. Calendars in desktop/src/main/calendar/ (adapter per source), Swift EventKit helper in desktop/native/
 cloud/              Cloudflare Worker + D1: accounts, Paystack, licences, server-side Claude, help chat; serves web/dist
 web/                React + Vite website (built into web/dist, served by the Worker)
 spikes/             throwaway experiments, not part of the build

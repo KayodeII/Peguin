@@ -59,6 +59,14 @@ export const Settings = z.preprocess(migrate, z.object({
   }).default({ theme: "system", accent: "blue" }),
   /** "standard" is the built-in voice; "mine" is the owner's own (opt-in, recorded in Settings). Every value is the owner's preference. */
   voice: Voice.default(() => Voice.parse({})),
+  /** Find standups in the owner's calendars instead of (or as well as) the fixed time above. */
+  calendar: z.object({
+    enabled: z.boolean().default(false),
+    /** Read the Mac's Calendar (every account added to macOS). Links and Calendly live in calendar.bin, encrypted. */
+    mac: z.boolean().default(false),
+    /** A meeting counts as a standup when its title has one of these words. The owner's list. */
+    words: z.array(z.string().trim().min(1).max(40)).max(20).default(["standup", "stand-up", "stand up", "daily", "scrum"]),
+  }).default(() => ({ enabled: false, mac: false, words: ["standup", "stand-up", "stand up", "daily", "scrum"] })),
   /** After each meeting: a recap with follow-ups, kept encrypted on this Mac for `keepDays`. */
   recap: z.object({
     /** Ask Claude for a short summary and extra follow-ups (the transcript is sent, like answers are). */

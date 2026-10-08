@@ -15,10 +15,12 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "setup:whisper": "bash scripts/setup-whisper.sh",
     "icons": "electron scripts/icons.cjs && bash scripts/icns.sh && node scripts/tray.mjs",
-    "dist:mac": "npm run build && bash scripts/build-whisper-release.sh && electron-builder --mac --arm64"
+    "dist:mac": "npm run build && bash scripts/build-whisper-release.sh && bash scripts/build-calendar-helper.sh && electron-builder --mac --arm64",
+    "setup:calendar": "bash scripts/build-calendar-helper.sh"
   },
   "dependencies": {
     "@huggingface/tokenizers": "^0.2.0",
+    "ical.js": "^2.2.1",
     "onnxruntime-node": "^1.30.0",
     "zod": "^4.6.5"
   },
@@ -41,7 +43,7 @@
   "build": {
     "appId": "co.peguin.app",
     "productName": "Peguin",
-    "copyright": "© Peguin",
+    "copyright": "\u00a9 Peguin",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -68,6 +70,10 @@
       {
         "from": "build/whisper/whisper-server",
         "to": "whisper/whisper-server"
+      },
+      {
+        "from": "build/calendar/calendar-helper",
+        "to": "calendar/calendar-helper"
       }
     ],
     "protocols": [
@@ -93,7 +99,9 @@
       "hardenedRuntime": false,
       "minimumSystemVersion": "12.0",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Peguin records a short sample of your voice, only when you choose to, so it can speak in your voice in meetings."
+        "NSMicrophoneUsageDescription": "Peguin records a short sample of your voice, only when you choose to, so it can speak in your voice in meetings.",
+        "NSCalendarsFullAccessUsageDescription": "Peguin reads your calendar to find your standups and join them for you. Events stay on this Mac.",
+        "NSCalendarsUsageDescription": "Peguin reads your calendar to find your standups and join them for you. Events stay on this Mac."
       }
     },
     "dmg": {

@@ -268,3 +268,27 @@ input[type="range"]:focus { outline: none; }
 .transcript strong { margin-right: 6px; color: var(--ink-strong); font-weight: 600; }
 .transcript .t-system { color: var(--muted); font-style: normal; }
 .recap-actions { margin-top: 24px; }
+
+/* Calendars */
+.calendars { margin-bottom: 8px; }
+.row-card.column { flex-direction: column; align-items: stretch; gap: 10px; }
+.row-head { display: flex; align-items: center; gap: 16px; }
+.link-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; background: var(--main); }
+.link-row .mono { flex: 1; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+.inline-form { display: flex; gap: 8px; }
+.words { margin: 12px 0; }
+.words strong { display: block; margin-bottom: 8px; color: var(--ink-strong); font-size: 14px; }
+.chips-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.word-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--active); font-size: 13px; }
+.word-chip button { width: 18px; height: 18px; border-radius: 50%; color: var(--muted); line-height: 1; }
+.word-chip button:hover { background: var(--hover); color: var(--ink-strong); }
+.chips-row input { width: 140px; padding: 4px 10px; border-radius: 999px; font-size: 13px; }
+.upcoming { margin: 12px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); }
+.upcoming-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.upcoming-head strong { color: var(--ink-strong); }
+.up-row { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+.up-row.muted { opacity: .8; }
+.up-row .row-main strong { font-size: 14px; }
+.up-row .row-main p { margin: 0; font-size: 12.5px; color: var(--muted); }
+.other-head { margin-top: 10px !important; font-size: 12.5px; }
+.side-card .side-title { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

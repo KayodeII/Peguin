@@ -30,7 +30,7 @@ export function App() {
   const openFollowUps = meetings.reduce((n, m) => n + (m.recap?.followUps.filter((f) => !f.done).length ?? 0), 0);
   const [draft, setDraft] = useState<DraftState>({ draft: null, preparing: false });
   const [live, setLive] = useState<LiveState>({ status: "ended", events: [] });
-  const [next, setNext] = useState<{ label: string } | null>(null);
+  const [next, setNext] = useState<{ label: string; title?: string } | null>(null);
   const [toast, setToast] = useState("");
   const [account, setAccount] = useState<Account | null>(null);
   const [model, setModel] = useState<{ progress: number; error?: string } | null>(null);
@@ -64,6 +64,10 @@ export function App() {
       }
     });
   }, [refreshNext, reloadMeetings]);
+
+  // Calendars change on their own (and are connected outside the save flow), so check now and then.
+  useEffect(() => { const t = setInterval(refreshNext, 3 * 60_000); return () => clearInterval(t); }, [refreshNext]);
+  useEffect(() => { if (view === "settings") return; refreshNext(); }, [view, refreshNext]);
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(""), 4000); return () => clearTimeout(t); }, [toast]);
 
@@ -139,9 +143,11 @@ export function App() {
           )}
           <p className="side-label">Next standup</p>
           <div className="side-card">
-            {settings.standup.url
-              ? <><strong>{next?.label ?? "Not scheduled"}</strong><span>{settings.standup.auto ? "Auto-join on" : "Auto-join off"}</span></>
-              : <><strong>None set</strong><button className="link" onClick={() => setView("settings")}>Add standup</button></>}
+            {next
+              ? <><strong>{next.label}</strong>{next.title && <span className="side-title">{next.title}</span>}<span>{settings.standup.auto ? "Auto-join on" : "Auto-join off"}</span></>
+              : settings.standup.url || settings.calendar.enabled
+                ? <><strong>Not scheduled</strong><span>{settings.calendar.enabled ? "No standup found in your calendars" : "Check your standup days"}</span></>
+                : <><strong>None set</strong><button className="link" onClick={() => setView("settings")}>Add standup</button></>}
           </div>
         </div>
         <footer className="userbar">

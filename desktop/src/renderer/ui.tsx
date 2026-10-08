@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { siClaude, siGit, siGithub, siGooglecalendar, siGooglemeet, siJira, siLinear, siZoom, type SimpleIcon } from "simple-icons";
+import { siApple, siCalendly, siClaude, siGit, siGithub, siGooglecalendar, siGooglemeet, siJira, siLinear, siZoom, type SimpleIcon } from "simple-icons";
 
 /** Small inline icons (24px grid, stroke follows currentColor). */
 const paths: Record<string, ReactNode> = {
@@ -22,7 +22,8 @@ export function Icon({ name, size = 20 }: { name: keyof typeof paths | string; s
 }
 
 const BRANDS: Record<string, SimpleIcon> = {
-  git: siGit, github: siGithub, claude_code: siClaude, calendar: siGooglecalendar,
+  git: siGit, github: siGithub, claude_code: siClaude, calendar: siGooglecalendar, google_calendar: siGooglecalendar,
+  apple_calendar: siApple, calendly: siCalendly,
   linear: siLinear, jira: siJira, google_meet: siGooglemeet, zoom: siZoom,
 };
 
