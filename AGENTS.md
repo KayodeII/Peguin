@@ -93,6 +93,10 @@ Live meetings need public URLs (ngrok) for `API_PUBLIC_URL` and `REALTIME_PUBLIC
 - Release from an up-to-date `main`: `npm run release -- patch|minor|major|x.y.z` bumps the version, commits `Release vX.Y.Z` and tags it. `git push origin main --follow-tags` publishes; `.github/workflows/release.yml` builds the .dmg and the site picks it up within ten minutes. See `docs/RELEASING.md`.
 - The Worker and website aren't versioned: deploy them after merging with `cd cloud && npx wrangler deploy` (and `npx wrangler d1 migrations apply penguin --remote` first when there's a new migration).
 
+## Privacy Policy and Terms
+
+`web/src/pages/Legal.tsx` describes what the code actually does with data. When a change stores something new, sends something to another service, or changes retention, update the policy in the same PR.
+
 ## Gotchas
 
 - Webhooks can arrive late, duplicated or out of order. `setMeetingStatus` never moves a meeting out of `ended`/`failed`, and recap is deduped by job id.

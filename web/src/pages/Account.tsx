@@ -64,6 +64,7 @@ export function SignIn() {
               <label>Work email<input type="email" required autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
               <button className="btn wide" disabled={busy}>{busy ? "Sending" : "Email me a sign-in link"}</button>
             </form>
+            <p className="fine agree">By continuing you agree to the <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy Policy</Link>.</p>
           </>
         )}
       </div>
