@@ -1,13 +1,13 @@
 // Server-side Claude for subscribers: drafts the update and answers live
 // questions from the facts, with the same prompts as the desktop CLI path.
 import Anthropic from "@anthropic-ai/sdk";
-import { answerContext, answerSystem, draftSystem, draftUser, parseDraft, type PromptActivity } from "../../src/core/brain/prompts.js";
+import { answerContext, answerSystem, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser, type PromptActivity } from "../../src/core/brain/prompts.js";
 import type { User } from "./auth.js";
 import { isEntitled, subscriptionOf } from "./billing.js";
 import { HttpError, need, type Env } from "./env.js";
 import { body, json } from "./http.js";
 
-type Kind = "draft" | "answer";
+type Kind = "draft" | "answer" | "recap";
 
 async function entitled(env: Env, user: User) {
   if (!isEntitled(await subscriptionOf(env, user.id), user.trial_ends_at)) throw new HttpError(402, "Your trial has ended and there's no active plan.");
@@ -15,7 +15,7 @@ async function entitled(env: Env, user: User) {
 
 /** Per-user daily cap, so a stuck client can't run up the bill. */
 async function countUse(env: Env, user: User, kind: Kind) {
-  const limit = Number(kind === "draft" ? env.DRAFTS_PER_DAY : env.ANSWERS_PER_DAY);
+  const limit = Number({ draft: env.DRAFTS_PER_DAY, answer: env.ANSWERS_PER_DAY, recap: env.RECAPS_PER_DAY }[kind]);
   const day = new Date().toISOString().slice(0, 10);
   const row = await env.DB.prepare(
     `INSERT INTO usage (user_id, day, kind, count) VALUES (?, ?, ?, 1)
@@ -58,4 +58,14 @@ export async function answer(env: Env, req: Request, user: User): Promise<Respon
   // Live in a meeting: low effort keeps the reply quick.
   const text = await ask(env, answerSystem(b.name), answerContext(b.facts ?? [], b.script, (b.recent ?? []).slice(-12), b.question), "low");
   return json({ text });
+}
+
+/** A private recap of a meeting Peguin attended, from its transcript only. */
+export async function recap(env: Env, req: Request, user: User): Promise<Response> {
+  await entitled(env, user);
+  const b = await body<{ name?: string; lines?: string[] }>(req);
+  if (!b.name || !Array.isArray(b.lines)) throw new HttpError(400, "Send name and lines.");
+  await countUse(env, user, "recap");
+  const lines = b.lines.slice(-400).map((l) => String(l).slice(0, 500));
+  return json(parseRecap(await ask(env, recapSystem(b.name), recapUser(lines), "low")));
 }

@@ -21,6 +21,10 @@ const api = {
   voiceDelete: () => ipcRenderer.invoke("voice:delete"),
   voiceDeleteModel: () => ipcRenderer.invoke("voice:delete-model"),
   voicePreview: () => ipcRenderer.invoke("voice:preview"),
+  meetings: () => ipcRenderer.invoke("meetings:list"),
+  setFollowUp: (id: string, index: number, done: boolean) => ipcRenderer.invoke("meetings:follow-up", id, index, done),
+  deleteMeeting: (id: string) => ipcRenderer.invoke("meetings:delete", id),
+  deleteAllMeetings: () => ipcRenderer.invoke("meetings:delete-all"),
   voiceSayWord: (word: string) => ipcRenderer.invoke("voice:say-word", word),
   onEvent: (cb: (e: unknown) => void) => {
     const h = (_e: unknown, ev: unknown) => cb(ev);

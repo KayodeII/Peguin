@@ -41,3 +41,22 @@ export function parseDraft(text: string): { script: string; facts: string[] } {
   const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
   return { script: String(json.script), facts: (json.facts ?? []).map(String) };
 }
+
+export function recapSystem(name: string): string {
+  return `You write a short private recap for ${name} of a standup that their AI assistant, Peguin, attended for them.
+Rules:
+- Use ONLY the transcript. Speakers other than Peguin aren't identified; say "someone" or "the team", never guess names.
+- "summary": two or three plain sentences: whether Peguin gave the update, what the team asked or raised that matters to ${first(name)}, and anything decided that affects them.
+- "followUps": short, specific things ${first(name)} should do because of this meeting: questions Peguin couldn't answer, requests made of them, things they were asked to check. Start each with a verb. No duplicates, nothing that's already done, nothing invented. An empty list is fine.
+- Transcripts come from speech recognition and contain mistakes; ignore fragments that don't make sense rather than guessing.
+Return JSON only: {"summary": string, "followUps": string[]}`;
+}
+
+export function recapUser(lines: string[]): string {
+  return `Transcript:\n${lines.join("\n") || "(nothing was heard)"}`;
+}
+
+export function parseRecap(text: string): { summary: string; followUps: string[] } {
+  const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+  return { summary: String(json.summary ?? "").trim(), followUps: (Array.isArray(json.followUps) ? json.followUps : []).map(String).filter(Boolean).slice(0, 12) };
+}

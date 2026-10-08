@@ -1,6 +1,6 @@
 import { appConnect, appSignOut, appToken, emailStart, emailVerify, googleCallback, googleStart, requireUser, signOut } from "./auth.js";
 import { checkout, currentPlan, isEntitled, portal, subscriptionOf, webhook } from "./billing.js";
-import { answer, draft } from "./claude.js";
+import { answer, draft, recap } from "./claude.js";
 import { HttpError, type Env } from "./env.js";
 import { json } from "./http.js";
 import { issueLicense } from "./license.js";
@@ -38,6 +38,7 @@ const routes: Record<string, Handler> = {
   "GET /api/license": authed((env, _req, user) => issueLicense(env, user)),
   "POST /api/draft": authed((env, req, user) => draft(env, req, user)),
   "POST /api/answer": authed((env, req, user) => answer(env, req, user)),
+  "POST /api/recap": authed((env, req, user) => recap(env, req, user)),
 
   "POST /api/support/chat": (env, req) => supportChat(env, req),
   "POST /api/support/message": (env, req) => supportMessage(env, req),

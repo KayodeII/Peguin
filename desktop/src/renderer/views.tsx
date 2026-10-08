@@ -161,6 +161,7 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
   const [s, setS] = useState(settings);
   const [aliases, setAliases] = useState(settings.aliases.join(", "));
   const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   // Appearance saves instantly; keep other unsaved edits when it does.
   useEffect(() => { setS((prev) => ({ ...prev, appearance: settings.appearance })); }, [settings.appearance]);
   // The voice switch also saves instantly.
@@ -229,6 +230,24 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
 
         <h3 className="section-label" id="voice">Voice</h3>
         <VoiceSettings settings={settings} draft={s} setDraft={setS} save={save} />
+
+        <h3 className="section-label">Recaps</h3>
+        <div className="row-card">
+          <div className="row-main"><strong>Summarize with Claude</strong><p>Sends the meeting transcript for a short summary and extra follow-ups. Off: you still get every question Peguin deferred.</p></div>
+          <Toggle on={s.recap.summarize} onChange={(v) => setS({ ...s, recap: { ...s.recap, summarize: v } })} label="Summarize with Claude" />
+        </div>
+        <div className="field-grid">
+          <label>Keep recaps for
+            <select value={s.recap.keepDays} onChange={(e) => setS({ ...s, recap: { ...s.recap, keepDays: Number(e.target.value) } })}>
+              {[7, 14, 30, 90, 365].map((d) => <option key={d} value={d}>{d === 365 ? "A year" : `${d} days`}</option>)}
+            </select>
+          </label>
+          <div className="label">&nbsp;
+            {confirmDelete
+              ? <button className="btn danger" onClick={() => { setConfirmDelete(false); void window.penguin.deleteAllMeetings(); }}>Yes, delete every recap</button>
+              : <button className="btn ghost" onClick={() => setConfirmDelete(true)}>Delete all recaps</button>}
+          </div>
+        </div>
 
         <h3 className="section-label">Advanced</h3>
         <label>Timezone<select value={s.timezone} onChange={(e) => setS({ ...s, timezone: e.target.value })}>{timezones.map((t) => <option key={t}>{t}</option>)}</select></label>

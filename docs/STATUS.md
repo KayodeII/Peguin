@@ -14,6 +14,7 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 - Writes the update from git, GitHub (via `gh`) and Claude Code sessions, 15 minutes before the scheduled standup; answers follow-ups from those facts only, otherwise defers. Claude through the Peguin account when subscribed, else the Claude CLI. Prompts write for the ear.
 - Speaks in the standard voice or, opt-in, the owner's own voice (Chatterbox Turbo on-device; live-recorded, encrypted sample; owner-set pronunciations, pause, expressiveness and checks; update made ahead and cached).
 - Answers are spoken a sentence at a time; Peguin stops and listens when someone talks over it (setting, on by default).
+- After each meeting, a recap in `#recaps`: follow-ups (every deferred question, plus Claude's), a short summary from the transcript (setting), what Peguin said, the transcript; encrypted, kept 30 days by default; a notification.
 - Discord-style UI with Notion themes; sign-in to the account via `peguin://`; update check every six hours.
 
 **Cloud (`cloud/`, Cloudflare Worker + D1) at www.peguin.co**
@@ -23,7 +24,7 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 
 ## Verified
 
-- `npm test` (78), typecheck for root, cloud, web and desktop; CI on every PR.
+- `npm test` (88), typecheck for root, cloud, web and desktop; CI on every PR.
 - Real calls (earlier builds): Meet and Zoom join, speak and listen with the owner on a phone.
 - Own voice end to end in Electron: encrypted sample, update generated and checked (~25 s), cached replay (0.01 s), fallback to the standard voice.
 - Meeting playback queue and talk-over stop, against a fake Meet page with the real preload and inject script: chunks play in order, mic unmutes and re-mutes, a stop cuts off at once and mutes.
@@ -38,6 +39,6 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 
 1. Real-call test of the current app: own voice, sentence-by-sentence answers, talking over Peguin. (Owner.)
 2. Calendar sync: find standups in Google Calendar and join them (Google verification needed past 100 users).
-3. After each meeting: an in-app recap (what was said, asked and deferred) and an optional Slack post.
+3. Optional Slack post of each recap (per-user webhook).
 4. Before charging strangers: Privacy Policy and Terms, Paystack live keys and final price, Resend DNS, `ANTHROPIC_API_KEY`, Apple Developer ID (notarised app, auto-update), watermarking cloned audio.
 5. Later: streaming Claude's answer text, Linear and Jira sources, Teams via ACS, Windows.

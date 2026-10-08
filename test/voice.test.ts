@@ -98,6 +98,7 @@ describe("own voice: audio", () => {
 describe("own voice: settings and disclosure", () => {
   it("starts with no built-in pronunciations and default tuning the owner can change", () => {
     expect(Settings.parse({}).voice).toEqual({ mode: "standard", pronunciations: [], pause: 0.32, expressiveness: 0.6, attempts: 3 });
+    expect(Settings.parse({}).recap).toEqual({ summarize: true, keepDays: 30 });
     expect(() => Settings.parse({ voice: { pause: 5 } })).toThrow();
   });
   it("migrates older voice settings instead of resetting everything", () => {

@@ -1,8 +1,10 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, shell, systemPreferences, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, systemPreferences, Tray } from "electron";
 import { existsSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { checkForUpdate, completeSignIn, refreshAccount, signOut, startSignIn, type Account, type Update } from "./account.js";
-import { answerQuestion, isFresh, loadDraft, prepareDraft, type Draft } from "./brain.js";
+import { answerQuestion, isFresh, loadDraft, prepareDraft, summarizeMeeting, type Draft } from "./brain.js";
+import { deferredFollowUps, headline, mergeFollowUps, transcriptLines, worthKeeping, type MeetingRecord } from "./meeting/record.js";
+import { deleteAllMeetings, deleteMeeting, listMeetings, saveMeeting, setFollowUpDone } from "./meetings.js";
 import { lines, meetingPaths, MeetingRunner, type MeetingEvent } from "./meeting/runner.js";
 import { nextStandup, startScheduler } from "./scheduler.js";
 import { loadSettings, saveSettings } from "./settings.js";
@@ -62,7 +64,9 @@ export type AppEvent =
   | { kind: "account"; account: Account | null; error?: string }
   | { kind: "model"; progress: number; error?: string }
   | { kind: "update"; update: Update | null }
-  | { kind: "voice"; progress: number; error?: string };
+  | { kind: "voice"; progress: number; error?: string }
+  | { kind: "recaps" }
+  | { kind: "show"; view: string };
 
 function send(e: AppEvent) {
   if (win && !win.isDestroyed()) win.webContents.send("app:event", e);
@@ -131,6 +135,7 @@ async function join(url: string) {
     answer: (q, recent) => answerQuestion(settings, draft, q, recent),
   });
   meeting = runner;
+  runner.on("record", (r) => void recapMeeting(r));
   runner.on("event", (event) => {
     send({ kind: "meeting", event });
     if (event.kind === "status" && (event.status === "ended" || event.status === "failed") && meeting === runner) meeting = null;
@@ -165,6 +170,36 @@ async function warmOwnVoice(draft: Draft) {
     send({ kind: "log", text: "Your update is ready in your voice." });
   } catch (e) {
     send({ kind: "log", text: `Couldn't prepare your voice ahead of time (${message(e)}). It'll be made when the meeting starts.` });
+  }
+}
+
+/**
+ * After a meeting: keep the record (encrypted), list every deferred question as a
+ * follow-up straight away, then, if the owner allows it, add Claude's summary
+ * and any extra follow-ups from the transcript. A notification says how it went.
+ */
+async function recapMeeting(r: MeetingRecord) {
+  if (!worthKeeping(r)) return;
+  const s = loadSettings();
+  const deferred = deferredFollowUps(r);
+  r.recap = { followUps: deferred.map((text) => ({ text, done: false })), createdAt: Date.now() };
+  saveMeeting(r);
+  send({ kind: "recaps" });
+  const lines = transcriptLines(r);
+  if (s.recap.summarize && lines.length) {
+    try {
+      const { summary, followUps } = await summarizeMeeting(s, lines);
+      r.recap = { summary: summary || undefined, followUps: mergeFollowUps(deferred, followUps).map((text) => ({ text, done: false })), createdAt: Date.now() };
+      saveMeeting(r);
+      send({ kind: "recaps" });
+    } catch (e) {
+      send({ kind: "log", text: `The recap has your follow-ups, but no summary (${message(e)}).` });
+    }
+  }
+  if (Notification.isSupported()) {
+    const n = new Notification({ title: "Standup covered", body: headline(r) });
+    n.on("click", () => { openWindow(); send({ kind: "show", view: "recaps" }); });
+    n.show();
   }
 }
 
@@ -226,6 +261,10 @@ ipcMain.handle("standup:next", () => nextStandup(loadSettings()));
 ipcMain.handle("meeting:join", (_e, url: string) => join(url));
 ipcMain.handle("meeting:leave", () => { meeting?.stop(); meeting = null; });
 ipcMain.handle("account:get", () => account);
+ipcMain.handle("meetings:list", () => listMeetings(loadSettings().recap.keepDays));
+ipcMain.handle("meetings:follow-up", (_e, id: string, index: number, done: boolean) => setFollowUpDone(String(id), Number(index), !!done));
+ipcMain.handle("meetings:delete", (_e, id: string) => { deleteMeeting(String(id)); });
+ipcMain.handle("meetings:delete-all", () => { deleteAllMeetings(); });
 ipcMain.handle("voice:status", () => voiceStatus());
 ipcMain.handle("voice:download", () => downloadVoiceModel().then(voiceStatus));
 ipcMain.handle("voice:mic", () => (process.platform === "darwin" ? systemPreferences.askForMediaAccess("microphone") : true));

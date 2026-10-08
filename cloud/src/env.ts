@@ -6,6 +6,7 @@ export interface Env {
   TRIAL_DAYS: string;
   DRAFTS_PER_DAY: string;
   ANSWERS_PER_DAY: string;
+  RECAPS_PER_DAY: string;
   ANTHROPIC_API_KEY?: string;
   PAYSTACK_SECRET_KEY?: string;
   PAYSTACK_PLAN_CODE?: string;
