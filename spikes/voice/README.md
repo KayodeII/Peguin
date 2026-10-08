@@ -143,6 +143,21 @@ in its own venv (`vendor/venv-ft`, torch 2.6, MPS). Patches made locally, needed
   generate with the same env and `../venv-ft/bin/python ../../ft_generate.py --out ../../gen/ft-en-21`;
   check words with `bash check.sh gen/ft-en-21` (whisper small.en; base.en is useless for this accent).
 
+### Shipping path: patch the trained weights into the ONNX files (works)
+The owner judged run 3 (60 sentences) "natural; flow and intonation need work, but good for a start".
+- `patch_onnx.py` merges the LoRA into Turbo's weights, then finds each changed weight in
+  Resemble's ONNX initializers **by content** (as is, transposed, or a q/k/v third of GPT-2's
+  fused c_attn) and swaps in the trained values. The graphs are untouched, so the app's
+  onnxruntime engine runs it as is. 96 of 97 changed weights matched (144 initializers).
+  The one miss is `cond_enc.spkr_enc` (1024x256): Resemble's export has no such initializer
+  (folded into the speech encoder's computation); leaving it at base values doesn't audibly hurt.
+- Patched clips (`gen/onnx-ft-60-clips/`, via `turbo_v2.py --model-dir gen/onnx-ft-60`, one take):
+  real-time (RTF 0.71-0.86, same as zero-shot) and clear. "merged the payment webhook retries"
+  came back **exactly** for the first time. Still: "Peguin" ("Penguin", "Peckwan"), "will do"
+  -> "we do", "merged" -> "masked" once.
+- Gotcha: `turbo_v2.py` hangs at start-up when Hugging Face is unreachable (tokenizer check, no
+  timeout). Run with `HF_HUB_OFFLINE=1`.
+
 ### Zero-shot comparison (same sample, same lines)
 - `zeroshot.py --model omnivoice|qwen`: OmniVoice (k2-fsa, Apache 2.0) in `vendor/venv-zs`,
   Qwen3-TTS 1.7B Base (Apache 2.0) in `vendor/venv-qwen` (their `transformers` versions

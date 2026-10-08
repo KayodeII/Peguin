@@ -62,11 +62,19 @@ def punc_norm(text: str) -> str:
     return text
 
 
+GROUP = 1
+
+
+def chunk(sentences: list[str]) -> list[str]:
+    """Generate GROUP sentences at a time: the model carries intonation across a chunk."""
+    return [" ".join(sentences[i:i + GROUP]) for i in range(0, len(sentences), GROUP)]
+
+
 def prepare(text: str) -> list[str]:
     for word, said in PRONOUNCE.items():
         text = re.sub(rf"\b{re.escape(word)}\b", said, text)
     sentences = re.split(r"(?<=[.!?])\s+", punc_norm(text))
-    return [s for s in sentences if s.strip()]
+    return chunk([s for s in sentences if s.strip()])
 
 
 def sample(logits, generated, rng, temperature=0.6, top_k=1000, top_p=0.95, penalty=1.2):
@@ -111,11 +119,14 @@ def level(wav, target_rms=0.08):
 
 
 class Turbo:
-    def __init__(self, dtype: str):
-        local = os.path.join(os.path.dirname(__file__), "vendor", "models", "chatterbox-turbo")
+    def __init__(self, dtype: str, model_dir: str | None = None):
+        local = model_dir or os.path.join(os.path.dirname(__file__), "vendor", "models", "chatterbox-turbo")
         paths = {}
         for name in ["conditional_decoder", "speech_encoder", "embed_tokens", "language_model"]:
             filename = f"{name}{'' if dtype == 'fp32' else '_quantized' if dtype == 'q8' else f'_{dtype}'}.onnx"
+            if model_dir:  # a patched (fine-tuned) copy: use it as is
+                paths[name] = os.path.join(model_dir, "onnx", filename)
+                continue
             paths[name] = hf_hub_download(MODEL_ID, subfolder="onnx", filename=filename, local_dir=local)
             hf_hub_download(MODEL_ID, subfolder="onnx", filename=f"{filename}_data", local_dir=local)
         self.s = {k: onnxruntime.InferenceSession(p, providers=["CPUExecutionProvider"]) for k, p in paths.items()}
@@ -158,7 +169,7 @@ class Turbo:
 
     def line(self, text, voice, rng, checker=None, takes=3, temperature=0.6, log=None):
         parts = []
-        spoken = [s for s in re.split(r"(?<=[.!?])\s+", punc_norm(text)) if s.strip()]
+        spoken = chunk([s for s in re.split(r"(?<=[.!?])\s+", punc_norm(text)) if s.strip()])
         for i, (sent, said) in enumerate(zip(prepare(text), spoken)):
             if i:
                 parts.append(np.zeros(int(SR * SENTENCE_PAUSE_S), dtype=np.float32))
@@ -229,12 +240,19 @@ def main():
     ap.add_argument("--takes", type=int, default=3, help="regenerate a sentence up to N times until whisper hears the right words (1 = no check)")
     ap.add_argument("--temp", type=float, default=0.6)
     ap.add_argument("--only", default=None, help="comma-separated line keys")
+    ap.add_argument("--model-dir", default=None, help="folder with onnx/ (e.g. a fine-tuned copy from patch_onnx.py)")
+    ap.add_argument("--pause", type=float, default=None, help="seconds between sentences")
+    ap.add_argument("--group", type=int, default=1, help="sentences generated together (more = smoother intonation)")
     args = ap.parse_args()
     out = args.out or f"gen/v2-{args.dtype}"
     os.makedirs(out, exist_ok=True)
     timing = f"{out}/timing{'-' + args.only.replace(',', '-') if args.only else ''}.json"
 
-    model = Turbo(args.dtype)
+    model = Turbo(args.dtype, args.model_dir)
+    global SENTENCE_PAUSE_S, GROUP
+    if args.pause is not None:
+        SENTENCE_PAUSE_S = args.pause
+    GROUP = args.group
     voice = model.voice(args.ref)
     rng = np.random.default_rng(args.seed)
     checker = Whisper() if args.takes > 1 else None
