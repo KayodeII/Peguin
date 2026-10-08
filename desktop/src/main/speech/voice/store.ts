@@ -51,7 +51,10 @@ export function sampleInfo(): VoiceSampleInfo | null {
 export function loadSample(): { samples: Float32Array; id: string } | null {
   if (!existsSync(sampleFile())) return null;
   const sealed = readFileSync(sampleFile());
-  return { samples: decodeWav(unseal(sealed)).samples, id: createHash("sha256").update(sealed).digest("hex").slice(0, 16) };
+  let wav: Buffer;
+  // The Keychain key belongs to this install; a sample sealed by another (dev vs installed app) can't be opened.
+  try { wav = unseal(sealed); } catch { throw new Error("Your voice sample can't be read on this install. Record it again in Settings."); }
+  return { samples: decodeWav(wav).samples, id: createHash("sha256").update(sealed).digest("hex").slice(0, 16) };
 }
 
 /** Removes the sample, the consent record and any audio made from them. */

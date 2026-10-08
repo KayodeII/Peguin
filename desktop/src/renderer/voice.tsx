@@ -24,11 +24,15 @@ const PASSAGE = [
 
 const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)} GB`;
 
-function playWav(data: Uint8Array) {
-  const url = URL.createObjectURL(new Blob([data as BlobPart], { type: "audio/wav" }));
-  const audio = new Audio(url);
-  audio.onended = () => URL.revokeObjectURL(url);
-  return audio.play();
+/** Plays WAV bytes with Web Audio (an <audio> element with a blob: URL is blocked by the window's CSP). */
+async function playWav(data: Uint8Array) {
+  const ctx = new AudioContext();
+  const bytes = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+  const src = ctx.createBufferSource();
+  src.buffer = await ctx.decodeAudioData(bytes);
+  src.connect(ctx.destination);
+  src.onended = () => void ctx.close();
+  src.start();
 }
 
 export function VoiceSettings({ settings, draft, setDraft, save }: {
