@@ -1,6 +1,7 @@
-// Settings > Voice: the standard voice, or the owner's own (opt-in). Three
-// steps: record a sample live (with the consent sentence), download the model,
-// try it, then switch it on. Everything stays on this Mac.
+// Settings > Voice: the standard voice, or the owner's own (opt-in). Record a
+// sample live (with the consent sentence), download the model, teach it how
+// words sound, tune pace and expressiveness, try it, switch it on. Every value
+// is the owner's; nothing about how they sound is built in. All on this Mac.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Settings } from "../main/settings";
 import { message, Toggle } from "./ui";
@@ -12,15 +13,13 @@ type VoiceStatus = {
   modelBytes: number;
   download: { progress: number; error?: string } | null;
   consent: string;
+  /** The start of the owner's latest update, to read when recording (null if none yet). */
+  script: string | null;
 };
 
 const RATE = 24000;
 const MAX_S = 20;
 const MIN_S = 8;
-const PASSAGE = [
-  "Yesterday I finished the billing page and reviewed two pull requests.",
-  "Today I'm on the onboarding emails. No blockers, and I'll share a demo on Friday.",
-];
 
 const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)} GB`;
 
@@ -105,20 +104,71 @@ export function VoiceSettings({ settings, draft, setDraft, save }: {
           : <button className="btn ghost" disabled={!!busy || (!!status.download && !status.download.error)} onClick={() => run("download", () => window.penguin.voiceDownload())}>Download</button>}
       </div>
 
-      <label>How your first name sounds
-        <input value={draft.voice.namePronounced} maxLength={40} placeholder="Spell it the way it sounds, like Moo-jeeb"
-          onChange={(e) => setDraft({ ...draft, voice: { ...draft.voice, namePronounced: e.target.value } })} />
+      <Pronunciations draft={draft} setDraft={setDraft} canHear={ready && !busy} hear={(w) => run(`word:${w}`, async () => playWav(await window.penguin.voiceSayWord(w)))} busy={busy} />
+
+      <div className="field-grid">
+        <label>Pause between sentences <span className="value">{draft.voice.pause.toFixed(2)} s</span>
+          <input type="range" min={0.1} max={1} step={0.02} value={draft.voice.pause}
+            onChange={(e) => setDraft({ ...draft, voice: { ...draft.voice, pause: Number(e.target.value) } })} />
+          <span className="range-ends"><span>Quick</span><span>Unhurried</span></span>
+        </label>
+        <label>Expressiveness <span className="value">{draft.voice.expressiveness.toFixed(2)}</span>
+          <input type="range" min={0.3} max={0.9} step={0.05} value={draft.voice.expressiveness}
+            onChange={(e) => setDraft({ ...draft, voice: { ...draft.voice, expressiveness: Number(e.target.value) } })} />
+          <span className="range-ends"><span>Steady</span><span>Lively</span></span>
+        </label>
+      </div>
+      <label>Checks before each meeting
+        <select value={draft.voice.attempts} onChange={(e) => setDraft({ ...draft, voice: { ...draft.voice, attempts: Number(e.target.value) } })}>
+          <option value={1}>Don't check (fastest)</option>
+          {[2, 3, 4, 5].map((n) => <option key={n} value={n}>Redo a sentence up to {n - 1} {n === 2 ? "time" : "times"} if a word comes out wrong</option>)}
+        </select>
       </label>
+
       <div className="voice-actions">
         <button className="btn ghost" disabled={!ready || !!busy} onClick={() => run("preview", async () => playWav(await window.penguin.voicePreview()))}>
           {busy === "preview" ? "Generating" : "Hear a sample"}
         </button>
-        {draft.voice.namePronounced !== settings.voice.namePronounced && <span className="hint">Save changes to hear the new pronunciation.</span>}
+        {JSON.stringify(draft.voice) !== JSON.stringify(settings.voice) && <span className="hint">Save changes to hear them.</span>}
       </div>
       {error && <div className="notice error">{error}</div>}
 
-      {recording && <Recorder consent={status.consent} onClose={() => setRecording(false)} onSaved={() => { setRecording(false); refresh(); }} />}
+      {recording && <Recorder consent={status.consent} script={status.script} onClose={() => setRecording(false)} onSaved={() => { setRecording(false); refresh(); }} />}
     </>
+  );
+}
+
+/* ---------------------------------------------------------------- pronunciations */
+
+function Pronunciations({ draft, setDraft, canHear, hear, busy }: {
+  draft: Settings; setDraft: (s: Settings) => void; canHear: boolean; hear: (word: string) => void; busy: string;
+}) {
+  const list = draft.voice.pronunciations;
+  const first = draft.displayName.trim().split(/\s+/)[0] ?? "";
+  const set = (next: Settings["voice"]["pronunciations"]) => setDraft({ ...draft, voice: { ...draft.voice, pronunciations: next } });
+  const update = (i: number, p: Partial<{ word: string; sayAs: string }>) => set(list.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const saved = (i: number) => !!list[i]?.word.trim() && !!list[i]?.sayAs.trim();
+  return (
+    <div className="pron">
+      <div className="pron-head">
+        <strong>Pronunciations</strong>
+        <p>Teach it names and words it says wrong: yours, your team's, your product's. Spell each the way it sounds.</p>
+      </div>
+      {list.map((p, i) => (
+        <div key={i} className="pron-row">
+          <input value={p.word} maxLength={40} placeholder={i === 0 && first ? first : "Word"} aria-label="Word" onChange={(e) => update(i, { word: e.target.value })} />
+          <span className="pron-arrow">sounds like</span>
+          <input value={p.sayAs} maxLength={60} placeholder="How it sounds" aria-label="How it sounds" onChange={(e) => update(i, { sayAs: e.target.value })} />
+          <button className="btn link" disabled={!canHear || !saved(i)} title="Save changes first to hear a new spelling" onClick={() => hear(p.word)}>
+            {busy === `word:${p.word}` ? "Generating" : "Hear it"}
+          </button>
+          <button className="btn link" aria-label={`Remove ${p.word || "word"}`} onClick={() => set(list.filter((_, j) => j !== i))}>Remove</button>
+        </div>
+      ))}
+      {list.length < 40 && (
+        <button className="btn ghost" onClick={() => set([...list, { word: list.length === 0 ? first : "", sayAs: "" }])}>Add a word</button>
+      )}
+    </div>
   );
 }
 
@@ -126,7 +176,7 @@ export function VoiceSettings({ settings, draft, setDraft, save }: {
 
 type Take = { samples: Float32Array; seconds: number };
 
-function Recorder({ consent, onClose, onSaved }: { consent: string; onClose: () => void; onSaved: () => void }) {
+function Recorder({ consent, script, onClose, onSaved }: { consent: string; script: string | null; onClose: () => void; onSaved: () => void }) {
   const [phase, setPhase] = useState<"ready" | "countdown" | "recording" | "review">("ready");
   const [count, setCount] = useState(3);
   const [elapsed, setElapsed] = useState(0);
@@ -204,10 +254,12 @@ function Recorder({ consent, onClose, onSaved }: { consent: string; onClose: () 
     <div className="modal-backdrop">
       <div className="modal voice-modal" role="dialog" aria-labelledby="rec-title">
         <h2 id="rec-title">Record your voice</h2>
-        <p className="modal-sub">Read this aloud at your normal standup pace, with natural pauses. A quiet room helps.</p>
+        <p className="modal-sub">Start with the sentence below, then keep talking at your normal standup pace. A quiet room helps.</p>
         <blockquote className="script">
           <p className="consent">{consent}</p>
-          {PASSAGE.map((p) => <p key={p}>{p}</p>)}
+          {script
+            ? <p>{script}</p>
+            : <p className="free">Then talk for about 15 seconds about what you worked on yesterday and what's next, the way you would in standup.</p>}
         </blockquote>
 
         {phase === "ready" && <button className="btn primary wide" onClick={() => void start()}>Start recording</button>}

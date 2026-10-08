@@ -23,12 +23,12 @@ export function sentences(text: string): string[] {
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Swap words for spellings the model says right, e.g. { Peguin: "Peh-gwin" }. Whole words, case-sensitive. */
+/** Swap words for the owner's spellings of how they sound. Whole words; case-insensitive. */
 export function respell(text: string, pronounce: Record<string, string>): string {
   let out = text;
   for (const [word, said] of Object.entries(pronounce)) {
     if (!word.trim() || !said.trim()) continue;
-    out = out.replace(new RegExp(`(?<![\\w'])${escape(word)}(?![\\w])`, "g"), said);
+    out = out.replace(new RegExp(`(?<![\\w'])${escape(word.trim())}(?![\\w])`, "gi"), said.trim());
   }
   return out;
 }

@@ -21,9 +21,10 @@ describe("own voice: text", () => {
   it("splits into sentences", () => {
     expect(sentences("It's in progress. No date yet! Ask Mujeeb?")).toEqual(["It's in progress.", "No date yet!", "Ask Mujeeb?"]);
   });
-  it("respells whole words only, including possessives", () => {
-    expect(respell("I'm Peguin, Mujeeb's AI assistant. Peguins!", { Peguin: "Peh-gwin", Mujeeb: "Moo-jeeb" }))
-      .toBe("I'm Peh-gwin, Moo-jeeb's AI assistant. Peguins!");
+  it("respells the owner's words: whole words only, any case, including possessives", () => {
+    expect(respell("I'm Peguin, Mujeeb's AI assistant. Peguins! mujeeb", { Peguin: "Peh-gwin", Mujeeb: "Moo-jeeb" }))
+      .toBe("I'm Peh-gwin, Moo-jeeb's AI assistant. Peguins! Moo-jeeb");
+    expect(respell("Nothing to change.", {})).toBe("Nothing to change.");
   });
   it("compares words, reading digits as numbers", () => {
     expect(words("PR 482 is merged")).toEqual(["pr", "four", "hundred", "eighty", "two", "is", "merged"]);
@@ -44,20 +45,28 @@ describe("own voice: sampling", () => {
   it("is repeatable with a seed", () => {
     const logits = Float32Array.from({ length: 50 }, (_, i) => Math.sin(i) * 3);
     const a = rng(7), b = rng(7);
-    expect(Array.from({ length: 20 }, () => sampleToken(logits, [], a))).toEqual(Array.from({ length: 20 }, () => sampleToken(logits, [], b)));
+    expect(Array.from({ length: 20 }, () => sampleToken(logits, [], a, 0.6))).toEqual(Array.from({ length: 20 }, () => sampleToken(logits, [], b, 0.6)));
   });
   it("almost always picks a clear winner, and penalises repeats", () => {
     const logits = new Float32Array(10).fill(0); logits[3] = 20;
     const r = rng(1);
-    expect(sampleToken(logits, [], r)).toBe(3);
+    expect(sampleToken(logits, [], r, 0.6)).toBe(3);
     const close = new Float32Array(10).fill(0); close[3] = 2.0; close[4] = 1.9;
-    const picks = Array.from({ length: 200 }, () => sampleToken(close, [3], r));
+    const picks = Array.from({ length: 200 }, () => sampleToken(close, [3], r, 0.6));
     expect(picks.filter((p) => p === 4).length).toBeGreaterThan(picks.filter((p) => p === 3).length);
   });
   it("only picks from the top-p set", () => {
     const logits = new Float32Array(100).fill(-50); logits[0] = 10; logits[1] = 9;
     const r = rng(3);
-    for (let i = 0; i < 100; i++) expect([0, 1]).toContain(sampleToken(logits, [], r));
+    for (let i = 0; i < 100; i++) expect([0, 1]).toContain(sampleToken(logits, [], r, 0.6));
+  });
+  it("is steadier at low expressiveness than high", () => {
+    const logits = Float32Array.from([2, 1.6, 1.2, 0.8]);
+    const spread = (t: number) => { const r = rng(5); return new Set(Array.from({ length: 300 }, () => sampleToken(logits, [], r, t))).size; };
+    const low = Array.from({ length: 300 }, ((r) => () => sampleToken(logits, [], r, 0.3))(rng(9))).filter((x) => x === 0).length;
+    const high = Array.from({ length: 300 }, ((r) => () => sampleToken(logits, [], r, 0.9))(rng(9))).filter((x) => x === 0).length;
+    expect(low).toBeGreaterThan(high);
+    expect(spread(0.9)).toBeGreaterThanOrEqual(spread(0.3));
   });
 });
 
@@ -69,9 +78,9 @@ describe("own voice: audio", () => {
     expect(t.length / SAMPLE_RATE).toBeGreaterThan(0.5);
     expect(t.length / SAMPLE_RATE).toBeLessThan(0.62);
   });
-  it("joins sentences with pauses and levels loudness without clipping", () => {
-    const out = level(joinSentences([tone(0.5, 0.01), tone(0.5, 0.9)]));
-    expect(out.length / SAMPLE_RATE).toBeCloseTo(0.5 + 0.32 + 0.5 + 0.15, 2);
+  it("joins sentences with the owner's pause and levels loudness without clipping", () => {
+    const out = level(joinSentences([tone(0.5, 0.01), tone(0.5, 0.9)], 0.4));
+    expect(out.length / SAMPLE_RATE).toBeCloseTo(0.5 + 0.4 + 0.5 + 0.2, 2);
     expect(Math.max(...out.map(Math.abs))).toBeLessThanOrEqual(0.95);
   });
   it("fades the ends so joins don't click", () => {
@@ -87,11 +96,18 @@ describe("own voice: audio", () => {
 });
 
 describe("own voice: settings and disclosure", () => {
-  it("migrates the old voice setting instead of resetting everything", () => {
-    const s = Settings.parse({ displayName: "Mujeeb Adebowale", voice: "default" });
-    expect(s.voice).toEqual({ mode: "standard", namePronounced: "" });
-    expect(s.displayName).toBe("Mujeeb Adebowale");
-    expect(Settings.parse({}).voice.mode).toBe("standard");
+  it("starts with no built-in pronunciations and default tuning the owner can change", () => {
+    expect(Settings.parse({}).voice).toEqual({ mode: "standard", pronunciations: [], pause: 0.32, expressiveness: 0.6, attempts: 3 });
+    expect(() => Settings.parse({ voice: { pause: 5 } })).toThrow();
+  });
+  it("migrates older voice settings instead of resetting everything", () => {
+    const old = Settings.parse({ displayName: "Mujeeb Adebowale", voice: "default" });
+    expect(old.voice.mode).toBe("standard");
+    expect(old.displayName).toBe("Mujeeb Adebowale");
+    const named = Settings.parse({ displayName: "Mujeeb Adebowale", voice: { mode: "mine", namePronounced: "Moo jeeb" } });
+    expect(named.voice.mode).toBe("mine");
+    expect(named.voice.pronunciations).toEqual([{ word: "Mujeeb", sayAs: "Moo jeeb" }]);
+    expect(Settings.parse({ displayName: "Ada Obi", voice: { namePronounced: "" } }).voice.pronunciations).toEqual([]);
   });
   it("always discloses it's an AI, and says so when it's the owner's voice", () => {
     const s = Settings.parse({ displayName: "Mujeeb Adebowale" });

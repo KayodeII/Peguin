@@ -21,6 +21,7 @@ const api = {
   voiceDelete: () => ipcRenderer.invoke("voice:delete"),
   voiceDeleteModel: () => ipcRenderer.invoke("voice:delete-model"),
   voicePreview: () => ipcRenderer.invoke("voice:preview"),
+  voiceSayWord: (word: string) => ipcRenderer.invoke("voice:say-word", word),
   onEvent: (cb: (e: unknown) => void) => {
     const h = (_e: unknown, ev: unknown) => cb(ev);
     ipcRenderer.on("app:event", h);

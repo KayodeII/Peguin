@@ -21,9 +21,13 @@ type Sessions = Record<"speech_encoder" | "embed_tokens" | "language_model" | "c
 export type Voice = { cond: ort.Tensor; prompt: ort.Tensor; speakerEmbedding: ort.Tensor; speakerFeatures: ort.Tensor };
 
 export type SpeakOptions = {
-  /** Spellings the model says right, e.g. { Peguin: "Peh-gwin" }. */
+  /** Silence between sentences, seconds (the owner's setting). */
+  pause: number;
+  /** Sampling temperature (the owner's expressiveness setting). */
+  temperature: number;
+  /** The owner's pronunciations: word -> how it should sound. */
   pronounce?: Record<string, string>;
-  /** How speech recognition hears names ("mujib" -> "mujeeb"), so an accent isn't a mistake. */
+  /** How speech recognition hears the owner's name (their "also called" list), so an accent isn't a mistake. */
   aliases?: Record<string, string>;
   /** Transcribes 24 kHz audio; when given, a sentence that comes back wrong is generated again. */
   check?: (wav: Float32Array) => Promise<string>;
@@ -62,7 +66,7 @@ export class VoiceEngine {
   }
 
   /** One sentence. Stops at ~3 speech tokens per character so sampling can't run away. */
-  async sentence(text: string, voice: Voice, random: () => number): Promise<Float32Array> {
+  async sentence(text: string, voice: Voice, random: () => number, temperature: number): Promise<Float32Array> {
     const maxTokens = 3 * text.length + 40;
     let ids = this.tokenizer.encode(text).ids;
     const generated = [START];
@@ -82,7 +86,7 @@ export class VoiceEngine {
       const logits = out[logitsName!]!;
       const vocab = logits.dims[2]!;
       const last = (logits.data as Float32Array).subarray((step - 1) * vocab, step * vocab);
-      const next = sampleToken(last, generated, random);
+      const next = sampleToken(last, generated, random, temperature);
       generated.push(next);
       if (next === STOP) break;
       ids = [next];
@@ -105,16 +109,16 @@ export class VoiceEngine {
    * ear when `check` is given and regenerated if the words come back wrong,
    * joined with natural pauses and levelled.
    */
-  async speak(text: string, voice: Voice, o: SpeakOptions = {}): Promise<Float32Array> {
+  async speak(text: string, voice: Voice, o: SpeakOptions): Promise<Float32Array> {
     const random = rng(o.seed ?? Date.now());
     const meant = sentences(text);
     const said = sentences(respell(text, o.pronounce ?? {}));
     const parts: Float32Array[] = [];
     for (let i = 0; i < said.length; i++) {
       let best: Float32Array | null = null, bestError = Infinity;
-      const takes = o.check ? Math.max(1, o.takes ?? 3) : 1;
+      const takes = o.check ? Math.max(1, o.takes ?? 1) : 1;
       for (let t = 0; t < takes; t++) {
-        const wav = await this.sentence(said[i]!, voice, random);
+        const wav = await this.sentence(said[i]!, voice, random, o.temperature);
         if (!o.check) { best = wav; break; }
         const err = wordError(meant[i] ?? said[i]!, await o.check(wav).catch(() => ""), o.aliases);
         if (err < bestError) { best = wav; bestError = err; }
@@ -122,7 +126,7 @@ export class VoiceEngine {
       }
       parts.push(best!);
     }
-    return level(joinSentences(parts));
+    return level(joinSentences(parts, o.pause));
   }
 }
 

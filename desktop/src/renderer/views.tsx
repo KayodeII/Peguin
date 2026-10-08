@@ -166,7 +166,12 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
   // The voice switch also saves instantly.
   useEffect(() => { setS((prev) => ({ ...prev, voice: { ...prev.voice, mode: settings.voice.mode } })); }, [settings.voice.mode]);
   const setAppearance = (a: Partial<Settings["appearance"]>) => void save({ ...settings, appearance: { ...settings.appearance, ...a } });
-  const next = { ...s, aliases: [...new Set(aliases.split(",").map((a) => a.trim()).filter(Boolean))].slice(0, 10) };
+  const next = {
+    ...s,
+    aliases: [...new Set(aliases.split(",").map((a) => a.trim()).filter(Boolean))].slice(0, 10),
+    // Rows still being filled in aren't saved.
+    voice: { ...s.voice, pronunciations: s.voice.pronunciations.map((p) => ({ word: p.word.trim(), sayAs: p.sayAs.trim() })).filter((p) => p.word && p.sayAs) },
+  };
   const dirty = JSON.stringify(next) !== JSON.stringify(settings);
   const timezones = Intl.supportedValuesOf("timeZone");
   const st = s.standup;
@@ -182,7 +187,7 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
         <h3 className="section-label">My profile</h3>
         <div className="field-grid">
           <label>Name<input value={s.displayName} maxLength={40} onChange={(e) => setS({ ...s, displayName: e.target.value })} /></label>
-          <label>Also called<input value={aliases} placeholder="Mujib, MJ" onChange={(e) => setAliases(e.target.value)} /></label>
+          <label>Also called<input value={aliases} placeholder="Nicknames, or how people say your name" onChange={(e) => setAliases(e.target.value)} /></label>
         </div>
         <p className="hint">Joins as <strong>{preview(s.displayName)}</strong></p>
 

@@ -10,7 +10,7 @@ import type { Settings } from "../desktop/src/main/settings.js";
 const settings = (standup: Partial<Settings["standup"]> = {}): Settings => ({
   displayName: "Mujeeb Adebowale", aliases: [], timezone: "Africa/Lagos",
   standup: { url: "https://meet.google.com/abc-defg-hij", time: "09:30", days: [1, 2, 3, 4, 5], auto: true, ...standup },
-  sources: { git: true, github: true, claude_code: true }, voice: { mode: "standard", namePronounced: "" },
+  sources: { git: true, github: true, claude_code: true }, voice: { mode: "standard", pronunciations: [], pause: 0.32, expressiveness: 0.6, attempts: 3 },
   appearance: { theme: "system", accent: "blue" }, runHidden: true, onboarded: true,
 });
 // Lagos is UTC+1 all year. 2026-10-07 is a Wednesday.

@@ -224,3 +224,13 @@ label input, label select { text-transform: none; font-weight: 400; letter-spaci
 .meter { flex: 1; height: 6px; border-radius: 3px; background: var(--active); overflow: hidden; }
 .meter i { display: block; height: 100%; background: var(--green); transition: width .08s linear; }
 .btn.wide { width: 100%; }
+.pron { margin: 4px 0 14px; }
+.pron-head strong { color: var(--ink-strong); }
+.pron-head p { margin: 2px 0 10px; color: var(--muted); font-size: 13px; }
+.pron-row { display: grid; grid-template-columns: 1fr auto 1fr auto auto; align-items: center; gap: 8px; margin-bottom: 8px; }
+.pron-arrow { color: var(--muted); font-size: 13px; white-space: nowrap; }
+label .value { float: right; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; text-transform: none; letter-spacing: 0; }
+input[type="range"] { padding: 0; border: 0; background: none; accent-color: var(--accent); height: 22px; }
+input[type="range"]:focus { outline: none; }
+.range-ends { display: flex; justify-content: space-between; font-size: 12px; font-weight: 400; color: var(--muted); text-transform: none; letter-spacing: 0; }
+.voice-modal .script .free { font-weight: 400; color: var(--muted); }

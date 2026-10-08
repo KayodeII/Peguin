@@ -13,6 +13,7 @@ import {
   CONSENT_SENTENCE, deleteSample, deleteVoiceModel, ensureVoiceModel, forgetVoice, ownVoiceStatus, saveSample,
   speakInOwnVoice, usingOwnVoice, VOICE_MODEL_BYTES, voiceModelReady,
 } from "./speech/voice/index.js";
+import { sentences } from "./speech/voice/text.js";
 import { startWhisper, transcribeSamples, type Whisper } from "./speech/whisper.js";
 
 const rendererUrl = process.env.PENGUIN_RENDERER_URL; // set by `npm run dev`
@@ -158,9 +159,9 @@ async function warmOwnVoice(draft: Draft) {
     const check = (wav: Float32Array) => transcribeSamples(w.url, wav, nameVariants(s));
     const say = lines(s, draft, true), standard = lines(s, draft, false);
     send({ kind: "log", text: "Getting your update ready in your voice…" });
-    await synthesize(say.update, { settings: s, takes: 3, check, standardText: standard.update });
-    await synthesize(say.defer, { settings: s, takes: 2, check });
-    await synthesize(say.ack, { settings: s, takes: 2, check });
+    await synthesize(say.update, { settings: s, check, standardText: standard.update });
+    await synthesize(say.defer, { settings: s, check });
+    await synthesize(say.ack, { settings: s, check });
     send({ kind: "log", text: "Your update is ready in your voice." });
   } catch (e) {
     send({ kind: "log", text: `Couldn't prepare your voice ahead of time (${message(e)}). It'll be made when the meeting starts.` });
@@ -176,7 +177,16 @@ function downloadVoiceModel(): Promise<void> {
     .catch((e) => { voiceDownload = { progress: 0, error: message(e) }; send({ kind: "voice", progress: 0, error: message(e) }); throw e; });
 }
 
-const voiceStatus = () => ({ ...ownVoiceStatus(loadSettings()), modelBytes: VOICE_MODEL_BYTES, download: voiceDownload, consent: CONSENT_SENTENCE });
+/** The owner's own words to read when recording: the start of their latest update, if there is one. */
+const recordingScript = () => {
+  const script = loadDraft()?.script;
+  return script ? sentences(script).slice(0, 3).join(" ") : null;
+};
+
+const voiceStatus = () => ({
+  ...ownVoiceStatus(loadSettings()), modelBytes: VOICE_MODEL_BYTES, download: voiceDownload,
+  consent: CONSENT_SENTENCE, script: recordingScript(),
+});
 
 function useStandardVoice() {
   const s = loadSettings();
@@ -222,11 +232,15 @@ ipcMain.handle("voice:mic", () => (process.platform === "darwin" ? systemPrefere
 ipcMain.handle("voice:save", (_e, pcm: ArrayBuffer) => { saveSample(new Float32Array(pcm)); forgetVoice(); return voiceStatus(); });
 ipcMain.handle("voice:delete", () => { useStandardVoice(); deleteSample(); forgetVoice(); return voiceStatus(); });
 ipcMain.handle("voice:delete-model", () => { useStandardVoice(); deleteVoiceModel(); return voiceStatus(); });
+// Previews use the owner's own lines: the disclosure and the start of their latest update.
 ipcMain.handle("voice:preview", async () => {
   const s = loadSettings();
   if (!voiceModelReady()) throw new Error("Download the voice model first.");
-  const first = s.displayName.trim().split(/\s+/)[0] || "your owner";
-  return speakInOwnVoice(`Hi everyone, I'm Peguin, ${first}'s AI assistant, speaking in ${first}'s voice. This is how I'll sound in your standup.`, s);
+  return speakInOwnVoice(sentences(lines(s, loadDraft(), true).update).slice(0, 3).join(" "), s);
+});
+ipcMain.handle("voice:say-word", async (_e, word: string) => {
+  if (!voiceModelReady()) throw new Error("Download the voice model first.");
+  return speakInOwnVoice(`This is how I say ${String(word).slice(0, 40)}.`, loadSettings());
 });
 ipcMain.handle("update:get", () => update);
 ipcMain.handle("update:open", () => { if (update) void shell.openExternal(update.url); });

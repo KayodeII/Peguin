@@ -71,18 +71,18 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     const own = usingOwnVoice(s);
     const say = lines(s, this.brain.draft, own);
     const standard = lines(s, this.brain.draft, false);
-    // In the owner's voice, the prepared lines are checked by ear (regenerated if a word comes out wrong);
+    // In the owner's voice, the prepared lines are checked by ear (redone, up to their attempts setting, if a word comes out wrong);
     // live answers skip the check to stay quick.
-    const voice = (takes: number, standardText?: string): SynthesizeOptions => ({
-      settings: s, takes, standardText,
+    const voice = (standardText?: string): SynthesizeOptions => ({
+      settings: s, standardText,
       check: (wav) => transcribeSamples(this.whisper.url, wav, names),
       onFallback: (reason) => this.log(`Your voice wasn't available (${reason}); using the standard voice.`),
     });
     // Pre-synthesize so Peguin answers instantly when called on (usually already cached from preparing).
     const audio = {
-      update: synthesize(say.update, voice(3, standard.update)),
-      defer: synthesize(say.defer, voice(2)),
-      ack: synthesize(say.ack, voice(2)),
+      update: synthesize(say.update, voice(standard.update)),
+      defer: synthesize(say.defer, voice()),
+      ack: synthesize(say.ack, voice()),
     };
     for (const a of Object.values(audio)) a.catch((e) => this.log(`speech output failed: ${e}`));
 
@@ -125,7 +125,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
         const text = await answer(question, recent);
         remember(`Peguin: ${text}`);
         this.log(`Answer: ${text}`);
-        return synthesize(text, { ...voice(1), check: undefined });
+        return synthesize(text, { ...voice(), check: undefined });
       } catch (e) {
         this.log(`Couldn't answer (${e instanceof Error ? e.message : e}); deferring to you.`);
         return audio.defer;

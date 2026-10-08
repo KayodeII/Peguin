@@ -1,10 +1,8 @@
 // Picking the next speech token (pure). Sampling with a little randomness sounds
 // human; always taking the most likely token sounds flat and slurs words.
 
-export type SampleOptions = { temperature: number; topK: number; topP: number; repetitionPenalty: number };
-
-/** Tuned in spikes/voice: Resemble's settings with temperature 0.6 instead of 0.8 (fewer dropped words). */
-export const SAMPLING: SampleOptions = { temperature: 0.6, topK: 1000, topP: 0.95, repetitionPenalty: 1.2 };
+/** Properties of the model from Resemble's reference code, not preferences. */
+const MODEL = { topK: 1000, topP: 0.95, repetitionPenalty: 1.2 };
 
 /** Small seeded PRNG (mulberry32), so a line can be regenerated identically in tests. */
 export function rng(seed: number): () => number {
@@ -18,7 +16,9 @@ export function rng(seed: number): () => number {
   };
 }
 
-export function sampleToken(logits: ArrayLike<number>, previous: Iterable<number>, random: () => number, o: SampleOptions = SAMPLING): number {
+/** `temperature` is the owner's expressiveness setting: lower is steadier, higher livelier. */
+export function sampleToken(logits: ArrayLike<number>, previous: Iterable<number>, random: () => number, temperature: number): number {
+  const o = { ...MODEL, temperature };
   const scores = Float64Array.from(logits as ArrayLike<number>);
   // Penalise tokens already spoken, once each.
   for (const id of new Set(previous)) {

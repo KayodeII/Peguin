@@ -2,8 +2,6 @@
 // loudness, join sentences with natural pauses, and WAV in/out.
 
 export const SAMPLE_RATE = 24000;
-export const SENTENCE_PAUSE_S = 0.32;
-export const TAIL_PAUSE_S = 0.15;
 
 /** Cut leading and trailing quiet (below peak - topDb), keeping 30 ms so consonants aren't clipped. */
 export function trimSilence(wav: Float32Array, topDb = 40, sr = SAMPLE_RATE): Float32Array {
@@ -47,9 +45,9 @@ export function level(wav: Float32Array, targetRms = 0.08): Float32Array {
   return wav.map((v) => v * gain);
 }
 
-/** Sentences with a short pause between them and a little air at the end. */
-export function joinSentences(parts: Float32Array[], sr = SAMPLE_RATE): Float32Array {
-  const gap = Math.round(sr * SENTENCE_PAUSE_S), tail = Math.round(sr * TAIL_PAUSE_S);
+/** Sentences with the owner's chosen pause between them, and half that at the end. */
+export function joinSentences(parts: Float32Array[], pauseS: number, sr = SAMPLE_RATE): Float32Array {
+  const gap = Math.round(sr * pauseS), tail = Math.round((sr * pauseS) / 2);
   const total = parts.reduce((n, p) => n + p.length, 0) + gap * Math.max(0, parts.length - 1) + tail;
   const out = new Float32Array(total);
   let at = 0;
