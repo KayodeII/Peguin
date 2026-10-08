@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-08. Earlier history is in `git log` and `docs/DECISIONS.md`.
+Last updated: 2026-10-08 (evening). Earlier history is in `git log` and `docs/DECISIONS.md`. **Start with "Handoff" below.**
 
 ## Phase: private beta
 
@@ -43,3 +43,31 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 3. Optional Slack post of each recap (per-user webhook).
 4. Before charging strangers: Privacy Policy and Terms, Paystack live keys and final price, Resend DNS, `ANTHROPIC_API_KEY`, Apple Developer ID (notarised app, auto-update), watermarking cloned audio.
 5. Later: streaming Claude's answer text, Linear and Jira sources, Teams via ACS, Windows.
+
+## Handoff (2026-10-08 evening)
+
+### What's live
+- Latest release **v0.3.0** (own voice, sentence-by-sentence answers, talk-over, recaps, calendars); `www.peguin.co/api/release` serves it.
+- The Worker was last deployed **before** the recaps merge: `POST /api/recap` returns 404 live. Deploy from an up-to-date `main` (`cd cloud && npx wrangler deploy`) so subscribers get recap summaries.
+- `POST /api/support/chat` returns 503 live: `ANTHROPIC_API_KEY` isn't set in the Worker yet (same for server-side drafts and answers).
+
+### Branches not on GitHub yet (local only, on the owner's Mac)
+| Branch | What | Next |
+|---|---|---|
+| `legal-pages` | `/privacy` and `/terms`, written from the code; footer and sign-in links | Owner to confirm: refunds, 30-day price notice, liability cap, Nigerian law / Lagos courts, 18+, breach notice; add legal entity and a contact email. Then push and PR. |
+| `google-signin-reasons` | Google sign-in failures show which step failed and log Google's error code | Push, PR, deploy, retry sign-in; if the log says `invalid_client`, regenerate `GOOGLE_CLIENT_SECRET`. |
+| `voice-finetune-spike` | Fine-tuning test (see `spikes/voice/README.md`, v3) | Finish the comparison, then decide. |
+| `try-everything` | Throwaway: `main` + the two branches above, for local end-to-end testing | Delete when done. |
+
+### Owner's end-to-end test (not done yet)
+Local site (`cd cloud && npx wrangler dev`) and app (`cd desktop && PEGUIN_VOICE_MODEL_DIR=~/Desktop/penguin/spikes/voice/vendor/models/chatterbox-turbo npm run dev`, not signed in so drafts use the Claude CLI): onboarding, prepare, record voice, connect Mac Calendar, a real Meet with the owner on a phone (update, follow-up, talk-over, deferral), then the recap.
+
+### Voice quality work in progress
+The owner wants the most natural speech possible. In `spikes/voice/` (README, v3):
+- 21 of 60 training sentences recorded (`record_dataset.py`).
+- Fine-tuning Chatterbox Turbo with LoRA on the Mac works (65 s for 10 epochs). Toolkit defaults produced gibberish; English settings (original tokenizer, frozen text embeddings, r=16, lr 5e-5) trained cleanly, and their clips (`gen/ft-en-21/`) were being checked when this was written.
+- OmniVoice and Qwen3-TTS (both Apache 2.0) are installed for a zero-shot comparison but haven't generated yet.
+- If fine-tuning wins, shipping it is unsolved: the app runs ONNX, so each user's merged model would need exporting (no script yet), and training would have to run inside the app.
+
+### Still waiting on the owner
+Paystack Test webhook URL in the Paystack dashboard; final naira price and Paystack live keys; `ANTHROPIC_API_KEY` as a Worker secret; Resend DNS for peguin.co; `SUPPORT_INBOX` secret; Apple Developer ID (notarisation, removes "Open Anyway"); rotating the keys pasted in chat earlier.

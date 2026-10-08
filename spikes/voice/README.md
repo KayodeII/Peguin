@@ -88,3 +88,60 @@ if giving a standup, with real pauses, should help more than any setting.
 
 Still open: CoreML, chunked streaming, Perth watermarking without PyTorch, and the
 OmniVoice comparison if similarity isn't good enough.
+
+## v3: training a personal voice (fine-tuning), in progress (2026-10-08)
+
+The owner wants speech that's as close to perfect as possible. Zero-shot cloning (the
+shipped feature) copies the accent but not pronunciation and rhythm, so this tests
+LoRA fine-tuning Chatterbox Turbo on the owner's own recordings, against two newer
+zero-shot models. Nothing here is in the app yet.
+
+### Data
+- `record_dataset.py`: guided recorder, 60 sentences (30 Harvard sentences + 30
+  standup-style lines with the owner's name, "Peguin", numbers and tech words), one at
+  a time, saved as LJSpeech (`gen/dataset/wavs/NNNN.wav`, `gen/dataset/metadata.csv`).
+  Resumable. **21 of 60 recorded so far**; about 8 minutes total is the target.
+
+### Toolkit
+`vendor/chatterbox-finetuning` (git-ignored) is [gokhaneraslan/chatterbox-finetuning](https://github.com/gokhaneraslan/chatterbox-finetuning)
+in its own venv (`vendor/venv-ft`, torch 2.6, MPS). Patches made locally, needed to reproduce:
+- `src/config.py`: Turbo + LoRA; dataset/output paths point at `../../gen/...`;
+  batch 2 with grad accumulation 2; 0 dataloader workers; env overrides for
+  `FT_MODEL_DIR`, `FT_VOCAB`, `FT_LORA_R`, `FT_LORA_ALPHA`, `FT_LR`, `FT_SAVE_MODULES`
+  (comma list, empty = freeze text embeddings), `FT_EPOCHS`, `FT_PRE`, `FT_OUT`, `FT_PREPROCESS`.
+- `train.py`: use `mps` when available; fp32 (no bf16); no pinned memory or persistent workers.
+- `src/preprocess_ljspeech.py`: read metadata with `dtype=str` (ids like `0001` were
+  parsed as numbers, so every file was silently skipped).
+- `setuptools<80` in the venv: Resemble's Perth watermarker imports `pkg_resources`.
+- `setup.py`'s downloader breaks on long files; the weights were fetched with
+  `curl --retry -C -` instead (`t3_turbo_v1` 1,915,480,052 bytes, `s3gen_meanflow` 1,064,875,036).
+- `pretrained_en/`: the same weights (symlinks) with the **original** Turbo tokenizer
+  (50,276 tokens). The toolkit's `setup.py` rewrites the tokenizer in `pretrained_models/`
+  to 52,260 tokens for teaching new languages, which English doesn't need.
+
+### Results so far (21 sentences, ~2 minutes of audio, M5 16 GB)
+- Training is fast: 10 epochs in 65-85 s on MPS.
+- **Run 1, toolkit defaults** (extended vocab, LoRA r=128, lr 1e-4, text embeddings
+  trained): **gibberish**, and clips 2-3x too long. Peak memory 19.9 GB (swapped).
+  Cause: retraining text embeddings for 2,400 new tokens from 21 sentences.
+- **Run 2, English settings** (`FT_MODEL_DIR=./pretrained_en FT_VOCAB=50276 FT_SAVE_MODULES=""
+  FT_LORA_R=16 FT_LORA_ALPHA=32 FT_LR=5e-5 FT_EPOCHS=10`): trained, peak 10.7 GB;
+  clips in `gen/ft-en-21/`, being checked.
+- Reproduce run 2: `cd vendor/chatterbox-finetuning`, then those env vars plus
+  `FT_PRE=../../gen/dataset/preprocess-en FT_OUT=../../gen/finetune-en PYTORCH_ENABLE_MPS_FALLBACK=1 ../venv-ft/bin/python train.py`;
+  generate with the same env and `../venv-ft/bin/python ../../ft_generate.py --out ../../gen/ft-en-21`;
+  check words with `bash check.sh gen/ft-en-21` (whisper small.en; base.en is useless for this accent).
+
+### Zero-shot comparison (same sample, same lines)
+- `zeroshot.py --model omnivoice|qwen`: OmniVoice (k2-fsa, Apache 2.0) in `vendor/venv-zs`,
+  Qwen3-TTS 1.7B Base (Apache 2.0) in `vendor/venv-qwen` (their `transformers` versions
+  conflict, so separate venvs). Qwen officially targets CUDA; MPS/CPU untested.
+- OmniVoice's model download stalled once (Hugging Face); resumed with `snapshot_download`.
+  Not yet generated.
+
+### Open questions
+- Does run 2 sound better than zero-shot, by ear and by the word check? With all 60 sentences?
+- **Shipping**, only if fine-tuning wins: the app runs ONNX. A per-user LoRA would need
+  merging into Turbo's weights and re-exporting `language_model.onnx` per user (no export
+  script yet), or bundling PyTorch. Training itself would also have to run inside the app
+  (Python + torch, ~2 GB). Neither exists yet.
