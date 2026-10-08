@@ -1,14 +1,19 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, shell, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, shell, systemPreferences, Tray } from "electron";
 import { existsSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { checkForUpdate, completeSignIn, refreshAccount, signOut, startSignIn, type Account, type Update } from "./account.js";
 import { answerQuestion, isFresh, loadDraft, prepareDraft, type Draft } from "./brain.js";
-import { meetingPaths, MeetingRunner, type MeetingEvent } from "./meeting/runner.js";
+import { lines, meetingPaths, MeetingRunner, type MeetingEvent } from "./meeting/runner.js";
 import { nextStandup, startScheduler } from "./scheduler.js";
 import { loadSettings, saveSettings } from "./settings.js";
 import { fixPath, outDir, resource } from "./paths.js";
 import { ensureModel } from "./speech/model.js";
-import { startWhisper, type Whisper } from "./speech/whisper.js";
+import { synthesize } from "./speech/tts.js";
+import {
+  CONSENT_SENTENCE, deleteSample, deleteVoiceModel, ensureVoiceModel, forgetVoice, ownVoiceStatus, saveSample,
+  speakInOwnVoice, usingOwnVoice, VOICE_MODEL_BYTES, voiceModelReady,
+} from "./speech/voice/index.js";
+import { startWhisper, transcribeSamples, type Whisper } from "./speech/whisper.js";
 
 const rendererUrl = process.env.PENGUIN_RENDERER_URL; // set by `npm run dev`
 
@@ -55,7 +60,8 @@ export type AppEvent =
   | { kind: "log"; text: string }
   | { kind: "account"; account: Account | null; error?: string }
   | { kind: "model"; progress: number; error?: string }
-  | { kind: "update"; update: Update | null };
+  | { kind: "update"; update: Update | null }
+  | { kind: "voice"; progress: number; error?: string };
 
 function send(e: AppEvent) {
   if (win && !win.isDestroyed()) win.webContents.send("app:event", e);
@@ -83,7 +89,11 @@ function openWindow() {
   win.on("closed", () => { win = null; });
   // Dev aid: PENGUIN_SNAPSHOT=out.png saves a picture of this window, then quits.
   const snap = process.env.PENGUIN_SNAPSHOT;
+  // PENGUIN_SNAPSHOT_SCROLL=<css selector> scrolls that element into view first.
   if (snap) win.webContents.once("did-finish-load", () => setTimeout(async () => {
+    const target = process.env.PENGUIN_SNAPSHOT_SCROLL;
+    if (target) await win!.webContents.executeJavaScript(`document.querySelector(${JSON.stringify(target)})?.scrollIntoView({ block: "start" })`);
+    await new Promise((r) => setTimeout(r, 300));
     writeFileSync(snap, (await win!.webContents.capturePage()).toPNG());
     app.exit(0);
   }, Number(process.env.PENGUIN_SNAPSHOT_DELAY ?? 1500)));
@@ -94,7 +104,7 @@ function prepare(): Promise<Draft> {
   if (preparing) return preparing;
   send({ kind: "draft", draft: loadDraft(), preparing: true });
   preparing = prepareDraft(loadSettings())
-    .then((d) => { send({ kind: "draft", draft: d, preparing: false }); return d; })
+    .then((d) => { send({ kind: "draft", draft: d, preparing: false }); void warmOwnVoice(d); return d; })
     .catch((e) => { send({ kind: "draft", draft: loadDraft(), preparing: false, error: message(e) }); throw e; })
     .finally(() => { preparing = null; });
   return preparing;
@@ -126,6 +136,50 @@ async function join(url: string) {
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+const nameVariants = (s: ReturnType<typeof loadSettings>) => {
+  const first = s.displayName.trim().split(/\s+/)[0] ?? "";
+  return [...new Set([s.displayName.trim(), first, ...s.aliases].filter(Boolean))];
+};
+
+/**
+ * In the owner's voice, generating and checking the update takes about half a
+ * minute, so do it right after preparing; the meeting then plays it from cache.
+ */
+async function warmOwnVoice(draft: Draft) {
+  const s = loadSettings();
+  if (!usingOwnVoice(s)) return;
+  try {
+    await speechModel();
+    whisper ??= startWhisper();
+    const w = await whisper;
+    const check = (wav: Float32Array) => transcribeSamples(w.url, wav, nameVariants(s));
+    const say = lines(s, draft, true), standard = lines(s, draft, false);
+    send({ kind: "log", text: "Getting your update ready in your voice…" });
+    await synthesize(say.update, { settings: s, takes: 3, check, standardText: standard.update });
+    await synthesize(say.defer, { settings: s, takes: 2, check });
+    await synthesize(say.ack, { settings: s, takes: 2, check });
+    send({ kind: "log", text: "Your update is ready in your voice." });
+  } catch (e) {
+    send({ kind: "log", text: `Couldn't prepare your voice ahead of time (${message(e)}). It'll be made when the meeting starts.` });
+  }
+}
+
+let voiceDownload: { progress: number; error?: string } | null = null;
+
+function downloadVoiceModel(): Promise<void> {
+  voiceDownload = { progress: 0 };
+  return ensureVoiceModel((progress) => { voiceDownload = { progress }; send({ kind: "voice", progress }); })
+    .then(() => { voiceDownload = null; send({ kind: "voice", progress: 1 }); })
+    .catch((e) => { voiceDownload = { progress: 0, error: message(e) }; send({ kind: "voice", progress: 0, error: message(e) }); throw e; });
+}
+
+const voiceStatus = () => ({ ...ownVoiceStatus(loadSettings()), modelBytes: VOICE_MODEL_BYTES, download: voiceDownload, consent: CONSENT_SENTENCE });
+
+function useStandardVoice() {
+  const s = loadSettings();
+  if (s.voice.mode !== "standard") saveSettings({ ...s, voice: { ...s.voice, mode: "standard" } });
+}
+
 /** Download the speech model if needed, reporting progress to the window. */
 function speechModel(): Promise<void> {
   return ensureModel((progress) => send({ kind: "model", progress }))
@@ -145,13 +199,32 @@ function handleUrl(url: string) {
 app.on("open-url", (e, url) => { e.preventDefault(); app.isReady() ? handleUrl(url) : app.once("ready", () => handleUrl(url)); });
 
 ipcMain.handle("settings:get", () => loadSettings());
-ipcMain.handle("settings:save", (_e, s: unknown) => saveSettings(s));
+ipcMain.handle("settings:save", (_e, input: unknown) => {
+  const s = saveSettings(input);
+  if (s.voice.mode === "mine" && !usingOwnVoice(s)) {
+    useStandardVoice();
+    throw new Error("Record your voice and download the voice model first; Peguin keeps the standard voice until then.");
+  }
+  return s;
+});
 ipcMain.handle("draft:get", () => ({ draft: loadDraft(), preparing: !!preparing }));
 ipcMain.handle("draft:prepare", () => prepare());
 ipcMain.handle("standup:next", () => nextStandup(loadSettings()));
 ipcMain.handle("meeting:join", (_e, url: string) => join(url));
 ipcMain.handle("meeting:leave", () => { meeting?.stop(); meeting = null; });
 ipcMain.handle("account:get", () => account);
+ipcMain.handle("voice:status", () => voiceStatus());
+ipcMain.handle("voice:download", () => downloadVoiceModel().then(voiceStatus));
+ipcMain.handle("voice:mic", () => (process.platform === "darwin" ? systemPreferences.askForMediaAccess("microphone") : true));
+ipcMain.handle("voice:save", (_e, pcm: ArrayBuffer) => { saveSample(new Float32Array(pcm)); forgetVoice(); return voiceStatus(); });
+ipcMain.handle("voice:delete", () => { useStandardVoice(); deleteSample(); forgetVoice(); return voiceStatus(); });
+ipcMain.handle("voice:delete-model", () => { useStandardVoice(); deleteVoiceModel(); return voiceStatus(); });
+ipcMain.handle("voice:preview", async () => {
+  const s = loadSettings();
+  if (!voiceModelReady()) throw new Error("Download the voice model first.");
+  const first = s.displayName.trim().split(/\s+/)[0] || "your owner";
+  return speakInOwnVoice(`Hi everyone, I'm Peguin, ${first}'s AI assistant, speaking in ${first}'s voice. This is how I'll sound in your standup.`, s);
+});
 ipcMain.handle("update:get", () => update);
 ipcMain.handle("update:open", () => { if (update) void shell.openExternal(update.url); });
 ipcMain.handle("account:signin", () => startSignIn());

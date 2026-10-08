@@ -2,6 +2,19 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-08: Speaking in the owner's own voice, on their Mac
+
+Opt-in, in Settings > Voice. Chatterbox Turbo (Resemble AI, MIT) runs through onnxruntime-node in the Electron main process with the pure-JS `@huggingface/tokenizers`, so there is no Python and no cloud call; findings and timings are in `spikes/voice/README.md`.
+
+- **Model:** fp32 (3.3 GB), downloaded only when the owner turns the feature on, pinned to one revision with exact file sizes. q4 (721 MB) was as fast but garbled technical phrases.
+- **Sample:** recorded live in the app (no file upload, so nobody can clone a colleague from a recording), starting with a consent sentence; stored encrypted with `safeStorage`; deletable with every line made from it.
+- **Sounding human:** sampling at temperature 0.6 instead of greedy decoding, one sentence at a time joined with 0.32 s pauses, Resemble's punctuation clean-up, loudness levelled, and the owner's spelling of their own name ("Moo-jeeb").
+- **Checked by ear:** prepared lines (update, defer, acknowledgement) are transcribed with the app's whisper and regenerated up to three times when the words come back wrong. Accented but correct speech scores 0.1-0.2 against off-the-shelf recognition, so the bar is 0.2, and the owner's aliases count as their name; a gained or lost negation ("can" heard as "can't") always fails. Live answers skip the check to stay quick.
+- **Ahead of time:** the update is made in the owner's voice right after it's prepared (about 25 s) and cached encrypted, so the meeting plays it instantly.
+- **Disclosure:** unchanged and still first, plus "speaking in <name>'s voice" when the own voice is on. If the own voice fails, Peguin falls back to the standard voice and drops that phrase.
+- **Prompts write for the ear** (short sentences, no stacked technical nouns, numbers as words), which helps both voices.
+- Not yet: Perth watermarking (the reference implementation needs PyTorch), streaming answers sentence by sentence, CoreML.
+
 ## 2026-10-07: Reduced motion means calmer, not off
 
 Visitors with "reduce motion" switched on (common on Windows, where turning off animation effects sets it) saw an almost static site. Now reduced motion keeps fades, typing, speaking bars, the hero scene, the scripted app demo and the perched penguin, and drops only travel: smooth scrolling, parallax, the showcase tilt, cursor-driven layer drift, looping background motion and the help penguin's walk-in. Reveals fade in place instead of sliding. The build also targets Safari 14 and Chrome 87 so older Macs and iPhones get the full site.

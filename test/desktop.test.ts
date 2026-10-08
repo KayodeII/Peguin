@@ -10,7 +10,8 @@ import type { Settings } from "../desktop/src/main/settings.js";
 const settings = (standup: Partial<Settings["standup"]> = {}): Settings => ({
   displayName: "Mujeeb Adebowale", aliases: [], timezone: "Africa/Lagos",
   standup: { url: "https://meet.google.com/abc-defg-hij", time: "09:30", days: [1, 2, 3, 4, 5], auto: true, ...standup },
-  sources: { git: true, github: true, claude_code: true }, voice: "default", runHidden: true, onboarded: true,
+  sources: { git: true, github: true, claude_code: true }, voice: { mode: "standard", namePronounced: "" },
+  appearance: { theme: "system", accent: "blue" }, runHidden: true, onboarded: true,
 });
 // Lagos is UTC+1 all year. 2026-10-07 is a Wednesday.
 const lagos = (hhmm: string, date = "2026-10-07") => new Date(`${date}T${hhmm}:00+01:00`);

@@ -63,6 +63,18 @@ async function transcribe(whisperUrl: string, pcm: Buffer, names: string[]): Pro
   return clean(body.text ?? "");
 }
 
+/** Transcribes 24 kHz float audio (Peguin's own speech), to check generated lines. */
+export function transcribeSamples(whisperUrl: string, samples: Float32Array, names: string[] = []): Promise<string> {
+  const n = Math.floor((samples.length * RATE) / 24000);
+  const pcm = Buffer.alloc(n * 2);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 24000) / RATE, j = Math.floor(x), f = x - j;
+    const v = (samples[j] ?? 0) * (1 - f) + (samples[j + 1] ?? 0) * f; // linear resample 24k -> 16k
+    pcm.writeInt16LE(Math.round(Math.max(-1, Math.min(1, v)) * 32767), i * 2);
+  }
+  return transcribe(whisperUrl, pcm, names);
+}
+
 export type Utterance = { text: string; sttMs: number; endedAt: number };
 
 /** Feed PCM chunks in; finished utterances come out in order, one at a time. */

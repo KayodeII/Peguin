@@ -7,8 +7,9 @@ import path from "node:path";
 import { TurnDetector } from "../../../../src/realtime/turn.js";
 import type { Draft } from "../brain.js";
 import type { Settings } from "../settings.js";
-import { synthesize } from "../speech/tts.js";
-import { createListener, type Whisper } from "../speech/whisper.js";
+import { synthesize, type SynthesizeOptions } from "../speech/tts.js";
+import { usingOwnVoice } from "../speech/voice/index.js";
+import { createListener, transcribeSamples, type Whisper } from "../speech/whisper.js";
 import { outDir, resource } from "../paths.js";
 import { botName, detectPlatform, webClientUrl, type Platform } from "./platform.js";
 
@@ -20,14 +21,17 @@ export type MeetingEvent =
 
 const SIGN_IN_HOSTS = /^(login\.microsoftonline\.com|login\.live\.com|accounts\.google\.com)$/;
 
-/** The fixed words Peguin says. The update itself is the prepared draft, never made up here. */
-export function lines(s: Settings, draft: Draft | null) {
+/**
+ * The fixed words Peguin says. The update itself is the prepared draft, never made up here.
+ * In the owner's own voice, the disclosure also says so.
+ */
+export function lines(s: Settings, draft: Draft | null, ownVoice = false) {
   const first = (s.displayName.trim().split(/\s+/)[0] || "my owner");
   return {
     // Non-negotiable: disclose first.
-    update: `Hi everyone, I'm Peguin, ${first}'s AI assistant. ${first} is in another meeting, so I'm covering the update. `
+    update: `Hi everyone, I'm Peguin, ${first}'s AI assistant${ownVoice ? `, speaking in ${first}'s voice` : ""}. ${first} is in another meeting, so I'm covering the update. `
       + (draft?.script ?? `I don't have an update prepared, so ${first} will share it after the call.`)
-      + ` ${first} can follow up on anything after the call.`,
+      + ` ${first} will follow up on anything else after the call.`,
     defer: `Good question. I'll get ${first} to follow up on that after the call.`,
     ack: "Yes, I'm here. Go ahead.",
   };
@@ -64,9 +68,22 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
     const name = botName(s.displayName, this.platform);
     const first = s.displayName.trim().split(/\s+/)[0] ?? "";
     const names = [...new Set([s.displayName.trim(), first, ...s.aliases].filter(Boolean))];
-    const say = lines(s, this.brain.draft);
-    // Pre-synthesize so Peguin answers instantly when called on.
-    const audio = { update: synthesize(say.update), defer: synthesize(say.defer), ack: synthesize(say.ack) };
+    const own = usingOwnVoice(s);
+    const say = lines(s, this.brain.draft, own);
+    const standard = lines(s, this.brain.draft, false);
+    // In the owner's voice, the prepared lines are checked by ear (regenerated if a word comes out wrong);
+    // live answers skip the check to stay quick.
+    const voice = (takes: number, standardText?: string): SynthesizeOptions => ({
+      settings: s, takes, standardText,
+      check: (wav) => transcribeSamples(this.whisper.url, wav, names),
+      onFallback: (reason) => this.log(`Your voice wasn't available (${reason}); using the standard voice.`),
+    });
+    // Pre-synthesize so Peguin answers instantly when called on (usually already cached from preparing).
+    const audio = {
+      update: synthesize(say.update, voice(3, standard.update)),
+      defer: synthesize(say.defer, voice(2)),
+      ack: synthesize(say.ack, voice(2)),
+    };
     for (const a of Object.values(audio)) a.catch((e) => this.log(`speech output failed: ${e}`));
 
     const win = new BrowserWindow({
@@ -108,7 +125,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent] }> {
         const text = await answer(question, recent);
         remember(`Peguin: ${text}`);
         this.log(`Answer: ${text}`);
-        return synthesize(text);
+        return synthesize(text, { ...voice(1), check: undefined });
       } catch (e) {
         this.log(`Couldn't answer (${e instanceof Error ? e.message : e}); deferring to you.`);
         return audio.defer;

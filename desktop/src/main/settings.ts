@@ -27,7 +27,15 @@ export const Settings = z.object({
     theme: z.enum(["system", "light", "dark", "midnight"]).default("system"),
     accent: z.enum(["blue", "purple", "green", "orange", "pink"]).default("blue"),
   }).default({ theme: "system", accent: "blue" }),
-  voice: z.enum(["default"]).default("default"),
+  /** "standard" is the built-in voice; "mine" is the owner's own (opt-in, recorded in Settings). */
+  voice: z.preprocess(
+    (v) => (typeof v === "string" ? { mode: "standard" } : v), // settings from before own voice stored "default"
+    z.object({
+      mode: z.enum(["standard", "mine"]).default("standard"),
+      /** How the owner's first name should be said, spelled for the voice model ("Moo-jeeb"). */
+      namePronounced: z.string().trim().max(40).default(""),
+    }).default({ mode: "standard", namePronounced: "" }),
+  ),
   runHidden: z.boolean().default(true),
   onboarded: z.boolean().default(false),
 });

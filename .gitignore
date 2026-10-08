@@ -4,3 +4,4 @@ dist
 *.log
 spikes/*/vendor
 spikes/*/gen
+__pycache__/

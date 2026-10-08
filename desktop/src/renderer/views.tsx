@@ -5,6 +5,7 @@ import type { Draft } from "../main/brain";
 import { botName } from "../main/meeting/platform";
 import type { Settings } from "../main/settings";
 import { Avatar, BrandIcon, dayTime, Icon, Logo, message, Toggle, Typing } from "./ui";
+import { VoiceSettings } from "./voice";
 
 const SOURCE_INFO = {
   git: { name: "Git commits", desc: "Commits in repos on this computer." },
@@ -162,6 +163,8 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
   const [error, setError] = useState("");
   // Appearance saves instantly; keep other unsaved edits when it does.
   useEffect(() => { setS((prev) => ({ ...prev, appearance: settings.appearance })); }, [settings.appearance]);
+  // The voice switch also saves instantly.
+  useEffect(() => { setS((prev) => ({ ...prev, voice: { ...prev.voice, mode: settings.voice.mode } })); }, [settings.voice.mode]);
   const setAppearance = (a: Partial<Settings["appearance"]>) => void save({ ...settings, appearance: { ...settings.appearance, ...a } });
   const next = { ...s, aliases: [...new Set(aliases.split(",").map((a) => a.trim()).filter(Boolean))].slice(0, 10) };
   const dirty = JSON.stringify(next) !== JSON.stringify(settings);
@@ -215,8 +218,8 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
           ))}
         </div>
 
-        <h3 className="section-label">Voice</h3>
-        <div className="row-card"><div className="row-main"><strong>Default voice</strong><p>Your own voice: coming soon.</p></div><span className="tag">Active</span></div>
+        <h3 className="section-label" id="voice">Voice</h3>
+        <VoiceSettings settings={settings} draft={s} setDraft={setS} save={save} />
 
         <h3 className="section-label">Advanced</h3>
         <label>Timezone<select value={s.timezone} onChange={(e) => setS({ ...s, timezone: e.target.value })}>{timezones.map((t) => <option key={t}>{t}</option>)}</select></label>
