@@ -93,7 +93,7 @@ export function signInEmail(origin: string, link: string, minutes: number): Omit
   };
 }
 
-export function welcomeEmail(origin: string, trialDays: number): Omit<Mail, "to"> {
+export function welcomeEmail(origin: string, trialDays: number, trialPlan: string): Omit<Mail, "to"> {
   const steps = [
     ["Install the Mac app", "Sign in from Settings in the app."],
     ["Set your standup", "Pick the days, the time and the meeting link."],
@@ -108,15 +108,49 @@ export function welcomeEmail(origin: string, trialDays: number): Omit<Mail, "to"
     html: layout({
       origin,
       art: true,
-      preheader: `Your ${trialDays}-day trial has started. No card needed.`,
+      preheader: `You have ${trialDays} days of ${trialPlan}, free. No card needed.`,
       heading: "Welcome to Peguin",
-      body: p(`Your ${trialDays}-day trial has started, and there's no card on file. Here's how to get your first standup covered:`)
+      body: p(`You have ${trialDays} days of ${trialPlan} free, and there's no card on file. After that you keep the Free plan unless you choose another. Here's how to get your first standup covered:`)
         + `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 12px">${list}</table>`
         + p("Peguin always tells the room it's an AI, and it only answers from what you actually shipped."),
       cta: { label: "Open your account", url: `${origin}/account` },
       footnote: "Questions? Click the penguin at the bottom of peguin.co and ask.",
     }),
-    text: `Welcome to Peguin.\n\nYour ${trialDays}-day trial has started, no card needed.\n\n${steps.map(([t, d], i) => `${i + 1}. ${t}. ${d}`).join("\n")}\n\nYour account: ${origin}/account`,
+    text: `Welcome to Peguin.\n\nYou have ${trialDays} days of ${trialPlan} free, no card needed.\n\n${steps.map(([t, d], i) => `${i + 1}. ${t}. ${d}`).join("\n")}\n\nYour account: ${origin}/account`,
+  };
+}
+
+export function waitlistEmail(origin: string): Omit<Mail, "to"> {
+  return {
+    subject: "You're on the Peguin waitlist",
+    html: layout({
+      origin,
+      art: true,
+      preheader: "We'll email you when your invite is ready.",
+      heading: "You're on the list",
+      body: p("Thanks for your interest in Peguin. We're letting people in a few at a time, so it runs well for everyone.")
+        + p("We'll email you at this address when your invite is ready. You don't need to do anything until then."),
+      footnote: "Didn't sign up? Ignore this email and you won't hear from us again.",
+    }),
+    text: "You're on the Peguin waitlist.\n\nWe're letting people in a few at a time. We'll email you here when your invite is ready.\n\nDidn't sign up? Ignore this email.",
+  };
+}
+
+export function inviteEmail(origin: string, trialDays: number, trialPlan: string): Omit<Mail, "to"> {
+  const url = `${origin}/signin?next=/account`;
+  return {
+    subject: "Your Peguin invite is ready",
+    html: layout({
+      origin,
+      art: true,
+      preheader: `Sign in with this email address to start. ${trialDays} days of ${trialPlan}, free.`,
+      heading: "You're in",
+      body: p("Your spot on the waitlist came up. Sign in with this email address, with Google or an email link, and your account is ready.")
+        + p(`You get ${trialDays} days of ${trialPlan} free, no card needed.`),
+      cta: { label: "Sign in to Peguin", url },
+      footnote: "The invite is for this email address only.",
+    }),
+    text: `Your Peguin invite is ready.\n\nSign in with this email address: ${url}\n\nYou get ${trialDays} days of ${trialPlan} free, no card needed.`,
   };
 }
 

@@ -3,8 +3,10 @@
 // can ask every 20 seconds without hammering anyone's calendar.
 import type { Settings } from "../settings.js";
 import { calendlySource } from "./calendly.js";
+import { googleSource } from "./google.js";
 import { icsSource } from "./ics.js";
 import { macSource } from "./mac.js";
+import { microsoftSource } from "./microsoft.js";
 import { nearMisses, standups, type Standup } from "./match.js";
 import { loadCalendarSecrets } from "./secrets.js";
 import type { CalendarEvent, CalendarKind, CalendarSource } from "./types.js";
@@ -25,9 +27,20 @@ export function connectedSources(s: Settings): CalendarSource[] {
   const secrets = loadCalendarSecrets();
   const out: CalendarSource[] = [];
   if (s.calendar.mac) out.push(macSource);
+  for (const a of secrets.accounts) {
+    if (a.provider === "google") out.push(googleSource(a.id, a.account));
+    if (a.provider === "microsoft") out.push(microsoftSource(a.id, a.account));
+    if (a.provider === "calendly") out.push(calendlySource({ accountId: a.id }));
+  }
   if (secrets.links.length) out.push(icsSource(secrets.links));
   if (secrets.calendlyToken) out.push(calendlySource(secrets.calendlyToken));
   return out;
+}
+
+/** What's connected, without any secret (tokens change on every refresh, so they mustn't key the cache). */
+function cacheKey(s: Settings): string {
+  const { accounts, links, calendlyToken } = loadCalendarSecrets();
+  return JSON.stringify([s.calendar, accounts.map((a) => a.id), links, !!calendlyToken]);
 }
 
 let cache: { key: string; at: number; value: Upcoming } | null = null;
@@ -36,7 +49,7 @@ let cache: { key: string; at: number; value: Upcoming } | null = null;
 export function refreshCalendars() { cache = null; }
 
 export async function upcoming(s: Settings, now = Date.now()): Promise<Upcoming> {
-  const key = JSON.stringify([s.calendar, loadCalendarSecrets()]);
+  const key = cacheKey(s);
   if (cache && cache.key === key && now - cache.at < CACHE_MS) return cache.value;
   const from = new Date(now - LOOK_BACK_MS), to = new Date(now + LOOK_AHEAD_MS);
   const events: CalendarEvent[] = [];

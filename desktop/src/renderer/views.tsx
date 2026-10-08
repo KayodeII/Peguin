@@ -6,6 +6,7 @@ import { botName } from "../main/meeting/platform";
 import type { Settings } from "../main/settings";
 import { Avatar, BrandIcon, dayTime, Icon, Logo, message, Toggle, Typing } from "./ui";
 import { VoiceSettings } from "./voice";
+import { PLANS } from "../../../src/core/plans";
 import { CalendarSettings } from "./calendars";
 
 const SOURCE_INFO = {
@@ -281,7 +282,7 @@ const ACCENTS: { id: Settings["appearance"]["accent"]; color: string }[] = [
   { id: "blue", color: "#2383e2" }, { id: "purple", color: "#9065b0" }, { id: "green", color: "#448361" }, { id: "orange", color: "#d9730d" }, { id: "pink", color: "#c14c8a" },
 ];
 
-const PLAN: Record<string, string> = { active: "Active", trialing: "Free trial", non_renewing: "Cancelled, active until period end", past_due: "Payment failed", canceled: "Ended" };
+const PLAN_STATUS: Record<string, string> = { trialing: "free trial", non_renewing: "cancelled, active until period end", past_due: "payment failed" };
 
 function AccountCard({ account }: { account: Account | null }) {
   const [waiting, setWaiting] = useState(false);
@@ -292,11 +293,16 @@ function AccountCard({ account }: { account: Account | null }) {
       <button className="btn primary" onClick={() => { setWaiting(true); void window.penguin.signIn(); }}>Sign in</button>
     </div>
   );
-  const plan = account.status ? PLAN[account.status] ?? account.status : "No plan";
+  const status = account.status ? PLAN_STATUS[account.status] : undefined;
+  const warn = account.status === "past_due";
   return (
     <div className="row-card">
       <Avatar name={account.email} />
-      <div className="row-main"><strong>{account.email}</strong><p className={account.entitled ? "ok" : "warn"}>{plan}{account.entitled ? "" : " · start a plan on the website"}</p></div>
+      <div className="row-main">
+        <strong>{account.email}</strong>
+        <p className={warn ? "warn" : "ok"}>{PLANS[account.plan].name} plan{status ? `, ${status}` : ""}</p>
+      </div>
+      {account.plan !== "pro" && account.plan !== "team" && <button className="btn link" onClick={() => void window.penguin.openAccountPage()}>Upgrade</button>}
       <button className="btn ghost" onClick={() => void window.penguin.signOut()}>Sign out</button>
     </div>
   );

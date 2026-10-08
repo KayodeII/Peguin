@@ -1,7 +1,10 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, systemPreferences, Tray } from "electron";
 import { existsSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { checkForUpdate, completeSignIn, refreshAccount, signOut, startSignIn, type Account, type Update } from "./account.js";
+import {
+  CLOUD_URL, calendarProviders, checkForUpdate, completeCalendarConnect, completeSignIn, refreshAccount, signOut, startCalendarConnect, startSignIn,
+  type Account, type CalendarProvider, type Update,
+} from "./account.js";
 import { answerQuestion, isFresh, loadDraft, prepareDraft, summarizeMeeting, type Draft } from "./brain.js";
 import { deferredFollowUps, headline, mergeFollowUps, transcriptLines, worthKeeping, type MeetingRecord } from "./meeting/record.js";
 import { deleteAllMeetings, deleteMeeting, listMeetings, saveMeeting, setFollowUpDone } from "./meetings.js";
@@ -9,7 +12,8 @@ import { lines, meetingPaths, MeetingRunner, type MeetingEvent } from "./meeting
 import { nextStandup, startScheduler, whenLabel } from "./scheduler.js";
 import { nextCalendarStandup, refreshCalendars, upcoming } from "./calendar/index.js";
 import { macCalendarAccess, requestMacCalendarAccess } from "./calendar/mac.js";
-import { loadCalendarSecrets, maskLink, saveCalendarSecrets } from "./calendar/secrets.js";
+import { loadCalendarSecrets, maskLink, saveCalendarSecrets, upsertAccount } from "./calendar/secrets.js";
+import { allowed, checkWeeklyLimit, currentFeatures, currentPlan, recordJoin } from "./plan.js";
 import { loadSettings, saveSettings } from "./settings.js";
 import { fixPath, outDir, resource } from "./paths.js";
 import { ensureModel } from "./speech/model.js";
@@ -69,6 +73,7 @@ export type AppEvent =
   | { kind: "update"; update: Update | null }
   | { kind: "voice"; progress: number; error?: string }
   | { kind: "recaps" }
+  | { kind: "calendar"; error?: string }
   | { kind: "show"; view: string };
 
 function send(e: AppEvent) {
@@ -122,8 +127,10 @@ function prepare(): Promise<Draft> {
 }
 
 async function join(url: string) {
-  const settings = loadSettings();
+  const features = await currentFeatures();
+  const settings = allowed(loadSettings(), features);
   if (!settings.displayName.trim()) throw new Error("Add your name in Settings first, so Peguin knows when it's called.");
+  checkWeeklyLimit(features, settings.timezone, await currentPlan());
   meeting?.stop();
   let draft = loadDraft();
   if (!isFresh(draft, settings.timezone)) {
@@ -135,12 +142,16 @@ async function join(url: string) {
   whisper.catch(() => { whisper = null; });
   const runner = new MeetingRunner(url, settings, await whisper, meetingPaths(), {
     draft,
-    answer: (q, recent) => answerQuestion(settings, draft, q, recent),
+    // Plans without follow-up answers defer every question to the owner.
+    answer: features.followUps ? (q, recent) => answerQuestion(settings, draft, q, recent) : null,
   });
   meeting = runner;
   runner.on("record", (r) => void recapMeeting(r));
+  let counted = false;
   runner.on("event", (event) => {
     send({ kind: "meeting", event });
+    // A standup counts toward the weekly limit once Peguin is actually in the call.
+    if (event.kind === "status" && event.status === "in_call" && !counted) { counted = true; recordJoin(); }
     if (event.kind === "status" && (event.status === "ended" || event.status === "failed") && meeting === runner) meeting = null;
   });
   await runner.start();
@@ -158,7 +169,7 @@ const nameVariants = (s: ReturnType<typeof loadSettings>) => {
  * minute, so do it right after preparing; the meeting then plays it from cache.
  */
 async function warmOwnVoice(draft: Draft) {
-  const s = loadSettings();
+  const s = allowed(loadSettings(), await currentFeatures());
   if (!usingOwnVoice(s)) return;
   try {
     await speechModel();
@@ -189,7 +200,7 @@ async function recapMeeting(r: MeetingRecord) {
   saveMeeting(r);
   send({ kind: "recaps" });
   const lines = transcriptLines(r);
-  if (s.recap.summarize && lines.length) {
+  if (s.recap.summarize && lines.length && (await currentFeatures()).recaps) {
     try {
       const { summary, followUps } = await summarizeMeeting(s, lines);
       r.recap = { summary: summary || undefined, followUps: mergeFollowUps(deferred, followUps).map((text) => ({ text, done: false })), createdAt: Date.now() };
@@ -245,13 +256,32 @@ async function updateAccount(fn: () => Promise<Account | null>) {
 function handleUrl(url: string) {
   if (!url.startsWith("peguin://")) return;
   openWindow();
+  if (url.startsWith("peguin://calendar")) { void connectCalendar(url); return; }
   void updateAccount(async () => (await completeSignIn(url)) ?? account);
+}
+
+/** peguin://calendar from the browser: collect the connection and keep it in the Keychain. */
+async function connectCalendar(url: string) {
+  try {
+    const c = await completeCalendarConnect(url);
+    if (!c) return;
+    if (!c.refreshToken) throw new Error("The calendar didn't allow offline access. Connect it again.");
+    upsertAccount({ provider: c.provider, account: c.account, accessToken: c.accessToken, refreshToken: c.refreshToken, expiresAt: c.expiresAt });
+    const s = loadSettings();
+    if (!s.calendar.enabled) saveSettings({ ...s, calendar: { ...s.calendar, enabled: true } });
+    refreshCalendars();
+    send({ kind: "calendar" });
+  } catch (e) { send({ kind: "calendar", error: message(e) }); }
 }
 app.on("open-url", (e, url) => { e.preventDefault(); app.isReady() ? handleUrl(url) : app.once("ready", () => handleUrl(url)); });
 
 ipcMain.handle("settings:get", () => loadSettings());
-ipcMain.handle("settings:save", (_e, input: unknown) => {
+ipcMain.handle("settings:save", async (_e, input: unknown) => {
   const s = saveSettings(input);
+  if (s.voice.mode === "mine" && !(await currentFeatures()).ownVoice) {
+    useStandardVoice();
+    throw new Error("Speaking in your own voice comes with the Pro and Team plans. You can still record and preview it.");
+  }
   if (s.voice.mode === "mine" && !usingOwnVoice(s)) {
     useStandardVoice();
     throw new Error("Record your voice and download the voice model first; Peguin keeps the standard voice until then.");
@@ -269,7 +299,22 @@ ipcMain.handle("standup:next", async () => {
 });
 ipcMain.handle("calendar:status", async () => {
   const s = loadSettings(), secrets = loadCalendarSecrets();
-  return { mac: { on: s.calendar.mac, access: await macCalendarAccess() }, links: secrets.links.map(maskLink), calendly: !!secrets.calendlyToken };
+  return {
+    mac: { on: s.calendar.mac, access: await macCalendarAccess() },
+    accounts: secrets.accounts.map(({ id, provider, account }) => ({ id, provider, account })),
+    providers: await calendarProviders(),
+    links: secrets.links.map(maskLink),
+    calendlyToken: !!secrets.calendlyToken,
+  };
+});
+ipcMain.handle("calendar:connect", (_e, provider: CalendarProvider) => {
+  if (!["google", "microsoft", "calendly"].includes(provider)) throw new Error("Unknown calendar.");
+  return startCalendarConnect(provider);
+});
+ipcMain.handle("calendar:disconnect", (_e, id: string) => {
+  const secrets = loadCalendarSecrets();
+  saveCalendarSecrets({ ...secrets, accounts: secrets.accounts.filter((a) => a.id !== String(id)) });
+  refreshCalendars();
 });
 ipcMain.handle("calendar:mac-connect", async () => {
   const access = await requestMacCalendarAccess();
@@ -296,10 +341,9 @@ ipcMain.handle("calendar:remove-link", (_e, index: number) => {
   saveCalendarSecrets({ ...secrets, links: secrets.links.filter((_, i) => i !== Number(index)) });
   refreshCalendars();
 });
-ipcMain.handle("calendar:set-calendly", (_e, token: string | null) => {
-  saveCalendarSecrets({ ...loadCalendarSecrets(), calendlyToken: token ? String(token) : null });
-  const s = loadSettings();
-  if (token && !s.calendar.enabled) saveSettings({ ...s, calendar: { ...s.calendar, enabled: true } });
+// Removing a Calendly personal access token saved before one-click connections.
+ipcMain.handle("calendar:remove-calendly-token", () => {
+  saveCalendarSecrets({ ...loadCalendarSecrets(), calendlyToken: null });
   refreshCalendars();
 });
 ipcMain.handle("calendar:upcoming", (_e, fresh?: boolean) => { if (fresh) refreshCalendars(); return upcoming(loadSettings()); });
@@ -329,6 +373,7 @@ ipcMain.handle("voice:say-word", async (_e, word: string) => {
 ipcMain.handle("update:get", () => update);
 ipcMain.handle("update:open", () => { if (update) void shell.openExternal(update.url); });
 ipcMain.handle("account:signin", () => startSignIn());
+ipcMain.handle("account:open-page", () => shell.openExternal(`${CLOUD_URL}/account`));
 ipcMain.handle("account:signout", () => updateAccount(async () => { await signOut(); return null; }));
 
 app.whenReady().then(() => {

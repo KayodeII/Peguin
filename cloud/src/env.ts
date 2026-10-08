@@ -9,7 +9,18 @@ export interface Env {
   RECAPS_PER_DAY: string;
   ANTHROPIC_API_KEY?: string;
   PAYSTACK_SECRET_KEY?: string;
+  /** The single plan from before tiers; treated as Pro when PAYSTACK_PLANS doesn't name one. */
   PAYSTACK_PLAN_CODE?: string;
+  /** JSON {"basic":"PLN_…","pro":"PLN_…","team":"PLN_…"}: the Paystack plan behind each paid plan. */
+  PAYSTACK_PLANS?: string;
+  /** "open" (anyone can sign up) or "waitlist" (new accounts need an invite). */
+  SIGNUPS?: string;
+  /** Bearer token for /api/admin/* (inviting people from the waitlist). */
+  ADMIN_TOKEN?: string;
+  MICROSOFT_CLIENT_ID?: string;
+  MICROSOFT_CLIENT_SECRET?: string;
+  CALENDLY_CLIENT_ID?: string;
+  CALENDLY_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   RESEND_API_KEY?: string;

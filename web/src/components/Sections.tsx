@@ -1,44 +1,131 @@
-import { useEffect, useState } from "react";
-import { formatPrice, getPlan, type Plan } from "../api";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { FEATURE_ROWS, PLANS, type PlanId } from "../../../src/core/plans";
+import { api, formatPrice, getPlans, type PlanOffer, type Plans } from "../api";
 import { Icon, Link, Logo } from "../ui";
 import { Perched } from "./Perched";
 import { faq, TRIAL_DAYS } from "../faq";
 
 export { TRIAL_DAYS };
 
-/** The live Paystack plan: undefined while loading, null if it couldn't be loaded. */
-export function usePlan(): Plan | null | undefined {
-  const [plan, setPlan] = useState<Plan | null | undefined>(undefined);
-  useEffect(() => { void getPlan().then(setPlan); }, []);
-  return plan;
+/** Plans, live prices and whether sign-ups are open: undefined while loading, null if they couldn't be loaded. */
+export function usePlans(): Plans | null | undefined {
+  const [plans, setPlans] = useState<Plans | null | undefined>(undefined);
+  useEffect(() => { void getPlans().then(setPlans); }, []);
+  return plans;
 }
 
-const INCLUDED = [
-  "Updates written from git, GitHub and Claude Code",
-  "Joins Google Meet and Zoom on your schedule",
-  "Answers follow-ups from facts, defers the rest",
-  "Runs on your Mac, and your code stays there",
-];
+/** Sign-ups are open unless the server says it's waitlist-only. */
+export const useWaitlist = () => usePlans()?.signups === "waitlist";
 
-export function PricingCard() {
-  const plan = usePlan();
-  const [amount, period] = plan ? formatPrice(plan).split("/") : [];
+/** The main call to action: start a trial, or join the waitlist while sign-ups are closed. */
+export function StartButton({ className = "btn", children }: { className?: string; children?: ReactNode }) {
+  return useWaitlist()
+    ? <Link to="/waitlist" className={className}>Join the waitlist</Link>
+    : <Link to="/signin?next=/account" className={className}>{children ?? "Start free trial"}</Link>;
+}
+
+const ORDER: PlanId[] = ["free", "basic", "pro", "team"];
+/** Plans before prices load (or if they can't): the table still shows what each includes. */
+const FALLBACK: PlanOffer[] = ORDER.map((id) => ({ ...PLANS[id], price: null, onSale: id === "free" }));
+
+function included(o: PlanOffer): string[] {
+  return FEATURE_ROWS.flatMap((r) => {
+    const v = r.value(o.features);
+    if (v === false) return [];
+    return [typeof v === "string" ? (r.label === "Standups per week" ? (v === "Unlimited" ? "Every standup" : `${v} standups a week`) : `${r.label}: ${v}`) : r.label];
+  });
+}
+
+function PlanCard({ offer, waitlist, trial, currency }: { offer: PlanOffer; waitlist: boolean; trial: { days: number; plan: PlanId }; currency?: string }) {
+  const [amount, period] = offer.price ? formatPrice(offer.price).split("/")
+    : offer.id === "free" && currency ? formatPrice({ amount: 0, currency, interval: "monthly" }).split("/") : [];
+  const featured = offer.id === trial.plan;
+  const cta = waitlist || !offer.onSale
+    ? <Link to={`/waitlist?plan=${offer.id}`} className={`btn wide ${featured ? "" : "ghost"}`}>Join the waitlist</Link>
+    : offer.id === "free"
+      ? <Link to="/signin?next=/account" className="btn wide ghost">Start free</Link>
+      : <Link to={`/signin?next=${encodeURIComponent(`/account?plan=${offer.id}`)}`} className={`btn wide ${featured ? "" : "ghost"}`}>Start free trial</Link>;
   return (
-    <div className="plan">
-      <Perched />
+    <div className={`plan-card ${featured ? "featured" : ""}`}>
+      {featured && <Perched />}
       <div className="plan-head">
-        <span className="plan-name">Peguin</span>
-        <span className="pill">{TRIAL_DAYS} days free</span>
+        <span className="plan-name">{offer.name}</span>
+        {featured && <span className="pill">{trial.days} days free</span>}
       </div>
       <div className="price">
-        {plan ? <><strong>{amount}</strong><span>/{period}</span></>
-          : plan === null ? <span className="price-fallback">{TRIAL_DAYS} days free, then one monthly plan</span>
-          : <strong className="price-loading">&nbsp;</strong>}
+        {amount ? <><strong>{amount}</strong><span>/{period}</span></>
+          : <span className="price-fallback">{offer.id === "free" ? "No charge" : "Coming soon"}</span>}
       </div>
-      <p className="muted">Everything Peguin does. Cancel whenever you like.</p>
-      <ul className="checks">{INCLUDED.map((t) => <li key={t}><Icon name="check" size={16} />{t}</li>)}</ul>
-      <Link to="/signin?next=/account" className="btn wide">Start free trial</Link>
+      <p className="muted">{offer.blurb}</p>
+      <ul className="checks">{included(offer).map((t) => <li key={t}><Icon name="check" size={16} />{t}</li>)}</ul>
+      {cta}
     </div>
+  );
+}
+
+export function PricingTable({ compare = false }: { compare?: boolean }) {
+  const plans = usePlans();
+  const offers = plans?.plans ?? FALLBACK;
+  const trial = { days: plans?.trialDays ?? TRIAL_DAYS, plan: plans?.trialPlan ?? "pro" };
+  const currency = offers.find((o) => o.price)?.price?.currency; // Free shows 0 in the paid plans' currency
+  return (
+    <>
+      <div className="plan-grid">
+        {ORDER.map((id) => offers.find((o) => o.id === id)).filter((o): o is PlanOffer => !!o)
+          .map((o) => <PlanCard key={o.id} offer={o} waitlist={plans?.signups === "waitlist"} trial={trial} currency={currency} />)}
+      </div>
+      {compare && (
+        <div className="compare" role="region" aria-label="Compare plans" tabIndex={0}>
+          <table>
+            <thead><tr><th scope="col"><span className="sr-only">Feature</span></th>{ORDER.map((id) => <th key={id} scope="col">{PLANS[id].name}</th>)}</tr></thead>
+            <tbody>
+              {FEATURE_ROWS.map((r) => (
+                <tr key={r.label}>
+                  <th scope="row">{r.label}</th>
+                  {ORDER.map((id) => {
+                    const v = r.value(PLANS[id].features);
+                    return <td key={id}>{typeof v === "string" ? v : v ? <Icon name="check" size={16} /> : <span className="dash" aria-label="Not included">–</span>}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Email (and optionally the plan they want); the server answers the same whether or not they were already on it. */
+export function WaitlistForm({ plan: initialPlan, email: initialEmail = "" }: { plan?: string; email?: string }) {
+  const [email, setEmail] = useState(initialEmail);
+  const [plan, setPlan] = useState(ORDER.includes(initialPlan as PlanId) ? initialPlan! : "");
+  const [state, setState] = useState<"idle" | "busy" | "done">("idle");
+  const [error, setError] = useState("");
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setState("busy"); setError("");
+    try { await api("/api/waitlist", { body: { email, plan: plan || undefined, source: location.pathname } }); setState("done"); }
+    catch (err) { setError((err as Error).message); setState("idle"); }
+  }
+  if (state === "done") return (
+    <div className="waitlist-done" role="status">
+      <Icon name="check" size={20} />
+      <div><strong>You're on the list.</strong><p className="muted">We sent a confirmation to {email}. We'll email you there when your invite is ready.</p></div>
+    </div>
+  );
+  return (
+    <form className="waitlist-form" onSubmit={submit}>
+      {error && <div className="error" role="alert">{error}</div>}
+      <label>Work email<input type="email" required autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+      <label><span>Plan you're interested in <span className="muted">(optional)</span></span>
+        <select value={plan} onChange={(e) => setPlan(e.target.value)}>
+          <option value="">Not sure yet</option>
+          {ORDER.map((id) => <option key={id} value={id}>{PLANS[id].name}</option>)}
+        </select>
+      </label>
+      <button className="btn wide" disabled={state === "busy"}>{state === "busy" ? "Adding you" : "Join the waitlist"}</button>
+    </form>
   );
 }
 
@@ -82,7 +169,7 @@ export function Nav() {
           {NAV.map((n) => <Link key={n.to} to={n.to} onClick={() => setOpen(false)}>{n.label}</Link>)}
           <Link to="/account" className="nav-signin" onClick={() => setOpen(false)}>Sign in</Link>
         </nav>
-        <Link to="/signin?next=/account" className="btn small">Start free trial</Link>
+        <StartButton className="btn small" />
         <button className="menu" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen(!open)}>
           <Icon name={open ? "close" : "menu"} />
         </button>
@@ -108,7 +195,7 @@ export function Footer() {
         </div>
         <div>
           <h4>Account</h4>
-          <Link to="/signin?next=/account">Start free trial</Link>
+          <StartButton className="" />
           <Link to="/account">Sign in</Link>
         </div>
       </div>

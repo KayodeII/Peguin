@@ -1,11 +1,14 @@
 import { appConnect, appSignOut, appToken, emailStart, emailVerify, googleCallback, googleStart, requireUser, signOut } from "./auth.js";
-import { checkout, currentPlan, isEntitled, portal, subscriptionOf, webhook } from "./billing.js";
+import { TRIAL_PLAN } from "../../src/core/plans.js";
+import { accessOf, checkout, plans, portal, subscriptionOf, webhook } from "./billing.js";
+import { availableProviders, connectCallback, connectStart, connectToken, refreshToken } from "./calendars.js";
 import { answer, draft, recap } from "./claude.js";
 import { HttpError, type Env } from "./env.js";
 import { json } from "./http.js";
 import { issueLicense } from "./license.js";
 import { downloadMac, installedApp, latestRelease, releaseRoute } from "./release.js";
 import { supportChat, supportMessage } from "./support.js";
+import { invite, joinWaitlist, listWaitlist, waitlistMode } from "./waitlist.js";
 
 type Handler = (env: Env, req: Request, url: URL) => Promise<Response>;
 
@@ -25,20 +28,35 @@ const routes: Record<string, Handler> = {
 
   "GET /api/release": (env) => releaseRoute(env),
   "GET /download/mac": (env) => downloadMac(env),
-  "GET /api/plan": async (env) => json({ ...(await currentPlan(env)), trialDays: Number(env.TRIAL_DAYS) }, 200, { "cache-control": "public, max-age=300" }),
+  "GET /api/plans": async (env) => json({
+    signups: waitlistMode(env) ? "waitlist" : "open", trialDays: Number(env.TRIAL_DAYS), trialPlan: TRIAL_PLAN, plans: await plans(env),
+  }, 200, { "cache-control": "public, max-age=300" }),
   "GET /api/me": authed(async (env, _req, user) => {
     const sub = await subscriptionOf(env, user.id);
+    const access = accessOf(sub, user.trial_ends_at);
     return json({
-      email: user.email, name: user.name, subscription: sub, trial_ends_at: user.trial_ends_at, entitled: isEntitled(sub, user.trial_ends_at),
+      email: user.email, name: user.name, subscription: sub, trial_ends_at: user.trial_ends_at, plan: access.plan, status: access.status,
+      // Every account can use the app now (Free included); kept for app builds from before plans.
+      entitled: true,
       app: await installedApp(env, user.id), release: await latestRelease(env).then(({ version, available }) => ({ version, available })),
     });
   }),
-  "POST /api/billing/checkout": authed((env, _req, user) => checkout(env, user)),
+  "POST /api/billing/checkout": authed((env, req, user) => checkout(env, req, user)),
   "POST /api/billing/portal": authed((env, _req, user) => portal(env, user)),
   "GET /api/license": authed((env, _req, user) => issueLicense(env, user)),
   "POST /api/draft": authed((env, req, user) => draft(env, req, user)),
   "POST /api/answer": authed((env, req, user) => answer(env, req, user)),
   "POST /api/recap": authed((env, req, user) => recap(env, req, user)),
+
+  "GET /calendar/connect": (env, _req, url) => connectStart(env, url),
+  "GET /calendar/callback": (env, req, url) => connectCallback(env, req, url),
+  "GET /api/calendar/providers": async (env) => json({ providers: availableProviders(env) }),
+  "POST /api/calendar/token": authed((env, req, user) => connectToken(env, req, user)),
+  "POST /api/calendar/refresh": authed((env, req, user) => refreshToken(env, req, user)),
+
+  "POST /api/waitlist": (env, req) => joinWaitlist(env, req),
+  "GET /api/admin/waitlist": (env, req) => listWaitlist(env, req),
+  "POST /api/admin/invite": (env, req) => invite(env, req),
 
   "POST /api/support/chat": (env, req) => supportChat(env, req),
   "POST /api/support/message": (env, req) => supportMessage(env, req),
@@ -58,7 +76,7 @@ export default {
     if (url.hostname === "peguin.co") return Response.redirect(`https://www.peguin.co${url.pathname}${url.search}`, 301);
     const route = routes[`${req.method} ${url.pathname}`];
     if (!route) {
-      if (/^\/(api|auth|app|webhooks|download)\//.test(url.pathname)) return json({ error: "Not found." }, 404);
+      if (/^\/(api|auth|app|webhooks|download|calendar)\//.test(url.pathname)) return json({ error: "Not found." }, 404);
       return env.ASSETS.fetch(req);
     }
     try {

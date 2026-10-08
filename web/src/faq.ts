@@ -1,6 +1,8 @@
 // The FAQ on the site, also the knowledge the help chat answers from (cloud/src/support.ts).
 // Keep it true: the chat repeats it to customers.
 
+import { PLANS, TRIAL_PLAN } from "../../src/core/plans.js";
+
 export const TRIAL_DAYS = 14; // matches TRIAL_DAYS in cloud/wrangler.jsonc
 
 export type FaqItem = { q: string; a: string };
@@ -13,5 +15,5 @@ export const faq = (trialDays = TRIAL_DAYS): FaqItem[] => [
   { q: "What happens if someone asks a question it can't answer?", a: "It answers only from the facts it prepared. If the answer isn't there, it says it'll get you to follow up, and never makes something up." },
   { q: "Does my computer need to be on?", a: "Yes. Peguin runs on your Mac, which is usually already on when you're double-booked. It joins quietly in the background, muted with the camera off until it's called." },
   { q: "Is there a Windows version?", a: "Not yet. Peguin is macOS first; Windows is planned." },
-  { q: "How does the free trial work?", a: `You get ${trialDays} days from sign-up, no card needed. Subscribe any time to keep going; cancel from your account whenever you like.` },
+  { q: "How does the free trial work?", a: `New accounts get ${PLANS[TRIAL_PLAN].name} free for ${trialDays} days, no card needed. After that you're on Free (${PLANS.free.features.standupsPerWeek} standups a week) unless you pick a paid plan. Cancel a paid plan from your account whenever you like.` },
 ];

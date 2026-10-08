@@ -2,6 +2,17 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-08: Plans, a switchable waitlist, one-click calendars
+
+The owner asked for Free, Basic, Pro and Team plans, a waitlist, and calendars that connect with a click instead of pasted links.
+
+- **Plans live in one file**, `src/core/plans.ts`, shared by the Worker (daily AI limits, the plan signed into the licence), the website (cards and comparison table) and the desktop app (feature gates). Prices aren't in code: each paid plan is a Paystack plan (`PAYSTACK_PLANS` JSON, set by `cloud/scripts/paystack-setup.mjs`), and a plan without one shows "Coming soon" and offers the waitlist. The feature split (Free: 3 standups a week, no follow-ups, recaps or own voice; Basic: every standup + follow-ups; Pro: + recaps + own voice; Team: Pro with seats) is a first proposal for the owner to adjust in that file.
+- **Trial is Pro for TRIAL_DAYS, then Free**, not a lock-out. Every account gets a licence; old licences without `plan`, and subscriptions from before plans, count as Pro.
+- **Team can't be bought yet**: seats aren't built, so it's waitlist-only even if a Paystack plan exists.
+- **Desktop gates from the signed licence, offline**: own voice falls back to the standard voice (the owner's setting is kept), follow-ups defer, no AI summary, and Free counts standups joined per week (Monday start, owner's timezone) in `joins.json`. It's a local app, so this is honest-user enforcement; the Worker enforces the AI limits for real. `PENGUIN_PLAN` overrides the plan in development.
+- **Waitlist is a switch**, `SIGNUPS` in `wrangler.jsonc` ("waitlist" or "open"). With "waitlist", new emails need an invite; existing accounts always sign in. Invites go through `POST /api/admin/invite` (bearer `ADMIN_TOKEN`), which also emails the invite.
+- **Calendars connect through the Worker, which keeps no calendar tokens.** It holds the OAuth client secrets, runs consent, and hands tokens to the app once via `peguin://calendar` with PKCE (the hand-off row is encrypted with a key derived from the one-time code, and deleted when collected). The app stores tokens in the Keychain and refreshes through `/api/calendar/refresh`, a pass-through. Google uses the sign-in OAuth client with `calendar.events.readonly` (Google review needed past 100 users); Outlook uses Microsoft Graph `Calendars.Read`; Calendly uses its OAuth app. A provider without its client configured is hidden in the app. Mac Calendar and iCal links stay as alternatives; old Calendly personal tokens keep working.
+
 ## 2026-10-08: Standups from the owner's calendars
 
 The owner wanted calendars from wherever they live (Meet's Google Calendar, the Mac, Calendly and so on), so calendars are adapters behind one interface (`desktop/src/main/calendar/`), like activity sources:

@@ -6,6 +6,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { PromptActivity } from "../../../src/core/brain/prompts.js";
+import { isPlanId, type PlanId } from "../../../src/core/plans.js";
 import { isNewer } from "../../../src/core/version.js";
 
 /** Production for installed builds; the local Worker (cd cloud && npm run dev) when running from source. */
@@ -16,8 +17,11 @@ const LICENSE_PUBLIC_JWK: JsonWebKey = CLOUD_URL === "https://www.peguin.co"
   ? { kty: "OKP", crv: "Ed25519", x: "veOVebzrrsqQu5EhGWAV326XeF53puDM6EDlFwUuZuA" }
   : { kty: "OKP", crv: "Ed25519", x: "9zqCksjEbfm0DIFzx5hv9P7iZuYsz5iQEi5kgFAEmTs" };
 
-export type Account = { email: string; status: string | null; entitled: boolean; licenseUntil: number | null };
-type License = { sub: string; email: string; status: string; exp: number };
+export type Account = { email: string; status: string | null; plan: PlanId; entitled: boolean; licenseUntil: number | null };
+/** `plan` is missing from licences issued before plans existed; those were all Pro. */
+type License = { sub: string; email: string; status: string; plan?: PlanId; exp: number };
+
+export const planOf = (lic: License | null): PlanId => (!lic ? "free" : isPlanId(lic.plan) ? lic.plan : "pro");
 
 const dir = () => app.getPath("userData");
 const tokenFile = () => path.join(dir(), "account.bin");
@@ -98,20 +102,16 @@ export async function offlineLicense(): Promise<License | null> {
 export async function refreshAccount(): Promise<Account | null> {
   if (!loadToken()) return null;
   try {
-    const me = await cloud<{ email: string; entitled: boolean; subscription: { status: string } | null }>("/api/me");
-    if (me.entitled) {
-      const { license } = await cloud<{ license: string }>("/api/license");
-      if (await verifyLicense(license)) writeFileSync(licenseFile(), license);
-    } else {
-      rmSync(licenseFile(), { force: true });
-    }
+    // Every account has a licence now (Free included); it carries the plan the app gates features on.
+    const me = await cloud<{ email: string; status?: string }>("/api/me");
+    const { license } = await cloud<{ license: string }>("/api/license");
+    if (await verifyLicense(license)) writeFileSync(licenseFile(), license);
     const lic = await offlineLicense();
-    const paid = me.subscription && me.subscription.status !== "canceled" ? me.subscription.status : null;
-    return { email: me.email, status: paid ?? (me.entitled ? "trialing" : me.subscription?.status ?? null), entitled: !!lic, licenseUntil: lic?.exp ?? null };
+    return { email: me.email, status: me.status ?? lic?.status ?? null, plan: planOf(lic), entitled: !!lic, licenseUntil: lic?.exp ?? null };
   } catch (e) {
     if ((e as { status?: number }).status === 401) { signOutLocal(); return null; }
     const lic = await offlineLicense(); // offline: trust the signed licence until it expires
-    return lic ? { email: lic.email, status: lic.status, entitled: true, licenseUntil: lic.exp } : null;
+    return lic ? { email: lic.email, status: lic.status, plan: planOf(lic), entitled: true, licenseUntil: lic.exp } : null;
   }
 }
 
@@ -124,6 +124,49 @@ export async function signOut(): Promise<void> {
   await cloud("/api/app/signout", { method: "POST", body: {} }).catch(() => {});
   signOutLocal();
 }
+
+export const signedIn = () => !!loadToken();
+
+/* ------------------------------------------------------------ calendar connections */
+
+export type CalendarProvider = "google" | "microsoft" | "calendly";
+export type CalendarTokens = { accessToken: string; refreshToken: string | null; expiresAt: number };
+export type CalendarConnection = CalendarTokens & { provider: CalendarProvider; account: string };
+
+let pendingCalendar: { verifier: string; state: string } | null = null;
+
+/** Which calendars the server can connect (those whose OAuth apps are set up). */
+export async function calendarProviders(): Promise<CalendarProvider[]> {
+  try { return (await cloud<{ providers: CalendarProvider[] }>("/api/calendar/providers", { token: null })).providers; }
+  catch { return []; }
+}
+
+/** Opens the provider's consent page in the browser; the result arrives through completeCalendarConnect(). */
+export async function startCalendarConnect(provider: CalendarProvider): Promise<void> {
+  if (!loadToken()) throw new Error("Sign in to your Peguin account first (Settings, Account), then connect calendars.");
+  const verifier = b64u(randomBytes(32));
+  const state = b64u(randomBytes(16));
+  pendingCalendar = { verifier, state };
+  const challenge = b64u(createHash("sha256").update(verifier).digest());
+  await shell.openExternal(`${CLOUD_URL}/calendar/connect?provider=${provider}&challenge=${challenge}&state=${state}`);
+}
+
+/** Handles peguin://calendar?code=…&state=…; null for any other link. */
+export async function completeCalendarConnect(url: string): Promise<CalendarConnection | null> {
+  const u = new URL(url);
+  if (u.hostname !== "calendar") return null;
+  const code = u.searchParams.get("code");
+  if (!code || !pendingCalendar || u.searchParams.get("state") !== pendingCalendar.state) {
+    throw new Error("That calendar connection didn't come from this app. Click Connect again.");
+  }
+  const { verifier } = pendingCalendar;
+  pendingCalendar = null;
+  return cloud<CalendarConnection>("/api/calendar/token", { body: { code, verifier } });
+}
+
+/** A fresh access token through the server, which holds the OAuth client secret. Keeps none of it. */
+export const refreshCalendarToken = (provider: CalendarProvider, refreshToken: string) =>
+  cloud<CalendarTokens>("/api/calendar/refresh", { body: { provider, refreshToken } });
 
 /** Server-side Claude, for subscribers. */
 export const cloudDraft = (name: string, activity: PromptActivity[], failed: string[]) =>

@@ -27,9 +27,16 @@ const BRANDS: Record<string, SimpleIcon> = {
   linear: siLinear, jira: siJira, google_meet: siGooglemeet, zoom: siZoom,
 };
 
+/** Marks simple-icons doesn't carry: a plain calendar glyph on the brand's colour. */
+const CALENDAR_GLYPH = "M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V9h14v11zM7 11h5v5H7z";
+const OTHER: Record<string, Pick<SimpleIcon, "hex" | "path" | "title">> = {
+  outlook: { hex: "0078D4", path: CALENDAR_GLYPH, title: "Outlook" },
+  calendar_link: { hex: "6B6B6B", path: CALENDAR_GLYPH, title: "Calendar link" },
+};
+
 /** A brand mark on its brand colour, readable in every theme. */
 export function BrandIcon({ id, size = 32 }: { id: string; size?: number }) {
-  const icon = BRANDS[id];
+  const icon = BRANDS[id] ?? OTHER[id];
   if (!icon) return null;
   return (
     <span className="brand-icon" style={{ width: size, height: size, background: `#${icon.hex}` }} title={icon.title} aria-hidden>
