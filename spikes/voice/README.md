@@ -155,6 +155,12 @@ The owner judged run 3 (60 sentences) "natural; flow and intonation need work, b
   real-time (RTF 0.71-0.86, same as zero-shot) and clear. "merged the payment webhook retries"
   came back **exactly** for the first time. Still: "Peguin" ("Penguin", "Peckwan"), "will do"
   -> "we do", "merged" -> "masked" once.
+- Intonation tests on the patched voice (`gen/tone-A..D`, ear-friendly update, one take):
+  A = 2 sentences per generation, temperature 0.6: smoother, but **dropped two sentences**;
+  B = 1 per generation, 0.75: added "um..." and garbled a phrase; C = 2 per generation, 0.75:
+  mostly right, moved a sentence break; D = 3 per generation, 0.75, 0.22 s pause: more slips.
+  Higher temperature costs accuracy; grouping can drop content (the app's whisper re-check
+  would catch a dropped sentence as a large word error). Waiting on the owner's ears.
 - Gotcha: `turbo_v2.py` hangs at start-up when Hugging Face is unreachable (tokenizer check, no
   timeout). Run with `HF_HUB_OFFLINE=1`.
 
