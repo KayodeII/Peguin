@@ -58,6 +58,7 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 | `google-signin-reasons` | Google sign-in failures show which step failed and log Google's error code | Push, PR, deploy, retry sign-in; if the log says `invalid_client`, regenerate `GOOGLE_CLIENT_SECRET`. |
 | `voice-finetune-spike` | Fine-tuning test (see `spikes/voice/README.md`, v3) | Finish the comparison, then decide. |
 | `try-everything` | Throwaway: `main` + the two branches above, for local end-to-end testing | Delete when done. |
+| `natural-voice-sample` | The voice sample becomes two recordings: the consent sentence (kept encrypted as the record) and ~20 s of unscripted natural talk, which becomes the voice; old scripted samples get a "record again" note. Includes the merged voice spike notes. | Owner records a new sample in the app and listens; push and PR. |
 
 ### Owner's end-to-end test (not done yet)
 Local site (`cd cloud && npx wrangler dev`) and app (`cd desktop && PEGUIN_VOICE_MODEL_DIR=~/Desktop/penguin/spikes/voice/vendor/models/chatterbox-turbo npm run dev`, not signed in so drafts use the Claude CLI): onboarding, prepare, record voice, connect Mac Calendar, a real Meet with the owner on a phone (update, follow-up, talk-over, deferral), then the recap.
