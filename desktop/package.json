@@ -1,6 +1,6 @@
 {
   "name": "penguin-desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Peguin covers your standup when you're double-booked.",
   "type": "module",
@@ -43,7 +43,7 @@
   "build": {
     "appId": "co.peguin.app",
     "productName": "Peguin",
-    "copyright": "\u00a9 Peguin",
+    "copyright": "© Peguin",
     "directories": {
       "output": "release",
       "buildResources": "build"
