@@ -113,9 +113,17 @@ export async function googleStart(env: Env, url: URL): Promise<Response> {
   });
 }
 
+/** Each way Google sign-in can fail gets its own message on the sign-in page, and a log line (never secrets). */
+const googleFailed = (reason: "state" | "denied" | "exchange" | "account", detail = "") => {
+  console.warn(`google sign-in failed: ${reason}${detail ? ` (${detail})` : ""}`);
+  return redirect(`/signin?error=google_${reason}`);
+};
+
 export async function googleCallback(env: Env, req: Request, url: URL): Promise<Response> {
+  const denied = url.searchParams.get("error");
+  if (denied) return googleFailed("denied", denied.slice(0, 60)); // e.g. access_denied: they cancelled
   const [state, nextEnc] = (readCookie(req, "pg_oauth") ?? "").split("|");
-  if (!state || state !== url.searchParams.get("state")) return redirect("/signin?error=google");
+  if (!state || state !== url.searchParams.get("state")) return googleFailed("state", state ? "mismatch" : "no cookie");
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -125,12 +133,17 @@ export async function googleCallback(env: Env, req: Request, url: URL): Promise<
       grant_type: "authorization_code",
     }),
   });
-  if (!res.ok) return redirect("/signin?error=google");
+  if (!res.ok) {
+    // Google's error code says why: invalid_client (wrong secret), redirect_uri_mismatch, invalid_grant (code used or expired).
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    return googleFailed("exchange", `${res.status} ${err.error ?? ""}`.trim());
+  }
   const { id_token } = (await res.json()) as { id_token?: string };
   // Received directly from Google over TLS, so the payload can be trusted without re-verifying the signature.
   const claims = JSON.parse(atob((id_token ?? "").split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/"))) as
     { sub: string; email: string; email_verified: boolean; name?: string; aud: string };
-  if (!claims.email_verified || claims.aud !== env.GOOGLE_CLIENT_ID) return redirect("/signin?error=google");
+  if (!claims.email_verified) return googleFailed("account", "email not verified");
+  if (claims.aud !== env.GOOGLE_CLIENT_ID) return googleFailed("exchange", "token for another client");
   const user = await findOrCreateUser(env, claims.email, { name: claims.name, googleSub: claims.sub });
   return startSession(env, user.id, safeNext(decodeURIComponent(nextEnc ?? "")));
 }
