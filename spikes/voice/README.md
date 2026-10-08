@@ -186,6 +186,12 @@ Conclusions:
 - Both trained variants break very short lines ("Thanks, will do"); otherwise competitive, not better.
 - Blind listening set for naturalness: `gen/blind/NN-A.wav` / `NN-B.wav` (7 pairs: natural vs ft,
   natural vs base, ft vs base, same update, shuffled); answers in `gen/blind-key.json`.
+- **Owner's blind picks (sounds more like them):** ft beat base 2-0; natural beat ft 2-1; natural vs
+  base 1-1. Totals: natural 3, ft 3, base 1. Small sample, but both new options sound better than
+  today's, and natural ties the fine-tuned voice on sound while winning on accuracy and cost.
+- **Decision: ship the natural reference clip** (record consent, then ~15-20 s of natural talk used as
+  the reference). Untested and worth trying later: the fine-tuned voice *with* a natural reference
+  (the ft clips here used the read-through `me.wav`), and fixing training's short-line weakness.
 
 ### Zero-shot comparison (same sample, same lines)
 - `zeroshot.py --model omnivoice|qwen`: OmniVoice (k2-fsa, Apache 2.0) in `vendor/venv-zs`,
