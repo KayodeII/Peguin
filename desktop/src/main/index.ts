@@ -313,7 +313,11 @@ ipcMain.handle("meetings:delete-all", () => { deleteAllMeetings(); });
 ipcMain.handle("voice:status", () => voiceStatus());
 ipcMain.handle("voice:download", () => downloadVoiceModel().then(voiceStatus));
 ipcMain.handle("voice:mic", () => (process.platform === "darwin" ? systemPreferences.askForMediaAccess("microphone") : true));
-ipcMain.handle("voice:save", (_e, pcm: ArrayBuffer) => { saveSample(new Float32Array(pcm)); forgetVoice(); return voiceStatus(); });
+ipcMain.handle("voice:save", (_e, consent: ArrayBuffer, talk: ArrayBuffer) => {
+  saveSample(new Float32Array(consent), new Float32Array(talk));
+  forgetVoice();
+  return voiceStatus();
+});
 ipcMain.handle("voice:delete", () => { useStandardVoice(); deleteSample(); forgetVoice(); return voiceStatus(); });
 ipcMain.handle("voice:delete-model", () => { useStandardVoice(); deleteVoiceModel(); return voiceStatus(); });
 // Previews use the owner's own lines: the disclosure and the start of their latest update.

@@ -9,7 +9,7 @@ import { message, Toggle } from "./ui";
 type VoiceStatus = {
   mode: Settings["voice"]["mode"];
   modelReady: boolean;
-  sample: { recordedAt: string; seconds: number } | null;
+  sample: { recordedAt: string; seconds: number; kind?: "talk" } | null;
   modelBytes: number;
   download: { progress: number; error?: string } | null;
   consent: string;
@@ -18,8 +18,6 @@ type VoiceStatus = {
 };
 
 const RATE = 24000;
-const MAX_S = 20;
-const MIN_S = 8;
 
 const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)} GB`;
 
@@ -79,7 +77,7 @@ export function VoiceSettings({ settings, draft, setDraft, save }: {
         <div className="row-main">
           <strong>Your voice sample</strong>
           <p>{status.sample
-            ? `${status.sample.seconds} seconds, recorded ${new Date(status.sample.recordedAt).toLocaleDateString()}. Encrypted on this Mac.`
+            ? `${status.sample.seconds} seconds, recorded ${new Date(status.sample.recordedAt).toLocaleDateString()}. Encrypted on this Mac.${status.sample.kind === "talk" ? "" : " Recorded the old way (reading a script): record again and just talk, for a more accurate voice."}`
             : "About 20 seconds, read aloud. You can only record your own voice here, not upload a file."}</p>
         </div>
         {status.sample && <button className="btn link" disabled={!!busy} onClick={() => run("delete", () => window.penguin.voiceDelete())}>Delete</button>}
@@ -176,14 +174,27 @@ function Pronunciations({ draft, setDraft, canHear, hear, busy }: {
 
 type Take = { samples: Float32Array; seconds: number };
 
-function Recorder({ consent, script, onClose, onSaved }: { consent: string; script: string | null; onClose: () => void; onSaved: () => void }) {
+type Step = "consent" | "talk";
+const LIMITS: Record<Step, { min: number; max: number }> = { consent: { min: 3, max: 15 }, talk: { min: 12, max: 25 } };
+
+/**
+ * Two short recordings: the consent sentence (kept as the record of consent),
+ * then the owner talking naturally about their work, unscripted, which becomes
+ * the voice. Reading a script made the voice noticeably less accurate.
+ */
+function Recorder({ consent, onClose, onSaved }: { consent: string; script: string | null; onClose: () => void; onSaved: () => void }) {
+  const [step, setStep] = useState<Step>("consent");
   const [phase, setPhase] = useState<"ready" | "countdown" | "recording" | "review">("ready");
   const [count, setCount] = useState(3);
   const [elapsed, setElapsed] = useState(0);
   const [levelPct, setLevelPct] = useState(0);
-  const [take, setTake] = useState<Take | null>(null);
+  const [takes, setTakes] = useState<Partial<Record<Step, Take>>>({});
   const [error, setError] = useState("");
   const rec = useRef<{ stop: () => Take } | null>(null);
+  const stepRef = useRef<Step>("consent");
+  stepRef.current = step;
+  const limits = LIMITS[step];
+  const take = takes[step];
 
   useEffect(() => () => { rec.current?.stop(); }, []);
 
@@ -191,7 +202,8 @@ function Recorder({ consent, script, onClose, onSaved }: { consent: string; scri
     if (!rec.current) return;
     const t = rec.current.stop();
     rec.current = null;
-    setTake(t); setPhase("review");
+    setTakes((prev) => ({ ...prev, [stepRef.current]: t }));
+    setPhase("review");
   }, []);
 
   async function start() {
@@ -206,15 +218,16 @@ function Recorder({ consent, script, onClose, onSaved }: { consent: string; scri
       const proc = ctx.createScriptProcessor(4096, 1, 1);
       const chunks: Float32Array[] = [];
       const began = performance.now();
+      const max = LIMITS[stepRef.current].max;
       proc.onaudioprocess = (e) => {
         const ch = e.inputBuffer.getChannelData(0);
         chunks.push(new Float32Array(ch));
         let sum = 0;
         for (const v of ch) sum += v * v;
         setLevelPct(Math.min(100, Math.sqrt(sum / ch.length) * 400));
-        const s = (performance.now() - began) / 1000;
-        setElapsed(s);
-        if (s >= MAX_S) finish();
+        const secs = (performance.now() - began) / 1000;
+        setElapsed(secs);
+        if (secs >= max) finish();
       };
       source.connect(proc); proc.connect(ctx.destination);
       rec.current = {
@@ -243,24 +256,38 @@ function Recorder({ consent, script, onClose, onSaved }: { consent: string; scri
     src.start();
   }
 
+  const redo = () => { setTakes((prev) => ({ ...prev, [step]: undefined })); setElapsed(0); setPhase("ready"); };
+  const next = () => { setStep("talk"); setElapsed(0); setPhase("ready"); };
+
   async function use() {
-    if (!take) return;
+    const c = takes.consent, t = takes.talk;
+    if (!c || !t) return;
     setError("");
-    try { await window.penguin.voiceSave(take.samples.buffer as ArrayBuffer); onSaved(); }
+    try { await window.penguin.voiceSave(c.samples.buffer as ArrayBuffer, t.samples.buffer as ArrayBuffer); onSaved(); }
     catch (e) { setError(message(e)); }
   }
 
   return (
     <div className="modal-backdrop">
       <div className="modal voice-modal" role="dialog" aria-labelledby="rec-title">
-        <h2 id="rec-title">Record your voice</h2>
-        <p className="modal-sub">Start with the sentence below, then keep talking at your normal standup pace. A quiet room helps.</p>
-        <blockquote className="script">
-          <p className="consent">{consent}</p>
-          {script
-            ? <p>{script}</p>
-            : <p className="free">Then talk for about 15 seconds about what you worked on yesterday and what's next, the way you would in standup.</p>}
-        </blockquote>
+        <p className="rec-step">Step {step === "consent" ? 1 : 2} of 2</p>
+        {step === "consent" ? (
+          <>
+            <h2 id="rec-title">Say this sentence</h2>
+            <p className="modal-sub">It records your consent. It isn't used as your voice.</p>
+            <blockquote className="script"><p className="consent">{consent}</p></blockquote>
+          </>
+        ) : (
+          <>
+            <h2 id="rec-title">Now just talk</h2>
+            <p className="modal-sub">About 20 seconds, the way you'd give your standup. Don't read anything: this becomes your voice, and natural talk makes it sound more like you.</p>
+            <ul className="talk-prompts">
+              <li>What you worked on yesterday</li>
+              <li>What you're doing today</li>
+              <li>Anything blocking you</li>
+            </ul>
+          </>
+        )}
 
         {phase === "ready" && <button className="btn primary wide" onClick={() => void start()}>Start recording</button>}
         {phase === "countdown" && <p className="rec-count">Starting in {count}</p>}
@@ -268,10 +295,12 @@ function Recorder({ consent, script, onClose, onSaved }: { consent: string; scri
           <>
             <div className="rec-row">
               <span className="rec-dot" />
-              <span>{Math.floor(elapsed)}s of {MAX_S}s</span>
+              <span>{Math.floor(elapsed)}s of {limits.max}s</span>
               <div className="meter"><i style={{ width: `${levelPct}%` }} /></div>
             </div>
-            <button className="btn primary wide" disabled={elapsed < MIN_S} onClick={finish}>{elapsed < MIN_S ? `Keep going (${Math.ceil(MIN_S - elapsed)}s)` : "Stop"}</button>
+            <button className="btn primary wide" disabled={elapsed < limits.min} onClick={finish}>
+              {elapsed < limits.min ? `Keep going (${Math.ceil(limits.min - elapsed)}s)` : "Stop"}
+            </button>
           </>
         )}
         {phase === "review" && take && (
@@ -279,14 +308,16 @@ function Recorder({ consent, script, onClose, onSaved }: { consent: string; scri
             <p className="hint center">{take.seconds.toFixed(0)} seconds recorded.</p>
             <div className="voice-actions center">
               <button className="btn ghost" onClick={listen}>Listen back</button>
-              <button className="btn ghost" onClick={() => { setTake(null); setElapsed(0); setPhase("ready"); }}>Record again</button>
-              <button className="btn primary" onClick={() => void use()}>Use this recording</button>
+              <button className="btn ghost" onClick={redo}>Record again</button>
+              {step === "consent"
+                ? <button className="btn primary" onClick={next}>Next</button>
+                : <button className="btn primary" onClick={() => void use()}>Use this recording</button>}
             </div>
           </>
         )}
         {error && <div className="notice error">{error}</div>}
         <button className="btn link wide" onClick={onClose}>Cancel</button>
-        <p className="hint center">Saved encrypted on this Mac. Delete it any time in Settings.</p>
+        <p className="hint center">Both recordings are saved encrypted on this Mac. Delete them any time in Settings.</p>
       </div>
     </div>
   );
