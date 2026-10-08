@@ -65,7 +65,7 @@ Local site (`cd cloud && npx wrangler dev`) and app (`cd desktop && PEGUIN_VOICE
 ### Voice quality work in progress
 The owner wants the most natural speech possible. In `spikes/voice/` (README, v3):
 - 21 of 60 training sentences recorded (`record_dataset.py`).
-- Fine-tuning Chatterbox Turbo with LoRA on the Mac works (65 s for 10 epochs). Toolkit defaults produced gibberish; English settings (original tokenizer, frozen text embeddings, r=16, lr 5e-5) trained cleanly, and their clips (`gen/ft-en-21/`) were being checked when this was written.
+- Fine-tuning Chatterbox Turbo with LoRA on the Mac works (65 s for 10 epochs). Toolkit defaults produced gibberish; English settings (original tokenizer, frozen text embeddings, r=16, lr 5e-5) trained cleanly and are intelligible from only 21 sentences, beating zero-shot on the jargon sentence; the owner still has to compare by ear, and record the other 39.
 - OmniVoice and Qwen3-TTS (both Apache 2.0) are installed for a zero-shot comparison but haven't generated yet.
 - If fine-tuning wins, shipping it is unsolved: the app runs ONNX, so each user's merged model would need exporting (no script yet), and training would have to run inside the app.
 

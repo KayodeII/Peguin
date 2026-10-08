@@ -125,8 +125,12 @@ in its own venv (`vendor/venv-ft`, torch 2.6, MPS). Patches made locally, needed
   trained): **gibberish**, and clips 2-3x too long. Peak memory 19.9 GB (swapped).
   Cause: retraining text embeddings for 2,400 new tokens from 21 sentences.
 - **Run 2, English settings** (`FT_MODEL_DIR=./pretrained_en FT_VOCAB=50276 FT_SAVE_MODULES=""
-  FT_LORA_R=16 FT_LORA_ALPHA=32 FT_LR=5e-5 FT_EPOCHS=10`): trained, peak 10.7 GB;
-  clips in `gen/ft-en-21/`, being checked.
+  FT_LORA_R=16 FT_LORA_ALPHA=32 FT_LR=5e-5 FT_EPOCHS=10`): trained, peak 10.7 GB. **Intelligible and natural length**, one take per
+  sentence, no re-checking (`gen/ft-en-21/`, small.en): the answer, the numbers line and the
+  whole ear-friendly update came back exactly; the jargon sentence came back as "met the
+  payment webhook, retries" (zero-shot garbled it even with 3 takes). Still off:
+  "Peguin" -> "Beguin"/"Peg Nguyen", "auth" -> "Aft", "Thanks, will do" -> "Thanks, we do".
+  PyTorch generation on MPS is slow (113 s for a 22 s update); irrelevant if shipped via ONNX.
 - Reproduce run 2: `cd vendor/chatterbox-finetuning`, then those env vars plus
   `FT_PRE=../../gen/dataset/preprocess-en FT_OUT=../../gen/finetune-en PYTORCH_ENABLE_MPS_FALLBACK=1 ../venv-ft/bin/python train.py`;
   generate with the same env and `../venv-ft/bin/python ../../ft_generate.py --out ../../gen/ft-en-21`;
