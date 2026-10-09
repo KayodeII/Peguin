@@ -1,11 +1,11 @@
 import { createHmac } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { accessOf, isEntitled, normaliseStatus, planCodes, planForCode, verifyPaystackSignature } from "../cloud/src/billing.js";
 import { availableProviders, emailFromIdToken, isProvider, seal, unseal } from "../cloud/src/calendars.js";
 import { signEd25519, verifyEd25519 } from "../cloud/src/crypto.js";
 import { escapeHtml, signInEmail, supportInboxEmail } from "../cloud/src/email.js";
 import { safeNext } from "../cloud/src/http.js";
-import { DMG_ASSET, fromGithub } from "../cloud/src/release.js";
+import { DMG_ASSET, fromGithub, githubLatest } from "../cloud/src/release.js";
 import { faqReply, HANDOFF, parseReply, plansText, supportSystem } from "../cloud/src/support.js";
 import { PLANS } from "../src/core/plans.js";
 import { compareVersions, isNewer } from "../src/core/version.js";
@@ -241,5 +241,34 @@ describe("release assets for updating in place", () => {
     expect(fromGithub({ tag_name: "v0.7.0", assets: [a(DMG_ASSET), a("Peguin-mac-arm64.zip"), a("SHA256SUMS.txt")] }))
       .toMatchObject({ version: "0.7.0", zip: "https://gh/Peguin-mac-arm64.zip", sums: "https://gh/SHA256SUMS.txt" });
     expect(fromGithub({ tag_name: "v0.5.0", assets: [a(DMG_ASSET), a("SHA256SUMS.txt")] })).not.toHaveProperty("zip");
+  });
+});
+
+describe("release lookup when GitHub fails", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  // A stand-in for the Workers cache; expiry is left out, `fresh` drops the short-lived entry.
+  function stubCache() {
+    const store = new Map<string, string>();
+    vi.stubGlobal("caches", { default: {
+      match: async (r: Request) => (store.has(r.url) ? new Response(store.get(r.url)) : undefined),
+      put: async (r: Request, res: Response) => { store.set(r.url, await res.text()); },
+    } });
+    return { fresh: () => { for (const k of [...store.keys()]) if (!k.endsWith("/last-good")) store.delete(k); } };
+  }
+  const release = { tag_name: "v0.6.0", assets: [{ name: DMG_ASSET, browser_download_url: "https://gh/dmg" }] };
+
+  it("serves the last good release instead of failing", async () => {
+    const cache = stubCache();
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(release)));
+    expect(await githubLatest("o/r")).toMatchObject({ version: "0.6.0" });
+    cache.fresh();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("rate limited", { status: 403 })));
+    expect(await githubLatest("o/r")).toMatchObject({ version: "0.6.0", url: "https://gh/dmg" });
+  });
+  it("still fails when it has never seen a release", async () => {
+    stubCache();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("rate limited", { status: 403 })));
+    await expect(githubLatest("o/r")).rejects.toThrow("403");
   });
 });
