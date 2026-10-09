@@ -28,16 +28,26 @@ export function fromGithub(r: GithubRelease): Release | null {
   return { version, available: true, url: dmg, ...(zip && sums ? { zip, sums } : {}) };
 }
 
-async function githubLatest(repo: string): Promise<Release | null> {
+/** How long the last good answer is kept for when GitHub fails (unauthenticated API calls from shared Worker IPs get rate limited). */
+const LAST_GOOD_SECONDS = 30 * 24 * 3600;
+
+export async function githubLatest(repo: string): Promise<Release | null> {
   const key = new Request(`https://release-cache.peguin.co/${repo}`);
+  const lastGood = new Request(`https://release-cache.peguin.co/${repo}/last-good`);
   const hit = await caches.default.match(key);
   if (hit) return hit.json<Release | null>();
   const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
     headers: { accept: "application/vnd.github+json", "user-agent": "peguin-cloud" },
   });
-  if (!res.ok && res.status !== 404) throw new Error(`GitHub releases returned ${res.status}`);
+  if (!res.ok && res.status !== 404) {
+    const stale = await caches.default.match(lastGood);
+    if (stale) return stale.json<Release | null>();
+    throw new Error(`GitHub releases returned ${res.status}`);
+  }
   const release = res.ok ? fromGithub(await res.json<GithubRelease>()) : null;
-  await caches.default.put(key, new Response(JSON.stringify(release), { headers: { "cache-control": `max-age=${CACHE_SECONDS}` } }));
+  const body = JSON.stringify(release);
+  await caches.default.put(key, new Response(body, { headers: { "cache-control": `max-age=${CACHE_SECONDS}` } }));
+  if (release) await caches.default.put(lastGood, new Response(body, { headers: { "cache-control": `max-age=${LAST_GOOD_SECONDS}` } }));
   return release;
 }
 
