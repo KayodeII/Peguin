@@ -207,3 +207,30 @@ describe("help chat without Claude", () => {
     expect(faqReply("hello??", 14)).toEqual({ text: expect.stringContaining("team can help"), handoff: true });
   });
 });
+
+describe("private copilot", async () => {
+  const { isQuestion, copilotSystem } = await import("../src/core/brain/prompts.js");
+
+  it("spots questions, including ones speech recognition didn't punctuate", () => {
+    expect(isQuestion("Mujeeb, when will the migration be done?")).toBe(true);
+    expect(isQuestion("what's the status on the refunds page")).toBe(true);
+    expect(isQuestion("so how did the deploy go")).toBe(true);
+    expect(isQuestion("Can you share the staging link")).toBe(true);
+  });
+  it("ignores statements and short fragments (false positives)", () => {
+    expect(isQuestion("I shipped the onboarding emails yesterday.")).toBe(false);
+    expect(isQuestion("Okay?")).toBe(false);
+    expect(isQuestion("Thanks, everyone.")).toBe(false);
+    expect(isQuestion("Let's take that offline.")).toBe(false);
+  });
+  it("suggests in the owner's words, from facts only, and says when it doesn't know", () => {
+    const s = copilotSystem("Ada Obi");
+    expect(s).toContain("only Ada Obi can see");
+    expect(s).toContain("first person as Ada");
+    expect(s).toContain("Not in your notes.");
+    expect(s).toContain("Never invent");
+  });
+  it("comes with Pro and Team", () => {
+    expect([PLANS.free, PLANS.basic, PLANS.pro, PLANS.team].map((p) => p.features.copilot)).toEqual([false, false, true, true]);
+  });
+});

@@ -6,8 +6,8 @@ import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { answerContext, answerSystem, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
-import { cloudAnswer, cloudDraft, cloudRecap, offlineLicense } from "./account.js";
+import { answerContext, answerSystem, copilotSystem, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
+import { cloudAnswer, cloudDraft, cloudRecap, cloudSuggest, offlineLicense } from "./account.js";
 import { gatherContext, type SourceReport } from "./context/index.js";
 import { wantsCues, type Settings } from "./settings.js";
 
@@ -85,6 +85,13 @@ export async function answerQuestion(s: Settings, draft: Draft | null, question:
   return (await viaAccount(!!(await offlineLicense()),
     () => cloudAnswer(s.displayName, draft?.facts ?? [], draft?.script, recent, question, cues),
     () => claude(`${answerSystem(s.displayName, { cues })}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000))).value;
+}
+
+/** A private copilot suggestion for the owner to say themselves (same routing as answers). */
+export async function suggestAnswer(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
+  return (await viaAccount(!!(await offlineLicense()),
+    () => cloudSuggest(s.displayName, draft?.facts ?? [], draft?.script, recent, question),
+    () => claude(`${copilotSystem(s.displayName)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 40000))).value;
 }
 
 /** Is this draft from today (in the user's timezone)? */
