@@ -5,6 +5,7 @@ import { HelpPenguin } from "./components/HelpPenguin";
 import { Footer, Nav } from "./components/Sections";
 import { Account, Connected, Pricing, SignIn, Waitlist } from "./pages/Account";
 import { Home } from "./pages/Home";
+import { Privacy, Terms } from "./pages/Legal";
 import "./styles.css";
 import { reducedMotion, scrollToHash, useRevealAll } from "./ui";
 
@@ -16,8 +17,8 @@ if (!reducedMotion()) {
   requestAnimationFrame(raf);
 }
 
-const PAGES: Record<string, () => JSX.Element | null> = { "/pricing": Pricing, "/signin": SignIn, "/account": Account, "/connected": Connected, "/waitlist": Waitlist };
-const TITLES: Record<string, string> = { "/pricing": "Pricing", "/signin": "Sign in", "/account": "Account", "/connected": "Connected", "/waitlist": "Join the waitlist" };
+const PAGES: Record<string, () => JSX.Element | null> = { "/pricing": Pricing, "/signin": SignIn, "/account": Account, "/connected": Connected, "/waitlist": Waitlist, "/privacy": Privacy, "/terms": Terms };
+const TITLES: Record<string, string> = { "/pricing": "Pricing", "/signin": "Sign in", "/account": "Account", "/connected": "Connected", "/waitlist": "Join the waitlist", "/privacy": "Privacy Policy", "/terms": "Terms of Service" };
 
 function App() {
   const [path, setPath] = useState(location.pathname);

@@ -198,6 +198,11 @@ export function Footer() {
           <StartButton className="" />
           <Link to="/account">Sign in</Link>
         </div>
+        <div>
+          <h4>Legal</h4>
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/terms">Terms</Link>
+        </div>
       </div>
       <div className="footer-base"><span>© {new Date().getFullYear()} Peguin</span><span>Made in Lagos</span></div>
       <div className="footer-mark" aria-hidden>Peguin</div>

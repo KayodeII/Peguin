@@ -41,7 +41,7 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 1. Real-call test of the current app: own voice, sentence-by-sentence answers, talking over Peguin. (Owner.)
 2. Plans, waitlist and one-click calendars (branch `plans-waitlist-oauth`) are built and tested locally (unit tests, local Worker with curl, screenshots), not against real providers. To go live: register the OAuth apps (Google: add `https://www.peguin.co/calendar/callback` and the `calendar.events.readonly` scope to the sign-in client, then Google review; Microsoft Entra app; Calendly OAuth app), set their secrets, `ADMIN_TOKEN`, run `paystack-setup.mjs` with the tier prices, `npm run db:migrate` (0005), deploy. Real test of the Mac Calendar permission flow in the packaged app.
 3. Optional Slack post of each recap (per-user webhook).
-4. Before charging strangers: Privacy Policy and Terms, Paystack live keys and final price, Resend DNS, `ANTHROPIC_API_KEY`, Apple Developer ID (notarised app, auto-update), watermarking cloned audio.
+4. Before charging strangers: owner review of the Privacy Policy and Terms (/privacy, /terms; add a legal entity and contact email), Paystack live keys and final price, Resend DNS, `ANTHROPIC_API_KEY`, Apple Developer ID (notarised app, auto-update), watermarking cloned audio.
 5. Later: streaming Claude's answer text, Linear and Jira sources, Teams via ACS, Windows.
 
 ## Handoff (2026-10-08 evening)
