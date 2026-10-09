@@ -50,7 +50,7 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 ### What's live
 - Release **v0.6.0** (copilot, update in place). Its zip and SHA256SUMS.txt are verified (checksum and bundle version match). It's the first build that can update itself; the swap is only proven when 0.7.0 ships and a 0.6.0 install takes it.
 - Worker deployed 2026-10-09 after #14 (`/api/suggest` live). Still no `ANTHROPIC_API_KEY` on the Worker.
-- `/api/release` sometimes answers the `0.1.0` fallback: the unauthenticated GitHub API call fails now and then (likely rate limits on shared Worker IPs). #14 stopped the edge caching that; branch `release-fallback` serves the last good release (kept 30 days) when GitHub fails. Needs merge and `wrangler deploy`.
+- `/api/release` sometimes answers the `0.1.0` fallback: the unauthenticated GitHub API call fails now and then (likely rate limits on shared Worker IPs). #14 stopped the edge caching that; #15 (merged, deployed 2026-10-09) serves the last good release, kept 30 days, when GitHub fails.
 
 Throwaway, delete when done: `try-everything`. Kept for reference: `voice-finetune-spike`.
 

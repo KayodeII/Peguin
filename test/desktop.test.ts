@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { claudeCodeActivity } from "../desktop/src/main/context/claudeCode.js";
-import { botName, webClientUrl } from "../desktop/src/main/meeting/platform.js";
+import { botName, chromeUserAgent, webClientUrl } from "../desktop/src/main/meeting/platform.js";
 import { due, nextStandup } from "../desktop/src/main/scheduler.js";
 import type { Settings } from "../desktop/src/main/settings.js";
 
@@ -120,5 +120,17 @@ describe("updating in place", async () => {
     execFileSync("/bin/sh", [script]);
     expect(fs.readFileSync(path.join(cur, "v"), "utf8")).toBe("old");
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("meeting windows present as plain Chrome", () => {
+  const chrome = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Safari/537.36";
+  it("drops the app's name and Electron, whatever the app is called", () => {
+    // Google Meet refused "Peguin/0.6.0" after the rename; the old rule only knew "penguin-desktop".
+    expect(chromeUserAgent(chrome.replace("Chrome/", "Peguin/0.6.0 Chrome/").replace("Safari/", "Electron/44.6.0 Safari/"))).toBe(chrome);
+    expect(chromeUserAgent(chrome.replace("Chrome/", "penguin-desktop/0.6.0 Chrome/"))).toBe(chrome);
+  });
+  it("leaves a real Chrome user agent alone", () => {
+    expect(chromeUserAgent(chrome)).toBe(chrome);
   });
 });
