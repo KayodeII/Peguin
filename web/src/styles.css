@@ -344,7 +344,6 @@ main.bare { min-height: 100vh; }
 .tp .hp-bird { pointer-events: none; cursor: default; scale: 1.45; transform-origin: 0 0; }
 .tp .hp-sprite { filter: drop-shadow(0 6px 8px rgba(15, 15, 15, .18)); }
 .tp .hp-chirp { top: -18px; left: 40px; right: auto; border-bottom-left-radius: 2px; }
-.tp .hp-flag { left: 61px; }
 .tp.tp-sit .hp-foot { transform-box: view-box; animation: tp-dangle .7s ease-in-out infinite alternate; }
 .tp.tp-sit .hp-foot-l { transform-origin: 29px 80px; }
 .tp.tp-sit .hp-foot-r { transform-origin: 51px 80px; animation-delay: -.35s; }

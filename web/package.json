@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build --logLevel warn",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "og": "npx --prefix ../desktop electron scripts/og.cjs"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
