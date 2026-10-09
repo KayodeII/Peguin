@@ -4,7 +4,7 @@ import { Hero, Marquee } from "../components/Hero";
 import { MeetingDemo } from "../components/MeetingDemo";
 import { Morning } from "../components/Morning";
 import { ExpandingPhoto, PeopleRail } from "../components/Scenes";
-import { Faq, PricingCard, TRIAL_DAYS } from "../components/Sections";
+import { Faq, PricingTable, TRIAL_DAYS } from "../components/Sections";
 import { FeatureRows, Tiles } from "../components/Showcase";
 import { Transform } from "../components/Transform";
 import { PHOTOS } from "../photos";
@@ -80,10 +80,10 @@ export function Home() {
       <section className="flow-section" id="pricing" data-bg={BG.ice}>
         <div className="flow-inner">
           <div className="section-head">
-            <Rise text="One plan" />
-            <p className="section-lead" data-reveal>{TRIAL_DAYS} days free, without a card. Then one monthly price.</p>
+            <Rise text="Plans" />
+            <p className="section-lead" data-reveal>Start free. New accounts get Pro for {TRIAL_DAYS} days, no card needed.</p>
           </div>
-          <div data-reveal><PricingCard /></div>
+          <div data-reveal><PricingTable /></div>
         </div>
       </section>
 

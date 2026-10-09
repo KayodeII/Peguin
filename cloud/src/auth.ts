@@ -1,8 +1,10 @@
+import { PLANS, TRIAL_PLAN } from "../../src/core/plans.js";
 import { b64url, randomToken, sha256 } from "./crypto.js";
 import { VERSION_RE } from "../../src/core/version.js";
 import { sendEmail, signInEmail, welcomeEmail } from "./email.js";
 import { HttpError, need, type Env } from "./env.js";
 import { body, cookie, json, now, readCookie, redirect, safeNext } from "./http.js";
+import { mayCreateAccount, userExists } from "./waitlist.js";
 
 export type User = { id: string; email: string; name: string | null; paystack_customer_code: string | null; trial_ends_at: number | null };
 const USER_COLS = "u.id, u.email, u.name, u.paystack_customer_code, u.trial_ends_at";
@@ -13,8 +15,10 @@ const LINK_MINUTES = 15;
 const CODE_MINUTES = 5;
 const secure = (env: Env) => env.APP_ORIGIN.startsWith("https://");
 
-async function findOrCreateUser(env: Env, email: string, extra: { name?: string; googleSub?: string } = {}): Promise<User> {
+/** Null when sign-ups are on the waitlist and this new email hasn't been invited. */
+async function findOrCreateUser(env: Env, email: string, extra: { name?: string; googleSub?: string } = {}): Promise<User | null> {
   const e = email.trim().toLowerCase();
+  if (!(await userExists(env, e)) && !(await mayCreateAccount(env, e))) return null;
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO users (id, email, name, google_sub, created_at, trial_ends_at) VALUES (?, ?, ?, ?, ?, ?)
@@ -27,7 +31,7 @@ async function findOrCreateUser(env: Env, email: string, extra: { name?: string;
 
 /** Best effort: a failed welcome email mustn't block signing in. */
 async function sendWelcome(env: Env, to: string) {
-  try { await sendEmail(env, { to, ...welcomeEmail(env.APP_ORIGIN, Number(env.TRIAL_DAYS)) }); }
+  try { await sendEmail(env, { to, ...welcomeEmail(env.APP_ORIGIN, Number(env.TRIAL_DAYS), PLANS[TRIAL_PLAN].name) }); }
   catch (e) { console.error("welcome email failed", e); }
 }
 
@@ -76,6 +80,9 @@ export async function requireUser(env: Env, req: Request): Promise<User> {
 export async function emailStart(env: Env, req: Request): Promise<Response> {
   const { email, next } = await body<{ email?: string; next?: string }>(req);
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "Enter a valid email address.");
+  if (!(await userExists(env, email)) && !(await mayCreateAccount(env, email))) {
+    throw new HttpError(403, "Peguin is invite-only for now, and this email hasn't been invited yet.");
+  }
   const token = randomToken();
   await env.DB.prepare("INSERT INTO magic_links (token_hash, email, next, expires_at) VALUES (?, ?, ?, ?)")
     .bind(await sha256(token), email.trim().toLowerCase(), safeNext(next), now() + LINK_MINUTES * 60).run();
@@ -95,6 +102,7 @@ export async function emailVerify(env: Env, url: URL): Promise<Response> {
   ).bind(now(), await sha256(token), now()).first<{ email: string; next: string }>();
   if (!row) return redirect("/signin?error=link");
   const user = await findOrCreateUser(env, row.email);
+  if (!user) return redirect("/signin?error=waitlist");
   return startSession(env, user.id, safeNext(row.next));
 }
 
@@ -113,9 +121,17 @@ export async function googleStart(env: Env, url: URL): Promise<Response> {
   });
 }
 
+/** Each way Google sign-in can fail gets its own message on the sign-in page, and a log line (never secrets). */
+const googleFailed = (reason: "state" | "denied" | "exchange" | "account", detail = "") => {
+  console.warn(`google sign-in failed: ${reason}${detail ? ` (${detail})` : ""}`);
+  return redirect(`/signin?error=google_${reason}`);
+};
+
 export async function googleCallback(env: Env, req: Request, url: URL): Promise<Response> {
+  const denied = url.searchParams.get("error");
+  if (denied) return googleFailed("denied", denied.slice(0, 60)); // e.g. access_denied: they cancelled
   const [state, nextEnc] = (readCookie(req, "pg_oauth") ?? "").split("|");
-  if (!state || state !== url.searchParams.get("state")) return redirect("/signin?error=google");
+  if (!state || state !== url.searchParams.get("state")) return googleFailed("state", state ? "mismatch" : "no cookie");
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -125,13 +141,19 @@ export async function googleCallback(env: Env, req: Request, url: URL): Promise<
       grant_type: "authorization_code",
     }),
   });
-  if (!res.ok) return redirect("/signin?error=google");
+  if (!res.ok) {
+    // Google's error code says why: invalid_client (wrong secret), redirect_uri_mismatch, invalid_grant (code used or expired).
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    return googleFailed("exchange", `${res.status} ${err.error ?? ""}`.trim());
+  }
   const { id_token } = (await res.json()) as { id_token?: string };
   // Received directly from Google over TLS, so the payload can be trusted without re-verifying the signature.
   const claims = JSON.parse(atob((id_token ?? "").split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/"))) as
     { sub: string; email: string; email_verified: boolean; name?: string; aud: string };
-  if (!claims.email_verified || claims.aud !== env.GOOGLE_CLIENT_ID) return redirect("/signin?error=google");
+  if (!claims.email_verified) return googleFailed("account", "email not verified");
+  if (claims.aud !== env.GOOGLE_CLIENT_ID) return googleFailed("exchange", "token for another client");
   const user = await findOrCreateUser(env, claims.email, { name: claims.name, googleSub: claims.sub });
+  if (!user) return redirect(`/signin?error=waitlist&email=${encodeURIComponent(claims.email)}`);
   return startSession(env, user.id, safeNext(decodeURIComponent(nextEnc ?? "")));
 }
 

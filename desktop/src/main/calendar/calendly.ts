@@ -1,5 +1,6 @@
-// Calendly: meetings booked through the owner's Calendly, via a personal
-// access token (Calendly > Integrations > API & Webhooks).
+// Calendly: meetings booked through the owner's Calendly, connected with one
+// click (OAuth), or through a personal access token pasted before that existed.
+import { authedGet } from "./oauth.js";
 import type { CalendarEvent, CalendarSource } from "./types.js";
 
 const API = "https://api.calendly.com";
@@ -22,10 +23,13 @@ export function fromCalendly(collection: CalendlyEvent[]): CalendarEvent[] {
   }));
 }
 
-export function calendlySource(token: string, fetcher: typeof fetch = fetch): CalendarSource {
+/** `auth` is a personal access token, or a connected account's id. */
+export function calendlySource(auth: string | { accountId: string }, fetcher: typeof fetch = fetch): CalendarSource {
   const get = async <T>(url: string): Promise<T> => {
+    if (typeof auth !== "string") return authedGet<T>(auth.accountId, "Calendly", url, {}, fetcher);
+    const token = auth;
     const res = await fetcher(url, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) }).catch(() => null);
-    if (res?.status === 401) throw new Error("Calendly didn't accept the token. Make a new personal access token and paste it again.");
+    if (res?.status === 401) throw new Error("Calendly didn't accept the saved token. Disconnect it and connect Calendly again.");
     if (!res?.ok) throw new Error(`Couldn't reach Calendly${res ? ` (${res.status})` : ""}. Try again in a minute.`);
     return res.json() as Promise<T>;
   };

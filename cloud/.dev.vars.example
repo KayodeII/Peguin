@@ -3,10 +3,19 @@
 APP_ORIGIN=http://localhost:8787
 ANTHROPIC_API_KEY=
 PAYSTACK_SECRET_KEY=sk_test_...
-PAYSTACK_PLAN_CODE=PLN_...
+PAYSTACK_PLANS={"basic":"PLN_...","pro":"PLN_..."}
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 RESEND_API_KEY=
 EMAIL_FROM=Peguin <no-reply@peguin.co>
 # npm run keys:license prints both keys
 LICENSE_PRIVATE_JWK=
+# "open" for local testing of sign-up; "waitlist" to test invites
+SIGNUPS=open
+# Any long random string; send it as "authorization: Bearer ..." to /api/admin/*
+ADMIN_TOKEN=
+# Calendar connections (optional; a provider without both is hidden in the app)
+MICROSOFT_CLIENT_ID=
+MICROSOFT_CLIENT_SECRET=
+CALENDLY_CLIENT_ID=
+CALENDLY_CLIENT_SECRET=

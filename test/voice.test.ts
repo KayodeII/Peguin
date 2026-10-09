@@ -97,7 +97,12 @@ describe("own voice: audio", () => {
 
 describe("own voice: settings and disclosure", () => {
   it("starts with no built-in pronunciations and default tuning the owner can change", () => {
-    expect(Settings.parse({}).voice).toEqual({ mode: "standard", pronunciations: [], pause: 0.32, expressiveness: 0.6, attempts: 3 });
+    expect(Settings.parse({}).voice).toEqual({
+      mode: "standard", engine: "mac", eleven: { model: "eleven_v4", liveModel: "eleven_v4_turbo" },
+      pronunciations: [], pause: 0.32, expressiveness: 0.6, attempts: 3,
+    });
+    // Settings from before engines keep working and stay on this Mac.
+    expect(Settings.parse({ voice: { mode: "mine", pause: 0.4 } }).voice).toMatchObject({ mode: "mine", engine: "mac", pause: 0.4 });
     expect(Settings.parse({}).recap).toEqual({ summarize: true, keepDays: 30 });
     expect(() => Settings.parse({ voice: { pause: 5 } })).toThrow();
   });
@@ -150,5 +155,34 @@ describe("talking over Peguin", async () => {
     for (let i = 0; i < 8; i++) l.feed(chunk(false)); // utterance ends
     for (let i = 0; i < 3; i++) l.feed(chunk(true));
     expect(l.fired()).toBe(0);
+  });
+});
+
+describe("ElevenLabs engine", async () => {
+  const { voiceSettingsFor, speakWav, cloneVoice } = await import("../desktop/src/main/speech/voice/eleven.js");
+
+  it("maps the owner's expressiveness: livelier is less stable, more styled", () => {
+    expect(voiceSettingsFor(0.3)).toMatchObject({ stability: 0.75, style: 0 });
+    expect(voiceSettingsFor(0.9)).toMatchObject({ stability: 0.25, style: 0.6 });
+    const mid = voiceSettingsFor(0.6);
+    expect(mid.stability).toBeLessThan(0.75);
+    expect(mid.style).toBeGreaterThan(0);
+  });
+
+  it("asks for 24 kHz WAV from the chosen model with the owner's key", async () => {
+    let seen: { url: string; init: RequestInit } | null = null;
+    const fetcher = (async (url: string, init: RequestInit) => { seen = { url, init }; return new Response(new Uint8Array([1, 2, 3])); }) as unknown as typeof fetch;
+    const wav = await speakWav("k", "v1", "Hello there.", { model: "eleven_v4", expressiveness: 0.6 }, fetcher);
+    expect(wav.length).toBe(3);
+    expect(seen!.url).toBe("https://api.elevenlabs.io/v1/text-to-speech/v1?output_format=wav_24000");
+    expect((seen!.init.headers as Record<string, string>)["xi-api-key"]).toBe("k");
+    expect(JSON.parse(String(seen!.init.body))).toMatchObject({ text: "Hello there.", model_id: "eleven_v4" });
+  });
+
+  it("explains a rejected key and surfaces verification", async () => {
+    const no = (async () => new Response("{}", { status: 401 })) as unknown as typeof fetch;
+    await expect(speakWav("bad", "v", "x", { model: "eleven_v4", expressiveness: 0.5 }, no)).rejects.toThrow(/didn't accept the API key/);
+    const ok = (async () => Response.json({ voice_id: "abc", requires_verification: true })) as unknown as typeof fetch;
+    expect(await cloneVoice("k", "Peguin: Test", Buffer.from("RIFF"), ok)).toEqual({ voiceId: "abc", requiresVerification: true });
   });
 });

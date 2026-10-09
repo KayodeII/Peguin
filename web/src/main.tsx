@@ -3,8 +3,9 @@ import { StrictMode, useEffect, useState, type JSX } from "react";
 import { createRoot } from "react-dom/client";
 import { HelpPenguin } from "./components/HelpPenguin";
 import { Footer, Nav } from "./components/Sections";
-import { Account, Connected, Pricing, SignIn } from "./pages/Account";
+import { Account, Connected, Pricing, SignIn, Waitlist } from "./pages/Account";
 import { Home } from "./pages/Home";
+import { Privacy, Terms } from "./pages/Legal";
 import "./styles.css";
 import { reducedMotion, scrollToHash, useRevealAll } from "./ui";
 
@@ -16,8 +17,8 @@ if (!reducedMotion()) {
   requestAnimationFrame(raf);
 }
 
-const PAGES: Record<string, () => JSX.Element | null> = { "/pricing": Pricing, "/signin": SignIn, "/account": Account, "/connected": Connected };
-const TITLES: Record<string, string> = { "/pricing": "Pricing", "/signin": "Sign in", "/account": "Account", "/connected": "Signed in" };
+const PAGES: Record<string, () => JSX.Element | null> = { "/pricing": Pricing, "/signin": SignIn, "/account": Account, "/connected": Connected, "/waitlist": Waitlist, "/privacy": Privacy, "/terms": Terms };
+const TITLES: Record<string, string> = { "/pricing": "Pricing", "/signin": "Sign in", "/account": "Account", "/connected": "Connected", "/waitlist": "Join the waitlist", "/privacy": "Privacy Policy", "/terms": "Terms of Service" };
 
 function App() {
   const [path, setPath] = useState(location.pathname);
@@ -32,7 +33,7 @@ function App() {
   }, [path]);
   useRevealAll(path);
   const Page = PAGES[path] ?? Home;
-  const bare = path === "/signin" || path === "/connected";
+  const bare = path === "/signin" || path === "/connected" || path === "/waitlist";
   return (
     <>
       {!bare && <Nav />}

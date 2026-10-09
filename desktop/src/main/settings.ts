@@ -11,6 +11,13 @@ const Pronunciation = z.object({ word: z.string().trim().min(1).max(40), sayAs: 
 
 const Voice = z.object({
   mode: z.enum(["standard", "mine"]).default("standard"),
+  /** Where the owner's voice is made: on this Mac (private), or ElevenLabs with their own key (most natural; the sample and lines are sent there). */
+  engine: z.enum(["mac", "elevenlabs"]).default("mac"),
+  /** ElevenLabs models: one for lines prepared before the meeting, a faster one for live answers. */
+  eleven: z.object({
+    model: z.enum(["eleven_v4", "eleven_v4_turbo"]).default("eleven_v4"),
+    liveModel: z.enum(["eleven_v4", "eleven_v4_turbo"]).default("eleven_v4_turbo"),
+  }).default(() => ({ model: "eleven_v4" as const, liveModel: "eleven_v4_turbo" as const })),
   /** Names, products and terms the owner has taught Peguin to say. Nothing is built in. */
   pronunciations: z.array(Pronunciation).max(40).default([]),
   /** Silence between sentences, in seconds. */
