@@ -48,6 +48,24 @@ export function answerContext(facts: string[], script: string | undefined, recen
     + `Recent conversation:\n${recent.join("\n")}\n\nQuestion: ${question}`;
 }
 
+/** Does what someone said sound like a question for the owner to answer (pure)? Short fragments don't count. */
+export function isQuestion(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (t.split(/\s+/).length < 3) return false;
+  return /\?\s*$/.test(t) || /^(so |and |okay,? |ok,? )?(what|why|how|when|where|who|which|can|could|would|will|do|does|did|is|are|was|were|have|has|should|any)\b/.test(t);
+}
+
+/**
+ * The private copilot: a suggestion only the owner sees, in their own meeting,
+ * for them to say themselves. Same facts-only rule as Peguin's spoken answers.
+ */
+export function copilotSystem(name: string): string {
+  return `You are Peguin, a private assistant that only ${name} can see during their own meeting. Someone in the meeting just said something that ${first(name)} may need to answer.
+Write what ${first(name)} could say back: one or two short sentences, in the first person as ${first(name)}, plain spoken English, numbers as words.
+Use ONLY the facts, the update and the conversation below. If they don't cover it, start with "Not in your notes." and suggest an honest holding answer, such as checking and following up after the call.
+Never invent status, numbers, dates, names or commitments. No preamble, no quotes, no URLs.`;
+}
+
 /** Pull the JSON object out of a model reply that may have prose around it. */
 export function parseDraft(text: string): { script: string; facts: string[] } {
   const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));

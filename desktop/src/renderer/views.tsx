@@ -80,7 +80,7 @@ export function TodayView({ settings, draft, prepare, goSources }: { settings: S
 const ACTION: Record<string, string> = { give_update: "gave the update", answer: "answered", acknowledge: "acknowledged" };
 const STATUS: Record<string, string> = { joining: "Joining", waiting: "In the lobby", in_call: "In the call", ended: "Idle", failed: "Couldn't join" };
 
-export function LiveView({ settings, live, join, leave }: { settings: Settings; live: LiveState; join: (u: string) => void; leave: () => void }) {
+export function LiveView({ settings, live, join, leave, copilot }: { settings: Settings; live: LiveState; join: (u: string) => void; leave: () => void; copilot: (u: string) => void }) {
   const [url, setUrl] = useState(settings.standup.url);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [live.events.length]);
@@ -124,7 +124,11 @@ export function LiveView({ settings, live, join, leave }: { settings: Settings; 
               )}
               <button type="button" className="btn danger" onClick={leave}>Leave</button>
             </>
-          : <button type="submit" className="btn primary" disabled={!url.trim()}><Icon name="send" size={16} />Join</button>}
+          : <>
+              <button type="button" className="btn ghost" disabled={!url.trim()} title="Join the meeting yourself, with private suggested answers beside it"
+                onClick={() => copilot(url.trim())}>Join as me</button>
+              <button type="submit" className="btn primary" disabled={!url.trim()} title="Send Peguin in your place"><Icon name="send" size={16} />Send Peguin</button>
+            </>}
       </form>
     </>
   );

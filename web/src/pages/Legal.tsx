@@ -70,7 +70,9 @@ export function Privacy() {
       <p>Peguin's use and transfer of information received from Google APIs to any other app adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">Google API Services User Data Policy</a>, including the Limited Use requirements. Calendar data is used only to find your standups, is read on your Mac, isn't stored on our servers, isn't used for advertising or to train AI models, and isn't shared with anyone else.</p>
 
       <h2>Other people in your meetings</h2>
-      <p>Peguin always introduces itself as your AI assistant, and its name ends in "(AI)". It transcribes what others say on your Mac so it knows when you're called on and can answer; the parts described above go to Claude. It does not identify who said what. You're responsible for using Peguin only in meetings where that's allowed, and for telling your team you use it.</p>
+      <p>Peguin always introduces itself as your AI assistant, and its name ends in "(AI)". It transcribes what others say on your Mac so it knows when you're called on and can answer; the parts described above go to Claude. It does not identify who said what.</p>
+      <p>With the <strong>private copilot</strong>, you're in your own meeting as yourself and Peguin doesn't join or speak. It transcribes what others say on your Mac, and when someone asks you something, the question, the recent conversation and your prepared facts go to Claude for a suggested answer that only you see. Your own microphone isn't transcribed.</p>
+      <p>You're responsible for using Peguin only in meetings where that's allowed, and for telling the people you meet with that you use it.</p>
 
       <h2>How long we keep things</h2>
       <ul>

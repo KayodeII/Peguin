@@ -175,6 +175,9 @@ export const cloudDraft = (name: string, activity: PromptActivity[], failed: str
 export const cloudAnswer = (name: string, facts: string[], script: string | undefined, recent: string[], question: string, cues = false) =>
   cloud<{ text: string }>("/api/answer", { body: { name, facts, script, recent, question, cues } }).then((r) => r.text);
 
+export const cloudSuggest = (name: string, facts: string[], script: string | undefined, recent: string[], question: string) =>
+  cloud<{ text: string }>("/api/suggest", { body: { name, facts, script, recent, question } }).then((r) => r.text);
+
 export const cloudRecap = (name: string, lines: string[]) =>
   cloud<{ summary: string; followUps: string[] }>("/api/recap", { body: { name, lines } });
 

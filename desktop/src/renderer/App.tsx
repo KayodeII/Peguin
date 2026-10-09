@@ -159,7 +159,8 @@ export function App() {
 
       <main className="content">
         {view === "today" && <TodayView settings={settings} draft={draft} prepare={prepare} goSources={() => setView("sources")} />}
-        {view === "live" && <LiveView settings={settings} live={live} join={(u) => window.penguin.join(u).catch((e: unknown) => setToast(message(e)))} leave={() => void window.penguin.leave()} />}
+        {view === "live" && <LiveView settings={settings} live={live} join={(u) => window.penguin.join(u).catch((e: unknown) => setToast(message(e)))} leave={() => void window.penguin.leave()}
+          copilot={(u) => window.penguin.copilotStart(u).catch((e: unknown) => setToast(message(e)))} />}
         {view === "sources" && <SourcesView settings={settings} draft={draft.draft} save={save} prepare={prepare} />}
         {view === "recaps" && <RecapsView meetings={meetings} reload={reloadMeetings} keepDays={settings.recap.keepDays} />}
         {view === "settings" && <SettingsView settings={settings} save={save} preview={(n) => botName(n, "google_meet")} account={account} />}

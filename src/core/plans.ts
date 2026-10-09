@@ -17,6 +17,8 @@ export type Features = {
   recaps: boolean;
   /** Speaks in the owner's own voice instead of a standard one. */
   ownVoice: boolean;
+  /** Private copilot: the owner's own meeting in Peguin's window, with suggested answers only they see. */
+  copilot: boolean;
   /** One bill for several people. */
   seats: boolean;
   /** Daily caps on server-side AI, so a stuck client can't run up the bill. */
@@ -28,19 +30,19 @@ export type PlanInfo = { id: PlanId; name: string; blurb: string; features: Feat
 export const PLANS: Record<PlanId, PlanInfo> = {
   free: {
     id: "free", name: "Free", blurb: "Try it on a few standups a week.",
-    features: { standupsPerWeek: 3, followUps: false, recaps: false, ownVoice: false, seats: false, perDay: { draft: 3, answer: 0, recap: 0 } },
+    features: { standupsPerWeek: 3, followUps: false, recaps: false, ownVoice: false, copilot: false, seats: false, perDay: { draft: 3, answer: 0, recap: 0 } },
   },
   basic: {
     id: "basic", name: "Basic", blurb: "Every standup, with follow-up answers.",
-    features: { standupsPerWeek: null, followUps: true, recaps: false, ownVoice: false, seats: false, perDay: { draft: 20, answer: 200, recap: 0 } },
+    features: { standupsPerWeek: null, followUps: true, recaps: false, ownVoice: false, copilot: false, seats: false, perDay: { draft: 20, answer: 200, recap: 0 } },
   },
   pro: {
     id: "pro", name: "Pro", blurb: "Your own voice and a recap after every call.",
-    features: { standupsPerWeek: null, followUps: true, recaps: true, ownVoice: true, seats: false, perDay: { draft: 20, answer: 200, recap: 20 } },
+    features: { standupsPerWeek: null, followUps: true, recaps: true, ownVoice: true, copilot: true, seats: false, perDay: { draft: 20, answer: 200, recap: 20 } },
   },
   team: {
     id: "team", name: "Team", blurb: "Pro for everyone on the team, on one bill.",
-    features: { standupsPerWeek: null, followUps: true, recaps: true, ownVoice: true, seats: true, perDay: { draft: 20, answer: 200, recap: 20 } },
+    features: { standupsPerWeek: null, followUps: true, recaps: true, ownVoice: true, copilot: true, seats: true, perDay: { draft: 20, answer: 200, recap: 20 } },
   },
 };
 
@@ -58,5 +60,6 @@ export const FEATURE_ROWS: { label: string; value: (f: Features) => string | boo
   { label: "Answers follow-up questions", value: (f) => f.followUps },
   { label: "Recap after every meeting", value: (f) => f.recaps },
   { label: "Speaks in your own voice", value: (f) => f.ownVoice },
+  { label: "Private copilot in your own meetings", value: (f) => f.copilot },
   { label: "Several people on one bill", value: (f) => f.seats },
 ];

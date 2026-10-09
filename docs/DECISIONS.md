@@ -2,6 +2,10 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-09: The private copilot
+
+"Join as me" opens the owner's own meeting in a Peguin window: the meeting on the left (a `WebContentsView` with the persistent `persist:copilot` profile, the owner's real mic and camera, and sign-in allowed because they're there as themselves), and a panel on the right (the app's renderer at `#copilot`) that only they see. `resources/copilot-inject.js` taps only other people's audio (remote WebRTC tracks, or the page's Web Audio output for Zoom) and never replaces the mic or camera; whisper transcribes on the Mac. `isQuestion` (pure, tested with false positives) picks questions; each gets a card with a suggested answer from `copilotSystem`: first person as the owner, from the prepared facts only, starting "Not in your notes." with an honest holding answer when they don't cover it. One suggestion is written at a time and only the newest waiting question is kept. Suggestions go through the Worker (`/api/suggest`, counted as answers, Pro and Team) and fall back to the owner's Claude Code sign-in like everything else. Copilot meetings aren't in Recaps yet (that model assumes Peguin was the participant). Interview answering is deliberately not a mode (see the hand-over entry).
+
 ## 2026-10-09: Hand over by leaving, not by taking over Peguin's seat
 
 The owner wants to step in mid-meeting. Peguin's participant is named "<Name> (AI)" and the platforms don't let a guest rename mid-call, so letting the owner speak through Peguin's window would put a human voice behind an "(AI)" name. Instead, **Hand over to me** (Live view, and the menu bar) opens the meeting link in the owner's browser so they join as themselves, while Peguin stops whatever it was saying, tells the room "<first name> is joining now, so I'll hand over" and leaves. The line is pre-synthesized with the others, so it plays at once; leaving waits for its playback to end (12 s at most).

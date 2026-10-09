@@ -7,7 +7,7 @@
   "main": "out/main/index.js",
   "scripts": {
     "build:main": "esbuild src/main/index.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=out/main/index.js --log-level=warning",
-    "build:preload": "esbuild src/preload/app.ts src/preload/meeting.ts --bundle --platform=node --format=cjs --external:electron --outdir=out/preload --out-extension:.js=.cjs --log-level=warning",
+    "build:preload": "esbuild src/preload/app.ts src/preload/meeting.ts src/preload/copilot.ts --bundle --platform=node --format=cjs --external:electron --outdir=out/preload --out-extension:.js=.cjs --log-level=warning",
     "build:renderer": "vite build --logLevel warn",
     "build": "npm run build:main && npm run build:preload && npm run build:renderer",
     "dev": "node scripts/dev.mjs",
@@ -99,7 +99,8 @@
       "hardenedRuntime": false,
       "minimumSystemVersion": "12.0",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Peguin records a short sample of your voice, only when you choose to, so it can speak in your voice in meetings.",
+        "NSMicrophoneUsageDescription": "Peguin records a short sample of your voice when you choose to, and uses your microphone in your own meetings when you join with the copilot.",
+        "NSCameraUsageDescription": "Peguin uses your camera only in your own meetings when you join with the copilot.",
         "NSCalendarsFullAccessUsageDescription": "Peguin reads your calendar to find your standups and join them for you. Events stay on this Mac.",
         "NSCalendarsUsageDescription": "Peguin reads your calendar to find your standups and join them for you. Events stay on this Mac."
       }

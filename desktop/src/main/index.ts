@@ -5,7 +5,8 @@ import {
   CLOUD_URL, calendarProviders, checkForUpdate, completeCalendarConnect, completeSignIn, refreshAccount, signOut, startCalendarConnect, startSignIn,
   type Account, type CalendarProvider, type Update,
 } from "./account.js";
-import { answerQuestion, isFresh, loadDraft, prepareDraft, summarizeMeeting, type Draft } from "./brain.js";
+import { answerQuestion, isFresh, loadDraft, prepareDraft, suggestAnswer, summarizeMeeting, type Draft } from "./brain.js";
+import { CopilotSession } from "./copilot/session.js";
 import { deferredFollowUps, headline, mergeFollowUps, transcriptLines, worthKeeping, type MeetingRecord } from "./meeting/record.js";
 import { deleteAllMeetings, deleteMeeting, listMeetings, saveMeeting, setFollowUpDone } from "./meetings.js";
 import { lines, meetingPaths, MeetingRunner, type MeetingEvent } from "./meeting/runner.js";
@@ -57,6 +58,7 @@ let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let whisper: Promise<Whisper> | null = null;
 let meeting: MeetingRunner | null = null;
+let copilot: CopilotSession | null = null;
 let preparing: Promise<Draft> | null = null;
 let update: Update | null = null;
 
@@ -161,6 +163,33 @@ async function join(url: string) {
     if (event.kind === "status" && (event.status === "ended" || event.status === "failed") && meeting === runner) meeting = null;
   });
   await runner.start();
+}
+
+/**
+ * The private copilot: the owner joins their own meeting in a Peguin window and
+ * gets suggested answers only they can see. Pro and Team.
+ */
+async function startCopilot(url: string) {
+  const features = await currentFeatures();
+  if (!features.copilot) throw new Error("The private copilot comes with the Pro and Team plans. Upgrade at peguin.co/account.");
+  const settings = loadSettings();
+  if (!settings.displayName.trim()) throw new Error("Add your name in Settings first, so Peguin knows who it's helping.");
+  if (copilot) { copilot.stop(); copilot = null; }
+  if (process.platform === "darwin") {
+    await systemPreferences.askForMediaAccess("microphone");
+    await systemPreferences.askForMediaAccess("camera");
+  }
+  let draft = loadDraft();
+  if (!isFresh(draft, settings.timezone)) void prepare().then((d) => { draft = d; }).catch(() => {}); // suggestions improve once it's ready
+  await speechModel();
+  whisper ??= startWhisper();
+  whisper.catch(() => { whisper = null; });
+  const session = new CopilotSession(url, settings, await whisper,
+    { get draft() { return draft; }, suggest: (q, recent) => suggestAnswer(settings, draft, q, recent) },
+    { url: rendererUrl, file: path.join(outDir, "renderer/index.html") },
+    () => { if (copilot === session) copilot = null; });
+  copilot = session;
+  await session.start();
 }
 
 /**
@@ -370,6 +399,8 @@ ipcMain.handle("calendar:upcoming", (_e, fresh?: boolean) => { if (fresh) refres
 ipcMain.handle("meeting:join", (_e, url: string) => join(url));
 ipcMain.handle("meeting:leave", () => { meeting?.stop(); meeting = null; });
 ipcMain.handle("meeting:handover", () => handOver());
+ipcMain.handle("copilot:start", (_e, url: string) => startCopilot(String(url ?? "").trim()));
+ipcMain.handle("copilot:state", () => copilot?.state() ?? null);
 ipcMain.handle("account:get", () => account);
 ipcMain.handle("meetings:list", () => listMeetings(loadSettings().recap.keepDays));
 ipcMain.handle("meetings:follow-up", (_e, id: string, index: number, done: boolean) => setFollowUpDone(String(id), Number(index), !!done));
@@ -450,6 +481,8 @@ app.whenReady().then(() => {
     log: (text) => send({ kind: "log", text }),
   });
   app.on("activate", openWindow);
+  // Development: PENGUIN_COPILOT_URL opens the copilot on that meeting straight away.
+  if (!app.isPackaged && process.env.PENGUIN_COPILOT_URL) void startCopilot(process.env.PENGUIN_COPILOT_URL).catch((e) => console.error("copilot:", message(e)));
 });
 
 // Windows and Linux deliver peguin:// links as an argument to a second instance.

@@ -1,7 +1,7 @@
 // Server-side Claude for subscribers: drafts the update and answers live
 // questions from the facts, with the same prompts as the desktop CLI path.
 import Anthropic from "@anthropic-ai/sdk";
-import { answerContext, answerSystem, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser, type PromptActivity } from "../../src/core/brain/prompts.js";
+import { answerContext, answerSystem, copilotSystem, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser, type PromptActivity } from "../../src/core/brain/prompts.js";
 import type { User } from "./auth.js";
 import { PLANS } from "../../src/core/plans.js";
 import { accessOf, subscriptionOf } from "./billing.js";
@@ -67,6 +67,17 @@ export async function answer(env: Env, req: Request, user: User): Promise<Respon
   await countUse(env, user, "answer");
   // Live in a meeting: low effort keeps the reply quick.
   const text = await ask(env, answerSystem(b.name, { cues: b.cues === true }), answerContext(b.facts ?? [], b.script, (b.recent ?? []).slice(-12), b.question), "low");
+  return json({ text });
+}
+
+/** A private copilot suggestion: what the owner could say, from the facts only. Counts as an answer. */
+export async function suggest(env: Env, req: Request, user: User): Promise<Response> {
+  const { plan } = accessOf(await subscriptionOf(env, user.id), user.trial_ends_at);
+  if (!PLANS[plan].features.copilot) throw new HttpError(402, `The private copilot isn't included in the ${PLANS[plan].name} plan. Upgrade at /account.`);
+  const b = await body<{ name?: string; facts?: string[]; script?: string; recent?: string[]; question?: string }>(req);
+  if (!b.name || !b.question) throw new HttpError(400, "Send name and question.");
+  await countUse(env, user, "answer");
+  const text = await ask(env, copilotSystem(b.name), answerContext(b.facts ?? [], b.script, (b.recent ?? []).slice(-16), b.question), "low");
   return json({ text });
 }
 
