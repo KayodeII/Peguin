@@ -66,12 +66,12 @@ export async function prepareDraft(s: Settings): Promise<Draft> {
   // Only titles, statuses and times leave the machine; never code.
   const activity = ctx.activity.map(({ source, kind, title, status, at }) => ({ source, kind, title, status, at }));
   const cues = wantsCues(s);
-  const { script, facts } = subscribed
-    ? await cloudDraft(s.displayName, activity, ctx.failed, cues)
-    : parseDraft(await claude(`${draftSystem(s.displayName, { cues })}\n\n${draftUser(s.displayName, activity, "", ctx.failed)}`, 120000));
+  const { value: { script, facts }, via } = await viaAccount(subscribed,
+    () => cloudDraft(s.displayName, activity, ctx.failed, cues),
+    async () => parseDraft(await claude(`${draftSystem(s.displayName, { cues })}\n\n${draftUser(s.displayName, activity, "", ctx.failed)}`, 120000)));
   const draft: Draft = {
     script, facts, generatedAt: new Date().toISOString(), since: ctx.since, reports: ctx.reports,
-    activityCount: ctx.activity.length, via: subscribed ? "account" : "claude_cli",
+    activityCount: ctx.activity.length, via,
   };
   mkdirSync(path.dirname(draftFile()), { recursive: true });
   writeFileSync(`${draftFile()}.tmp`, JSON.stringify(draft, null, 2));
@@ -82,8 +82,9 @@ export async function prepareDraft(s: Settings): Promise<Draft> {
 /** A spoken answer from the facts only; the prompt makes Claude defer otherwise. */
 export async function answerQuestion(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
   const cues = wantsCues(s);
-  if (await offlineLicense()) return cloudAnswer(s.displayName, draft?.facts ?? [], draft?.script, recent, question, cues);
-  return claude(`${answerSystem(s.displayName, { cues })}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000);
+  return (await viaAccount(!!(await offlineLicense()),
+    () => cloudAnswer(s.displayName, draft?.facts ?? [], draft?.script, recent, question, cues),
+    () => claude(`${answerSystem(s.displayName, { cues })}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000))).value;
 }
 
 /** Is this draft from today (in the user's timezone)? */

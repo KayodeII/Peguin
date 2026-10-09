@@ -6,7 +6,7 @@ import { signEd25519, verifyEd25519 } from "../cloud/src/crypto.js";
 import { escapeHtml, signInEmail, supportInboxEmail } from "../cloud/src/email.js";
 import { safeNext } from "../cloud/src/http.js";
 import { DMG_ASSET, fromGithub } from "../cloud/src/release.js";
-import { HANDOFF, parseReply, plansText, supportSystem } from "../cloud/src/support.js";
+import { faqReply, HANDOFF, parseReply, plansText, supportSystem } from "../cloud/src/support.js";
 import { PLANS } from "../src/core/plans.js";
 import { compareVersions, isNewer } from "../src/core/version.js";
 
@@ -192,5 +192,18 @@ describe("calendar connections", () => {
     expect(availableProviders(env)).toEqual(["google"]);
     expect(isProvider("google")).toBe(true);
     expect(isProvider("yahoo")).toBe(false);
+  });
+});
+
+describe("help chat without Claude", () => {
+  it("answers from the closest FAQ entry and offers the team", () => {
+    const r = faqReply("Is there a Windows version?", 14);
+    expect(r.text).toContain("macOS first");
+    expect(r.handoff).toBe(true);
+    expect(faqReply("does it work with zoom meetings", 14).text).toMatch(/Zoom/);
+    expect(faqReply("Does it work on Windows?", 14).text).toContain("macOS first");
+  });
+  it("hands off instead of guessing when nothing matches", () => {
+    expect(faqReply("hello??", 14)).toEqual({ text: expect.stringContaining("team can help"), handoff: true });
   });
 });

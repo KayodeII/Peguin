@@ -97,11 +97,12 @@ export function faqReply(question: string, trialDays: number): { text: string; h
   const ask = keywords(question);
   let best: { a: string; score: number } | null = null;
   for (const f of faq(trialDays)) {
-    const k = keywords(`${f.q} ${f.q} ${f.a}`); // the question's own words count double
-    const score = [...ask].filter((w) => k.has(w)).length;
+    // Words in the FAQ's question count double: they say what the entry is about.
+    const q = keywords(f.q), a = keywords(f.a);
+    const score = [...ask].reduce((n, w) => n + (q.has(w) ? 2 : 0) + (a.has(w) ? 1 : 0), 0);
     if (score > (best?.score ?? 0)) best = { a: f.a, score };
   }
-  return best && best.score >= 1
+  return best && best.score >= 2
     ? { text: best.a, handoff: true }
     : { text: "I can't answer that one right now. The team can help by email.", handoff: true };
 }

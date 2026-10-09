@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Brand, Link, Logo, reducedMotion } from "../ui";
+import { Brand, Logo, reducedMotion } from "../ui";
+import { StartButton } from "./Sections";
 
 /* A faithful, scripted copy of the desktop app (desktop/src/renderer): a cursor
    prepares the update, joins the standup, and Peguin speaks and answers. */
@@ -59,7 +60,7 @@ export function AppShowcase() {
         <div className="sc-icon" data-reveal><Logo size={58} /></div>
         <h2 data-reveal>Send Peguin to standup.<br />Get on with your morning.</h2>
         <div className="cta center" data-reveal>
-          <Link to="/signin?next=/account" className="btn big light">Try it free</Link>
+          <StartButton className="btn big light">Try it free</StartButton>
         </div>
         <AppDemo />
       </div>
