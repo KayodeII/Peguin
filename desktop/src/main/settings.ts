@@ -17,7 +17,9 @@ const Voice = z.object({
   eleven: z.object({
     model: z.enum(["eleven_v4", "eleven_v4_turbo"]).default("eleven_v4"),
     liveModel: z.enum(["eleven_v4", "eleven_v4_turbo"]).default("eleven_v4_turbo"),
-  }).default(() => ({ model: "eleven_v4" as const, liveModel: "eleven_v4_turbo" as const })),
+    /** Let Claude add a few delivery cues ([warmly], [thoughtfully]) that ElevenLabs performs. */
+    cues: z.boolean().default(true),
+  }).default(() => ({ model: "eleven_v4" as const, liveModel: "eleven_v4_turbo" as const, cues: true })),
   /** Names, products and terms the owner has taught Peguin to say. Nothing is built in. */
   pronunciations: z.array(Pronunciation).max(40).default([]),
   /** Silence between sentences, in seconds. */
@@ -27,6 +29,10 @@ const Voice = z.object({
   /** How many times a prepared line is made again when a word comes back wrong (1 = no checking). */
   attempts: z.number().int().min(1).max(5).default(3),
 });
+
+/** Delivery cues only when the owner's voice is made by ElevenLabs and they've left cues on (pure). */
+export const wantsCues = (s: { voice: { mode: string; engine: string; eleven: { cues: boolean } } }) =>
+  s.voice.mode === "mine" && s.voice.engine === "elevenlabs" && s.voice.eleven.cues;
 
 /** Older settings files: voice was "default", then { mode, namePronounced }. */
 function migrate(input: unknown): unknown {

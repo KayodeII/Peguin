@@ -41,7 +41,7 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 1. Merge `launch` (below), deploy the Worker with migration 0005, release v0.4.0.
 2. Owner setup for the new features: OAuth apps (`docs/OAUTH_SETUP.md`), `ADMIN_TOKEN`, tier prices (`cloud/scripts/paystack-setup.mjs`), and Google's review for the calendar scope.
 3. Real-call test: own voice (both engines), answers, talk-over, recap. Meet refused the owner's last test link ("You can't join this video call"): check the meeting allows signed-out guests before blaming the app.
-4. Emotion cues for ElevenLabs (v4 audio tags such as [excited]) added while drafting, stripped for the other engines.
+4. Emotion cues for ElevenLabs: built on `emotion-cues`; needs a real listen with an ElevenLabs key.
 5. Before charging strangers: legal entity and contact email in /privacy and /terms, Paystack live keys, Resend DNS, `ANTHROPIC_API_KEY`, Apple Developer ID (notarised app, auto-update), watermarking cloned audio.
 6. Later: Team seats, streaming answer text, Linear and Jira, Teams via ACS, Windows.
 

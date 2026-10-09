@@ -98,7 +98,7 @@ describe("own voice: audio", () => {
 describe("own voice: settings and disclosure", () => {
   it("starts with no built-in pronunciations and default tuning the owner can change", () => {
     expect(Settings.parse({}).voice).toEqual({
-      mode: "standard", engine: "mac", eleven: { model: "eleven_v4", liveModel: "eleven_v4_turbo" },
+      mode: "standard", engine: "mac", eleven: { model: "eleven_v4", liveModel: "eleven_v4_turbo", cues: true },
       pronunciations: [], pause: 0.32, expressiveness: 0.6, attempts: 3,
     });
     // Settings from before engines keep working and stay on this Mac.
@@ -184,5 +184,31 @@ describe("ElevenLabs engine", async () => {
     await expect(speakWav("bad", "v", "x", { model: "eleven_v4", expressiveness: 0.5 }, no)).rejects.toThrow(/didn't accept the API key/);
     const ok = (async () => Response.json({ voice_id: "abc", requires_verification: true })) as unknown as typeof fetch;
     expect(await cloneVoice("k", "Peguin: Test", Buffer.from("RIFF"), ok)).toEqual({ voiceId: "abc", requiresVerification: true });
+  });
+});
+
+describe("emotion cues", async () => {
+  const { stripCues, draftSystem, answerSystem, CUES } = await import("../src/core/brain/prompts.js");
+  const { wantsCues } = await import("../desktop/src/main/settings.js");
+
+  it("strips cues for display, logs and other voices, leaving the words", () => {
+    expect(stripCues("[warmly] Mujeeb shipped the retries. [thoughtfully] One blocker remains.")).toBe("Mujeeb shipped the retries. One blocker remains.");
+    expect(stripCues("No cues here.")).toBe("No cues here.");
+    // Not a cue: capitals or digits in brackets stay.
+    expect(stripCues("Ticket [ABC-12] is done.")).toBe("Ticket [ABC-12] is done.");
+  });
+  it("prompts ask for cues only when asked, from the fixed list", () => {
+    expect(draftSystem("Ada Obi")).not.toContain("delivery cues");
+    expect(draftSystem("Ada Obi", { cues: true })).toContain("[warmly]");
+    expect(draftSystem("Ada Obi", { cues: true })).toContain("Never put cues in facts");
+    expect(answerSystem("Ada Obi", { cues: true })).toContain("[thoughtfully]");
+    expect(CUES.length).toBeGreaterThan(3);
+  });
+  it("cues are used only with the owner's ElevenLabs voice and the setting on", () => {
+    const base = Settings.parse({ voice: { mode: "mine", engine: "elevenlabs" } });
+    expect(wantsCues(base)).toBe(true);
+    expect(wantsCues({ ...base, voice: { ...base.voice, eleven: { ...base.voice.eleven, cues: false } } })).toBe(false);
+    expect(wantsCues({ ...base, voice: { ...base.voice, engine: "mac" } })).toBe(false);
+    expect(wantsCues({ ...base, voice: { ...base.voice, mode: "standard" } })).toBe(false);
   });
 });

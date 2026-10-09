@@ -169,11 +169,11 @@ export const refreshCalendarToken = (provider: CalendarProvider, refreshToken: s
   cloud<CalendarTokens>("/api/calendar/refresh", { body: { provider, refreshToken } });
 
 /** Server-side Claude, for subscribers. */
-export const cloudDraft = (name: string, activity: PromptActivity[], failed: string[]) =>
-  cloud<{ script: string; facts: string[] }>("/api/draft", { body: { name, activity, failed } });
+export const cloudDraft = (name: string, activity: PromptActivity[], failed: string[], cues = false) =>
+  cloud<{ script: string; facts: string[] }>("/api/draft", { body: { name, activity, failed, cues } });
 
-export const cloudAnswer = (name: string, facts: string[], script: string | undefined, recent: string[], question: string) =>
-  cloud<{ text: string }>("/api/answer", { body: { name, facts, script, recent, question } }).then((r) => r.text);
+export const cloudAnswer = (name: string, facts: string[], script: string | undefined, recent: string[], question: string, cues = false) =>
+  cloud<{ text: string }>("/api/answer", { body: { name, facts, script, recent, question, cues } }).then((r) => r.text);
 
 export const cloudRecap = (name: string, lines: string[]) =>
   cloud<{ summary: string; followUps: string[] }>("/api/recap", { body: { name, lines } });

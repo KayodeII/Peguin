@@ -14,6 +14,7 @@ import { createListener, transcribeSamples, type Whisper } from "../speech/whisp
 import { outDir, resource } from "../paths.js";
 import { botName, detectPlatform, webClientUrl, type Platform } from "./platform.js";
 import { MeetingLog, type MeetingRecord } from "./record.js";
+import { stripCues } from "../../../../src/core/brain/prompts.js";
 
 export type MeetingStatus = "joining" | "waiting" | "in_call" | "ended" | "failed";
 export type MeetingEvent =
@@ -143,7 +144,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
       }
       remember(`Peguin: ${text}`);
       q.answered(text);
-      self.log(`Answer: ${text}`);
+      self.log(`Answer: ${stripCues(text)}`);
       for (const sentence of sentences(text)) yield await synthesize(sentence, { ...voice(), check: undefined });
     }
     const self = this;
