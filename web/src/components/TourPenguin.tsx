@@ -19,7 +19,7 @@ type Rect = { left: number; right: number; top: number; bottom: number; width: n
 export function tour(c: Rect[]): { start: Point; legs: Leg[] } {
   const [a, b, d, e] = c as [Rect, Rect, Rect, Rect];
   const hidden = { x: a.right - W - 6, y: a.bottom - H - 8 };      // fully behind card 1
-  const peek = { x: a.right - W * 0.4, y: hidden.y };              // head and flag out past its edge
+  const peek = { x: a.right - W * 0.4, y: hidden.y };              // head out past its edge
   const floor = a.bottom - H + 10;                                 // feet just below the cards' bottom edge
   const seat = { x: b.left + b.width * 0.42 - W / 2, y: b.top - H * 0.62 }; // bottom on the edge, feet over the front
   const restAt = { x: d.right - W * 0.42, y: floor + 4 };
@@ -60,7 +60,6 @@ export function TourPenguin({ grid }: { grid: RefObject<HTMLDivElement | null> }
   const el = useRef<HTMLDivElement>(null);
   const [pose, setPose] = useState<Pose>("peek");
   const [talking, setTalking] = useState(false);
-  const [hiding, setHiding] = useState(true);
 
   useEffect(() => {
     const g = grid.current, me = el.current;
@@ -104,7 +103,6 @@ export function TourPenguin({ grid }: { grid: RefObject<HTMLDivElement | null> }
         lastLeg = i;
         setPose(leg.pose);
         setTalking(!!leg.chirp);
-        setHiding(leg.pose === "peek" && leg.to.x === plan.start.x); // the flag goes behind the card with it
       }
     };
     raf = requestAnimationFrame(frame);
@@ -120,10 +118,9 @@ export function TourPenguin({ grid }: { grid: RefObject<HTMLDivElement | null> }
   const side = pose === "walk" || pose === "hop" || pose === "rest";
   return (
     <div ref={el} aria-hidden
-      className={`hp tp tp-${pose} ${side ? "profile" : ""} ${pose === "walk" ? "walk" : ""} ${pose === "peek" ? "flag-up flag-right" : ""} ${talking ? "chirping" : ""}`}
+      className={`hp tp tp-${pose} ${side ? "profile" : ""} ${pose === "walk" ? "walk" : ""} ${talking ? "chirping" : ""}`}
       style={{ ["--dir" as string]: 1 }}>
       <div className="hp-bird">
-        {pose === "peek" && !hiding && <span className="hp-flag" aria-hidden><i className="hp-pole" /><span className="hp-cloth">Peek-a-boo!</span></span>}
         <span className="hp-chirp">{pose === "rest" ? "z z z" : "chirp!"}</span>
         <PenguinSide />
         <PenguinSprite />
