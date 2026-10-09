@@ -2,6 +2,12 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-09: Hand over by leaving, not by taking over Peguin's seat
+
+The owner wants to step in mid-meeting. Peguin's participant is named "<Name> (AI)" and the platforms don't let a guest rename mid-call, so letting the owner speak through Peguin's window would put a human voice behind an "(AI)" name. Instead, **Hand over to me** (Live view, and the menu bar) opens the meeting link in the owner's browser so they join as themselves, while Peguin stops whatever it was saying, tells the room "<first name> is joining now, so I'll hand over" and leaves. The line is pre-synthesized with the others, so it plays at once; leaving waits for its playback to end (12 s at most).
+
+A private, text-only meeting copilot (the owner's own meeting in Peguin's window, with notes and suggested answers only they can see) is planned next. Answering questions covertly in job interviews is out of scope: it deceives the interviewer and contradicts "the room always knows it's an AI".
+
 ## 2026-10-09: Work without server-side AI
 
 The owner can't fund Anthropic credit yet, so nothing may depend on it. When the Worker's Claude call fails for an account reason (no credit, bad or unscoped key, rate limit) or Anthropic is down, `ask()` returns 503 "server-side AI is unavailable". The help chat then answers from the closest FAQ entry (keyword match, question words weighted double) and always offers "Message the team"; it never improvises. The desktop app treats that 503 as "use the owner's own Claude Code sign-in" for drafts, answers and recaps, so a signed-in subscriber keeps working on their own Claude.

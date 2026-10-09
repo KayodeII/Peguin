@@ -308,3 +308,4 @@ details.advanced[open] > summary::after { transform: rotate(90deg); }
 .check-row { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--muted); cursor: pointer; }
 .check-row input { margin-top: 3px; }
 .check-row strong { color: var(--text, inherit); margin-right: 4px; }
+.composer .btn { white-space: nowrap; }

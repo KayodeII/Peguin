@@ -6,7 +6,7 @@ import { stripCues } from "../../../../src/core/brain/prompts.js";
 
 export type Entry =
   | { at: number; who: "them"; text: string }
-  | { at: number; who: "peguin"; kind: "update" | "answer" | "defer" | "ack"; text: string }
+  | { at: number; who: "peguin"; kind: "update" | "answer" | "defer" | "ack" | "handover"; text: string }
   | { at: number; who: "system"; text: string };
 
 export type Question = { at: number; text: string; outcome: "pending" | "answered" | "deferred"; answer?: string };
@@ -50,7 +50,7 @@ export class MeetingLog {
   heard(text: string, now = Date.now()) { this.add({ at: now, who: "them", text }); }
   note(text: string, now = Date.now()) { this.add({ at: now, who: "system", text }); }
 
-  said(kind: "update" | "answer" | "defer" | "ack", spoken: string, now = Date.now()) {
+  said(kind: "update" | "answer" | "defer" | "ack" | "handover", spoken: string, now = Date.now()) {
     const text = stripCues(spoken); // the record keeps the words, not the delivery cues
     if (kind === "update") this.r.updateGiven = true;
     this.add({ at: now, who: "peguin", kind, text });
