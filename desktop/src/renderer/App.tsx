@@ -35,6 +35,7 @@ export function App() {
   const [account, setAccount] = useState<Account | null>(null);
   const [model, setModel] = useState<{ progress: number; error?: string } | null>(null);
   const [update, setUpdate] = useState<Update | null>(null);
+  const [updateState, setUpdateState] = useState<{ version: string; status: "downloading" | "ready" | "failed"; progress: number; error?: string } | null>(null);
 
   const refreshNext = useCallback(() => { void window.penguin.nextStandup().then(setNext); }, []);
 
@@ -43,6 +44,7 @@ export function App() {
     void window.penguin.getDraft().then((d: DraftState) => setDraft(d));
     void window.penguin.getAccount().then(setAccount);
     void window.penguin.getUpdate().then(setUpdate);
+    void window.penguin.updateState().then(setUpdateState);
     refreshNext();
     reloadMeetings();
     return window.penguin.onEvent((raw) => {
@@ -53,6 +55,7 @@ export function App() {
       if (e.kind === "log") setToast(e.text);
       if (e.kind === "account") { setAccount(e.account); if (e.error) setToast(e.error); }
       if (e.kind === "update") setUpdate(e.update);
+      if (e.kind === "update-state") setUpdateState(e.state);
       if (e.kind === "model") setModel(e.progress >= 1 && !e.error ? null : { progress: e.progress, error: e.error });
       if (e.kind === "meeting") {
         setLive((prev) => ({
@@ -124,8 +127,18 @@ export function App() {
             <>
               <p className="side-label">Update</p>
               <div className="side-card">
-                <strong>Peguin {update.version} is out</strong>
-                <button className="link" onClick={() => void window.penguin.openUpdate()}>Download the update</button>
+                {updateState?.version === update.version && updateState.status === "ready" ? <>
+                  <strong>Peguin {update.version} is ready</strong>
+                  <button className="btn primary small" onClick={() => window.penguin.installUpdate().catch((e: unknown) => setToast(message(e)))}>Restart to update</button>
+                  <span>Or it installs next time you quit.</span>
+                </> : updateState?.version === update.version && updateState.status === "downloading" ? <>
+                  <strong>Getting Peguin {update.version}</strong>
+                  <div className="progress"><i style={{ width: `${Math.round(updateState.progress * 100)}%` }} /></div>
+                </> : <>
+                  <strong>Peguin {update.version} is out</strong>
+                  {updateState?.status === "failed" && <span className="warn">{updateState.error}</span>}
+                  <button className="link" onClick={() => void window.penguin.openUpdate()}>Download the update</button>
+                </>}
               </div>
             </>
           )}

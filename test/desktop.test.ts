@@ -78,3 +78,47 @@ describe("Claude Code sessions", () => {
     expect(r.report.ok).toBe(false);
   });
 });
+
+describe("updating in place", async () => {
+  const { checksumFor, bundleOf, swapScript, ZIP_ASSET } = await import("../desktop/src/main/updater.js");
+  const { execFileSync } = await import("node:child_process");
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const sha = (c: string) => c.repeat(64);
+
+  it("reads the zip's checksum from the release's shasum file", () => {
+    const sums = `${sha("a")}  Peguin-0.7.0-mac-arm64.dmg\n${sha("b")}  Peguin-mac-arm64.dmg\n${sha("c")}  Peguin-0.7.0-mac-arm64.zip\n${sha("d")}  ${ZIP_ASSET}\n`;
+    expect(checksumFor(sums, ZIP_ASSET)).toBe(sha("d"));
+    expect(checksumFor(sums, "missing.zip")).toBeNull();
+    expect(checksumFor("garbage", ZIP_ASSET)).toBeNull();
+  });
+  it("finds the app bundle from the running executable", () => {
+    expect(bundleOf("/Applications/Peguin.app/Contents/MacOS/Peguin")).toBe("/Applications/Peguin.app");
+    expect(bundleOf("/usr/local/bin/electron")).toBeNull();
+  });
+  it("swaps the bundle once the app has exited, keeping nothing behind (real shell run)", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "peguin-swap-test-"));
+    const cur = path.join(dir, "Peguin's App.app"), next = path.join(dir, "new", "Peguin.app"), work = path.join(dir, "work");
+    fs.mkdirSync(cur, { recursive: true }); fs.writeFileSync(path.join(cur, "v"), "old");
+    fs.mkdirSync(next, { recursive: true }); fs.writeFileSync(path.join(next, "v"), "new");
+    fs.mkdirSync(work);
+    const script = path.join(dir, "swap.sh");
+    fs.writeFileSync(script, swapScript({ pid: 999999, current: cur, next, reopen: false, cleanup: work }));
+    execFileSync("/bin/sh", [script]);
+    expect(fs.readFileSync(path.join(cur, "v"), "utf8")).toBe("new");
+    expect(fs.existsSync(`${cur}.old`)).toBe(false);
+    expect(fs.existsSync(work)).toBe(false);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  it("puts the old app back when the new one can't be moved in", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "peguin-swap-test-"));
+    const cur = path.join(dir, "Peguin.app");
+    fs.mkdirSync(cur); fs.writeFileSync(path.join(cur, "v"), "old");
+    const script = path.join(dir, "swap.sh");
+    fs.writeFileSync(script, swapScript({ pid: 999999, current: cur, next: path.join(dir, "does-not-exist.app"), reopen: false }));
+    execFileSync("/bin/sh", [script]);
+    expect(fs.readFileSync(path.join(cur, "v"), "utf8")).toBe("old");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});

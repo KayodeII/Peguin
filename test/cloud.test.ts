@@ -234,3 +234,12 @@ describe("private copilot", async () => {
     expect([PLANS.free, PLANS.basic, PLANS.pro, PLANS.team].map((p) => p.features.copilot)).toEqual([false, false, true, true]);
   });
 });
+
+describe("release assets for updating in place", () => {
+  it("offers the zip and checksums only when both are published", () => {
+    const a = (name: string) => ({ name, browser_download_url: `https://gh/${name}` });
+    expect(fromGithub({ tag_name: "v0.7.0", assets: [a(DMG_ASSET), a("Peguin-mac-arm64.zip"), a("SHA256SUMS.txt")] }))
+      .toMatchObject({ version: "0.7.0", zip: "https://gh/Peguin-mac-arm64.zip", sums: "https://gh/SHA256SUMS.txt" });
+    expect(fromGithub({ tag_name: "v0.5.0", assets: [a(DMG_ASSET), a("SHA256SUMS.txt")] })).not.toHaveProperty("zip");
+  });
+});

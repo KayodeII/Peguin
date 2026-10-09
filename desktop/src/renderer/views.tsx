@@ -270,6 +270,10 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
           <div className="row-main"><strong>Show meeting window</strong></div>
           <Toggle on={!s.runHidden} onChange={(v) => setS({ ...s, runHidden: !v })} label="Show the meeting window" />
         </div>
+        <div className="row-card">
+          <div className="row-main"><strong>Update automatically</strong><p>Downloads new versions in the background, then one click restarts into them (or they install when you quit).</p></div>
+          <Toggle on={s.autoUpdate} onChange={(v) => setS({ ...s, autoUpdate: v })} label="Update automatically" />
+        </div>
         {error && <div className="notice error">{error}</div>}
       </div>
       {dirty && (

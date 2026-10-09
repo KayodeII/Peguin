@@ -6,11 +6,14 @@ import { VERSION_RE } from "../../src/core/version.js";
 import type { Env } from "./env.js";
 import { json, redirect } from "./http.js";
 
-export type Release = { version: string; available: boolean; url?: string };
+/** `zip` and `sums` let the app update itself: the app as a zip, and the release's SHA256SUMS.txt. */
+export type Release = { version: string; available: boolean; url?: string; zip?: string; sums?: string };
 export type Installed = { version: string | null; last_seen: number | null };
 
 /** The stable asset name the release workflow uploads alongside the versioned .dmg. */
 export const DMG_ASSET = "Peguin-mac-arm64.dmg";
+export const ZIP_ASSET = "Peguin-mac-arm64.zip";
+export const SUMS_ASSET = "SHA256SUMS.txt";
 const CACHE_SECONDS = 600;
 
 type GithubRelease = { tag_name?: string; draft?: boolean; prerelease?: boolean; assets?: { name: string; browser_download_url: string }[] };
@@ -18,9 +21,11 @@ type GithubRelease = { tag_name?: string; draft?: boolean; prerelease?: boolean;
 /** A published release with the .dmg attached, or null. */
 export function fromGithub(r: GithubRelease): Release | null {
   const version = (r.tag_name ?? "").replace(/^v/, "");
-  const dmg = r.assets?.find((a) => a.name === DMG_ASSET);
+  const asset = (name: string) => r.assets?.find((a) => a.name === name)?.browser_download_url;
+  const dmg = asset(DMG_ASSET);
   if (r.draft || r.prerelease || !VERSION_RE.test(version) || !dmg) return null;
-  return { version, available: true, url: dmg.browser_download_url };
+  const zip = asset(ZIP_ASSET), sums = asset(SUMS_ASSET);
+  return { version, available: true, url: dmg, ...(zip && sums ? { zip, sums } : {}) };
 }
 
 async function githubLatest(repo: string): Promise<Release | null> {
@@ -47,8 +52,8 @@ export async function latestRelease(env: Env): Promise<Release> {
 }
 
 export async function releaseRoute(env: Env): Promise<Response> {
-  const { version, available } = await latestRelease(env);
-  return json({ version, available }, 200, { "cache-control": "public, max-age=300" });
+  const { version, available, zip, sums } = await latestRelease(env);
+  return json({ version, available, zip, sums }, 200, { "cache-control": "public, max-age=300" });
 }
 
 export async function downloadMac(env: Env): Promise<Response> {

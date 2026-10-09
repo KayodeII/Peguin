@@ -89,6 +89,8 @@ export const Settings = z.preprocess(migrate, z.object({
   /** Stop speaking when someone talks over Peguin, and listen to them. */
   stopWhenInterrupted: z.boolean().default(true),
   runHidden: z.boolean().default(true),
+  /** Download new versions in the background and offer "Restart to update" (installs on quit too). */
+  autoUpdate: z.boolean().default(true),
   onboarded: z.boolean().default(false),
 }));
 export type Settings = z.infer<typeof Settings>;

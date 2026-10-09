@@ -181,12 +181,14 @@ export const cloudSuggest = (name: string, facts: string[], script: string | und
 export const cloudRecap = (name: string, lines: string[]) =>
   cloud<{ summary: string; followUps: string[] }>("/api/recap", { body: { name, lines } });
 
-export type Update = { version: string; url: string };
+/** `zip` and `sums` are there when the release supports updating in place. */
+export type Update = { version: string; url: string; zip?: string; sums?: string };
 
 /** A newer release than this build, or null. Never throws: an update check mustn't break the app. */
 export async function checkForUpdate(): Promise<Update | null> {
   try {
-    const r = await cloud<{ version: string; available: boolean }>("/api/release", { token: null });
-    return r.available && isNewer(r.version, app.getVersion()) ? { version: r.version, url: `${CLOUD_URL}/download/mac` } : null;
+    const r = await cloud<{ version: string; available: boolean; zip?: string; sums?: string }>("/api/release", { token: null });
+    if (!r.available || !isNewer(r.version, app.getVersion())) return null;
+    return { version: r.version, url: `${CLOUD_URL}/download/mac`, ...(r.zip && r.sums ? { zip: r.zip, sums: r.sums } : {}) };
   } catch { return null; }
 }
