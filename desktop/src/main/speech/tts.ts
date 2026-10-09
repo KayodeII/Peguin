@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { Settings } from "../settings.js";
+import { stripCues } from "../../../../src/core/brain/prompts.js";
 import { speakInOwnVoice, usingOwnVoice } from "./voice/index.js";
 
 /** The built-in voice: macOS `say` (Piper replaces it for other platforms). */
@@ -36,8 +37,10 @@ export type SynthesizeOptions = {
  */
 export async function synthesize(text: string, o?: SynthesizeOptions): Promise<Buffer> {
   if (o && usingOwnVoice(o.settings)) {
-    try { return await speakInOwnVoice(text, o.settings, { check: o.check, takes: o.takes }); }
+    // Only ElevenLabs performs delivery cues; the on-Mac voice would read them out.
+    const said = o.settings.voice.engine === "elevenlabs" ? text : stripCues(text);
+    try { return await speakInOwnVoice(said, o.settings, { check: o.check, takes: o.takes }); }
     catch (e) { o.onFallback?.(e instanceof Error ? e.message : String(e)); }
   }
-  return standardVoice(o?.standardText ?? text);
+  return standardVoice(stripCues(o?.standardText ?? text));
 }

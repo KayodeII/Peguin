@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Brand, Link, Logo, reducedMotion } from "../ui";
+import { Brand, Logo, reducedMotion } from "../ui";
+import { StartButton } from "./Sections";
 
 /* A faithful, scripted copy of the desktop app (desktop/src/renderer): a cursor
    prepares the update, joins the standup, and Peguin speaks and answers. */
 
 const W = 1040, H = 620; // design size; scaled down to fit
+const W_PHONE = 660, H_PHONE = 560; // phones: just the main pane, so the text stays readable
 const NAME = "Ada (AI)";
 const SCRIPT = "Hi everyone, I'm Peguin, Ada's AI assistant. Ada is in another meeting, so I'm covering the update. Yesterday Ada merged the payment webhook retries and fixed the flaky invoice test. Today they're migrating the users table to the new auth schema. No blockers.";
 const ANSWER = "It's in progress. There's no date yet, so I'll get Ada to follow up.";
@@ -58,7 +60,7 @@ export function AppShowcase() {
         <div className="sc-icon" data-reveal><Logo size={58} /></div>
         <h2 data-reveal>Send Peguin to standup.<br />Get on with your morning.</h2>
         <div className="cta center" data-reveal>
-          <Link to="/signin?next=/account" className="btn big light">Try it free</Link>
+          <StartButton className="btn big light">Try it free</StartButton>
         </div>
         <AppDemo />
       </div>
@@ -71,6 +73,8 @@ function AppDemo() {
   const win = useRef<HTMLDivElement>(null);
   const targets = useRef<Partial<Record<Target, HTMLElement | null>>>({});
   const [scale, setScale] = useState(1);
+  const [phone, setPhone] = useState(false);
+  const w = phone ? W_PHONE : W, h = phone ? H_PHONE : H;
   const [rise, setRise] = useState(reducedMotion() ? 1 : 0);
   const [visible, setVisible] = useState(false);
   const [s, setS] = useState<State>(START);
@@ -81,7 +85,11 @@ function AppDemo() {
   useLayoutEffect(() => {
     const el = fit.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setScale(Math.min(1, el.clientWidth / W)));
+    const ro = new ResizeObserver(() => {
+      const small = el.clientWidth < 600;
+      setPhone(small);
+      setScale(Math.min(1, el.clientWidth / (small ? W_PHONE : W)));
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -119,18 +127,18 @@ function AppDemo() {
   useLayoutEffect(() => {
     const el = s.cursor === "start" ? null : targets.current[s.cursor];
     const box = win.current?.getBoundingClientRect();
-    if (s.cursor === "rest") { setPos({ x: W * 0.7, y: H * 0.6 }); return; }
+    if (s.cursor === "rest") { setPos({ x: w * 0.7, y: h * 0.6 }); return; }
     if (!el || !box) return;
     const r = el.getBoundingClientRect();
     setPos({ x: (r.left - box.left + r.width / 2) / scale, y: (r.top - box.top + r.height / 2) / scale });
-  }, [s.cursor, s.view, scale]);
+  }, [s.cursor, s.view, scale, w, h]);
 
   const ref = (k: Target) => (el: HTMLElement | null) => { targets.current[k] = el; };
   const inCall = s.status !== "Idle";
 
   return (
-    <div className="sc-frame" ref={fit} style={{ height: H * scale + 13, transform: `translateY(${(1 - rise) * 80}px) perspective(1600px) rotateX(${(1 - rise) * 10}deg)` }} aria-hidden>
-      <div className="ad" ref={win} style={{ width: W, height: H, transform: `scale(${scale})` }}>
+    <div className="sc-frame" ref={fit} style={{ height: h * scale + 13, transform: `translateY(${(1 - rise) * 80}px) perspective(1600px) rotateX(${(1 - rise) * 10}deg)` }} aria-hidden>
+      <div className={`ad ${phone ? "phone" : ""}`} ref={win} style={{ width: w, height: h, transform: `scale(${scale})` }}>
         <nav className="ad-rail">
           <span className="ad-lights"><i /><i /><i /></span>
           <span className={`ad-home ${s.view === "today" ? "on" : ""}`}><Logo size={24} /></span>

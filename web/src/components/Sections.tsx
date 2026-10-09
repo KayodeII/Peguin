@@ -1,8 +1,9 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { FEATURE_ROWS, PLANS, type PlanId } from "../../../src/core/plans";
 import { api, formatPrice, getPlans, type PlanOffer, type Plans } from "../api";
-import { Icon, Link, Logo } from "../ui";
+import { Icon, Link, Logo, reducedMotion } from "../ui";
 import { Perched } from "./Perched";
+import { TourPenguin } from "./TourPenguin";
 import { faq, TRIAL_DAYS } from "../faq";
 
 export { TRIAL_DAYS };
@@ -36,7 +37,20 @@ function included(o: PlanOffer): string[] {
   });
 }
 
-function PlanCard({ offer, waitlist, trial, currency }: { offer: PlanOffer; waitlist: boolean; trial: { days: number; plan: PlanId }; currency?: string }) {
+/** The touring penguin needs all four cards in a row; narrower screens (and reduced motion) get one perched on the featured card. */
+function useTour(): boolean {
+  const query = "(min-width: 1001px)";
+  const [wide, setWide] = useState(() => typeof matchMedia !== "undefined" && matchMedia(query).matches);
+  useEffect(() => {
+    const m = matchMedia(query);
+    const on = () => setWide(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  return wide && !reducedMotion();
+}
+
+function PlanCard({ offer, waitlist, trial, currency, perched }: { offer: PlanOffer; waitlist: boolean; trial: { days: number; plan: PlanId }; currency?: string; perched: boolean }) {
   const [amount, period] = offer.price ? formatPrice(offer.price).split("/")
     : offer.id === "free" && currency ? formatPrice({ amount: 0, currency, interval: "monthly" }).split("/") : [];
   const featured = offer.id === trial.plan;
@@ -47,7 +61,7 @@ function PlanCard({ offer, waitlist, trial, currency }: { offer: PlanOffer; wait
       : <Link to={`/signin?next=${encodeURIComponent(`/account?plan=${offer.id}`)}`} className={`btn wide ${featured ? "" : "ghost"}`}>Start free trial</Link>;
   return (
     <div className={`plan-card ${featured ? "featured" : ""}`}>
-      {featured && <Perched />}
+      {featured && perched && <Perched />}
       <div className="plan-head">
         <span className="plan-name">{offer.name}</span>
         {featured && <span className="pill">{trial.days} days free</span>}
@@ -65,14 +79,17 @@ function PlanCard({ offer, waitlist, trial, currency }: { offer: PlanOffer; wait
 
 export function PricingTable({ compare = false }: { compare?: boolean }) {
   const plans = usePlans();
+  const grid = useRef<HTMLDivElement>(null);
+  const touring = useTour();
   const offers = plans?.plans ?? FALLBACK;
   const trial = { days: plans?.trialDays ?? TRIAL_DAYS, plan: plans?.trialPlan ?? "pro" };
   const currency = offers.find((o) => o.price)?.price?.currency; // Free shows 0 in the paid plans' currency
   return (
     <>
-      <div className="plan-grid">
+      <div className="plan-grid" ref={grid}>
         {ORDER.map((id) => offers.find((o) => o.id === id)).filter((o): o is PlanOffer => !!o)
-          .map((o) => <PlanCard key={o.id} offer={o} waitlist={plans?.signups === "waitlist"} trial={trial} currency={currency} />)}
+          .map((o) => <PlanCard key={o.id} offer={o} waitlist={plans?.signups === "waitlist"} trial={trial} currency={currency} perched={!touring} />)}
+        {touring && <TourPenguin grid={grid} />}
       </div>
       {compare && (
         <div className="compare" role="region" aria-label="Compare plans" tabIndex={0}>

@@ -86,12 +86,38 @@ export function parseReply(text: string): { text: string; handoff: boolean } {
   return { text: text.replaceAll(HANDOFF, "").trim(), handoff };
 }
 
+const STOP = new Set("a an and are can do does for how i in is it me my of on or the to what when where which who why will with you your peguin".split(" "));
+const keywords = (t: string) => new Set(t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(" ").filter((w) => w.length > 2 && !STOP.has(w)));
+
+/**
+ * Without Claude (no key, no credit, or Anthropic down): the closest FAQ answer
+ * by shared keywords, or a hand-off to the team. Never makes anything up (pure).
+ */
+export function faqReply(question: string, trialDays: number): { text: string; handoff: boolean } {
+  const ask = keywords(question);
+  let best: { a: string; score: number } | null = null;
+  for (const f of faq(trialDays)) {
+    // Words in the FAQ's question count double: they say what the entry is about.
+    const q = keywords(f.q), a = keywords(f.a);
+    const score = [...ask].reduce((n, w) => n + (q.has(w) ? 2 : 0) + (a.has(w) ? 1 : 0), 0);
+    if (score > (best?.score ?? 0)) best = { a: f.a, score };
+  }
+  return best && best.score >= 2
+    ? { text: best.a, handoff: true }
+    : { text: "I can't answer that one right now. The team can help by email.", handoff: true };
+}
+
 export async function supportChat(env: Env, req: Request): Promise<Response> {
   const { messages } = await body<{ messages?: unknown }>(req);
   const turns = cleanTurns(messages);
   await limit(env, req, "chat", CHATS_PER_DAY);
-  const reply = await ask(env, supportSystem(Number(env.TRIAL_DAYS), await plansLine(env), (await latestRelease(env)).available, env.SIGNUPS === "waitlist"), turns, "low", 1024);
-  return json(parseReply(reply));
+  try {
+    const reply = await ask(env, supportSystem(Number(env.TRIAL_DAYS), await plansLine(env), (await latestRelease(env)).available, env.SIGNUPS === "waitlist"), turns, "low", 1024);
+    return json(parseReply(reply));
+  } catch (e) {
+    console.error("help chat without Claude", e instanceof Error ? e.message : e);
+    return json(faqReply(turns.at(-1)!.content, Number(env.TRIAL_DAYS)));
+  }
 }
 
 export async function supportMessage(env: Env, req: Request): Promise<Response> {

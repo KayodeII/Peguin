@@ -11,6 +11,7 @@ import { cloneVoice, deleteVoice, loadEleven, saveEleven, speakWav } from "./ele
 import { VoiceEngine, type Voice } from "./engine.js";
 import { voiceModelReady } from "./model.js";
 import { cacheDir, loadSample, sampleInfo } from "./store.js";
+import { stripCues } from "../../../../../src/core/brain/prompts.js";
 import { respell, wordError } from "./text.js";
 
 export { CONSENT_SENTENCE, deleteSample, saveSample, sampleInfo } from "./store.js";
@@ -120,7 +121,7 @@ async function speakWithEleven(
   for (let t = 0; t < takes; t++) {
     const wav = await speakWav(apiKey, voiceId, said, { model, expressiveness: s.voice.expressiveness });
     if (!check) return wav;
-    const err = wordError(text, await check(decodeWav(wav).samples).catch(() => ""), prefs.aliases);
+    const err = wordError(stripCues(text), await check(decodeWav(wav).samples).catch(() => ""), prefs.aliases);
     if (err < bestError) { best = wav; bestError = err; }
     if (err <= ELEVEN_ACCEPT) break;
   }

@@ -127,6 +127,13 @@ export function VoiceSettings({ settings, draft, setDraft, save }: {
             </form>
           )}
           {status.elevenConnected && (
+            <label className="check-row">
+              <input type="checkbox" checked={draft.voice.eleven.cues}
+                onChange={(e) => setDraft({ ...draft, voice: { ...draft.voice, eleven: { ...draft.voice.eleven, cues: e.target.checked } } })} />
+              <span><strong>Emotion cues</strong> Claude marks a few moments in your update and answers ([warmly], [thoughtfully]) and ElevenLabs performs them. Applies from the next update you prepare.</span>
+            </label>
+          )}
+          {status.elevenConnected && (
             <div className="field-grid">
               <label>Prepared update
                 <select value={draft.voice.eleven.model} onChange={(e) => setDraft({ ...draft, voice: { ...draft.voice, eleven: { ...draft.voice.eleven, model: e.target.value as Settings["voice"]["eleven"]["model"] } } })}>

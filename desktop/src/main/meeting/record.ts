@@ -2,6 +2,8 @@
 // what Peguin said, and every question with how it was handled. The recap is
 // built from this, so the follow-ups never depend on a model getting it right.
 
+import { stripCues } from "../../../../src/core/brain/prompts.js";
+
 export type Entry =
   | { at: number; who: "them"; text: string }
   | { at: number; who: "peguin"; kind: "update" | "answer" | "defer" | "ack"; text: string }
@@ -48,7 +50,8 @@ export class MeetingLog {
   heard(text: string, now = Date.now()) { this.add({ at: now, who: "them", text }); }
   note(text: string, now = Date.now()) { this.add({ at: now, who: "system", text }); }
 
-  said(kind: "update" | "answer" | "defer" | "ack", text: string, now = Date.now()) {
+  said(kind: "update" | "answer" | "defer" | "ack", spoken: string, now = Date.now()) {
+    const text = stripCues(spoken); // the record keeps the words, not the delivery cues
     if (kind === "update") this.r.updateGiven = true;
     this.add({ at: now, who: "peguin", kind, text });
   }
@@ -58,7 +61,7 @@ export class MeetingLog {
     const q: Question = { at: now, text, outcome: "pending" };
     this.r.questions.push(q);
     return {
-      answered: (answer: string, at = Date.now()) => { q.outcome = "answered"; q.answer = answer; this.said("answer", answer, at); },
+      answered: (answer: string, at = Date.now()) => { q.outcome = "answered"; q.answer = stripCues(answer); this.said("answer", answer, at); },
       deferred: (said: string, at = Date.now()) => { q.outcome = "deferred"; this.said("defer", said, at); },
     };
   }

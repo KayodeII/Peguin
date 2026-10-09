@@ -31,6 +31,9 @@ async function countUse(env: Env, user: User, kind: Kind) {
 
 export type Turn = { role: "user" | "assistant"; content: string };
 
+/** Anthropic refused for an account reason (no credit, bad key, rate limit) or is down: the app should use its own Claude instead. */
+const unavailable = (e: unknown) => e instanceof Anthropic.APIError && (e.status === undefined || [400, 401, 403, 429, 500, 529].includes(e.status));
+
 export async function ask(env: Env, system: string, user: string | Turn[], effort: "low" | "high", maxTokens = 16000): Promise<string> {
   const client = new Anthropic({ apiKey: need(env, "ANTHROPIC_API_KEY") });
   const res = await client.beta.messages.create({
@@ -41,25 +44,29 @@ export async function ask(env: Env, system: string, user: string | Turn[], effor
     output_config: { effort },
     system,
     messages: typeof user === "string" ? [{ role: "user", content: user }] : user,
+  }).catch((e: unknown) => {
+    if (!unavailable(e)) throw e;
+    console.error("Anthropic unavailable", e instanceof Error ? e.message : e);
+    throw new HttpError(503, "Peguin's server-side AI is unavailable right now.");
   });
   if (res.stop_reason === "refusal") throw new HttpError(422, "Claude declined this request.");
   return res.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
 }
 
 export async function draft(env: Env, req: Request, user: User): Promise<Response> {
-  const { name, activity, failed } = await body<{ name?: string; activity?: PromptActivity[]; failed?: string[] }>(req);
+  const { name, activity, failed, cues } = await body<{ name?: string; activity?: PromptActivity[]; failed?: string[]; cues?: boolean }>(req);
   if (!name || !Array.isArray(activity)) throw new HttpError(400, "Send name and activity.");
   await countUse(env, user, "draft");
-  const text = await ask(env, draftSystem(name), draftUser(name, activity.slice(0, 300), "", failed ?? []), "high");
+  const text = await ask(env, draftSystem(name, { cues: cues === true }), draftUser(name, activity.slice(0, 300), "", failed ?? []), "high");
   return json(parseDraft(text));
 }
 
 export async function answer(env: Env, req: Request, user: User): Promise<Response> {
-  const b = await body<{ name?: string; facts?: string[]; script?: string; recent?: string[]; question?: string }>(req);
+  const b = await body<{ name?: string; facts?: string[]; script?: string; recent?: string[]; question?: string; cues?: boolean }>(req);
   if (!b.name || !b.question) throw new HttpError(400, "Send name and question.");
   await countUse(env, user, "answer");
   // Live in a meeting: low effort keeps the reply quick.
-  const text = await ask(env, answerSystem(b.name), answerContext(b.facts ?? [], b.script, (b.recent ?? []).slice(-12), b.question), "low");
+  const text = await ask(env, answerSystem(b.name, { cues: b.cues === true }), answerContext(b.facts ?? [], b.script, (b.recent ?? []).slice(-12), b.question), "low");
   return json({ text });
 }
 

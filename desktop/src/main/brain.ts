@@ -9,7 +9,7 @@ import path from "node:path";
 import { answerContext, answerSystem, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
 import { cloudAnswer, cloudDraft, cloudRecap, offlineLicense } from "./account.js";
 import { gatherContext, type SourceReport } from "./context/index.js";
-import type { Settings } from "./settings.js";
+import { wantsCues, type Settings } from "./settings.js";
 
 export type Draft = {
   script: string;
@@ -42,6 +42,17 @@ function claude(prompt: string, timeoutMs: number): Promise<string> {
   });
 }
 
+/** The server's AI is unavailable (no credit, outage): use the owner's own Claude Code sign-in instead. */
+const serverAiDown = (e: unknown) => (e as { status?: number }).status === 503;
+
+async function viaAccount<T>(subscribed: boolean, server: () => Promise<T>, local: () => Promise<T>): Promise<{ value: T; via: Draft["via"] }> {
+  if (subscribed) {
+    try { return { value: await server(), via: "account" }; }
+    catch (e) { if (!serverAiDown(e)) throw e; }
+  }
+  return { value: await local(), via: "claude_cli" };
+}
+
 const draftFile = () => path.join(app.getPath("userData"), "draft.json");
 
 export function loadDraft(): Draft | null {
@@ -54,12 +65,13 @@ export async function prepareDraft(s: Settings): Promise<Draft> {
   const subscribed = !!(await offlineLicense());
   // Only titles, statuses and times leave the machine; never code.
   const activity = ctx.activity.map(({ source, kind, title, status, at }) => ({ source, kind, title, status, at }));
-  const { script, facts } = subscribed
-    ? await cloudDraft(s.displayName, activity, ctx.failed)
-    : parseDraft(await claude(`${draftSystem(s.displayName)}\n\n${draftUser(s.displayName, activity, "", ctx.failed)}`, 120000));
+  const cues = wantsCues(s);
+  const { value: { script, facts }, via } = await viaAccount(subscribed,
+    () => cloudDraft(s.displayName, activity, ctx.failed, cues),
+    async () => parseDraft(await claude(`${draftSystem(s.displayName, { cues })}\n\n${draftUser(s.displayName, activity, "", ctx.failed)}`, 120000)));
   const draft: Draft = {
     script, facts, generatedAt: new Date().toISOString(), since: ctx.since, reports: ctx.reports,
-    activityCount: ctx.activity.length, via: subscribed ? "account" : "claude_cli",
+    activityCount: ctx.activity.length, via,
   };
   mkdirSync(path.dirname(draftFile()), { recursive: true });
   writeFileSync(`${draftFile()}.tmp`, JSON.stringify(draft, null, 2));
@@ -69,8 +81,10 @@ export async function prepareDraft(s: Settings): Promise<Draft> {
 
 /** A spoken answer from the facts only; the prompt makes Claude defer otherwise. */
 export async function answerQuestion(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
-  if (await offlineLicense()) return cloudAnswer(s.displayName, draft?.facts ?? [], draft?.script, recent, question);
-  return claude(`${answerSystem(s.displayName)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000);
+  const cues = wantsCues(s);
+  return (await viaAccount(!!(await offlineLicense()),
+    () => cloudAnswer(s.displayName, draft?.facts ?? [], draft?.script, recent, question, cues),
+    () => claude(`${answerSystem(s.displayName, { cues })}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000))).value;
 }
 
 /** Is this draft from today (in the user's timezone)? */
@@ -82,6 +96,7 @@ export function isFresh(d: Draft | null, timezone: string, now = new Date()): bo
 
 /** Summary and extra follow-ups for a meeting, from its transcript only (same routing as drafts). */
 export async function summarizeMeeting(s: Settings, lines: string[]): Promise<{ summary: string; followUps: string[] }> {
-  if (await offlineLicense()) return cloudRecap(s.displayName, lines);
-  return parseRecap(await claude(`${recapSystem(s.displayName)}\n\n${recapUser(lines)}`, 60000));
+  return (await viaAccount(!!(await offlineLicense()),
+    () => cloudRecap(s.displayName, lines),
+    async () => parseRecap(await claude(`${recapSystem(s.displayName)}\n\n${recapUser(lines)}`, 60000)))).value;
 }

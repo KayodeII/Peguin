@@ -6,6 +6,7 @@ import { botName } from "../main/meeting/platform";
 import type { Settings } from "../main/settings";
 import { Avatar, BrandIcon, dayTime, Icon, Logo, message, Toggle, Typing } from "./ui";
 import { VoiceSettings } from "./voice";
+import { stripCues } from "../../../src/core/brain/prompts";
 import { PLANS } from "../../../src/core/plans";
 import { CalendarSettings } from "./calendars";
 
@@ -51,7 +52,7 @@ export function TodayView({ settings, draft, prepare, goSources }: { settings: S
             <Avatar name={name} bot />
             <div className="msg-body">
               <div className="msg-head"><strong>{name}</strong><span className="tag">AI</span><time>Prepared {dayTime(d.generatedAt)}</time></div>
-              <p className="msg-text">{d.script}</p>
+              <p className="msg-text">{stripCues(d.script)}</p>
               <div className="embed">
                 <div className="embed-title">Facts used for questions</div>
                 <ul>{d.facts.map((f, i) => <li key={i}>{f}</li>)}</ul>
