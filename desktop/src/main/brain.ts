@@ -9,7 +9,7 @@ import path from "node:path";
 import { answerContext, answerSystem, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
 import { cloudAnswer, cloudDraft, cloudRecap, offlineLicense } from "./account.js";
 import { gatherContext, type SourceReport } from "./context/index.js";
-import type { Settings } from "./settings.js";
+import { wantsCues, type Settings } from "./settings.js";
 
 export type Draft = {
   script: string;
@@ -54,9 +54,10 @@ export async function prepareDraft(s: Settings): Promise<Draft> {
   const subscribed = !!(await offlineLicense());
   // Only titles, statuses and times leave the machine; never code.
   const activity = ctx.activity.map(({ source, kind, title, status, at }) => ({ source, kind, title, status, at }));
+  const cues = wantsCues(s);
   const { script, facts } = subscribed
-    ? await cloudDraft(s.displayName, activity, ctx.failed)
-    : parseDraft(await claude(`${draftSystem(s.displayName)}\n\n${draftUser(s.displayName, activity, "", ctx.failed)}`, 120000));
+    ? await cloudDraft(s.displayName, activity, ctx.failed, cues)
+    : parseDraft(await claude(`${draftSystem(s.displayName, { cues })}\n\n${draftUser(s.displayName, activity, "", ctx.failed)}`, 120000));
   const draft: Draft = {
     script, facts, generatedAt: new Date().toISOString(), since: ctx.since, reports: ctx.reports,
     activityCount: ctx.activity.length, via: subscribed ? "account" : "claude_cli",
@@ -69,8 +70,9 @@ export async function prepareDraft(s: Settings): Promise<Draft> {
 
 /** A spoken answer from the facts only; the prompt makes Claude defer otherwise. */
 export async function answerQuestion(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
-  if (await offlineLicense()) return cloudAnswer(s.displayName, draft?.facts ?? [], draft?.script, recent, question);
-  return claude(`${answerSystem(s.displayName)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000);
+  const cues = wantsCues(s);
+  if (await offlineLicense()) return cloudAnswer(s.displayName, draft?.facts ?? [], draft?.script, recent, question, cues);
+  return claude(`${answerSystem(s.displayName, { cues })}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000);
 }
 
 /** Is this draft from today (in the user's timezone)? */
