@@ -38,6 +38,10 @@ const SIGNIN_ERRORS: Record<string, string> = {
   link: "That sign-in link expired or was already used. Request a new one.",
   google: "Google sign-in didn't complete. Try again.",
   waitlist: "That email isn't on the invite list yet.",
+  google_state: "That sign-in started in another tab, on another address, or took more than 10 minutes. Try again from this page.",
+  google_denied: "Google sign-in was cancelled. Try again, or use an email link.",
+  google_exchange: "Google didn't accept the sign-in. Try again; if it keeps happening, use an email link and let us know.",
+  google_account: "That Google account's email address isn't verified with Google. Verify it, or use an email link.",
 };
 
 export function SignIn() {
