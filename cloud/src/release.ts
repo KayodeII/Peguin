@@ -53,7 +53,8 @@ export async function latestRelease(env: Env): Promise<Release> {
 
 export async function releaseRoute(env: Env): Promise<Response> {
   const { version, available, zip, sums } = await latestRelease(env);
-  return json({ version, available, zip, sums }, 200, { "cache-control": "public, max-age=300" });
+  // A failed GitHub lookup answers "not available"; don't let the edge keep that for five minutes.
+  return json({ version, available, zip, sums }, 200, { "cache-control": available ? "public, max-age=300" : "no-store" });
 }
 
 export async function downloadMac(env: Env): Promise<Response> {
