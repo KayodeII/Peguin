@@ -117,7 +117,13 @@ export function LiveView({ settings, live, join, leave }: { settings: Settings; 
       <form className="composer" onSubmit={(e) => { e.preventDefault(); if (!active && url.trim()) join(url.trim()); }}>
         <input value={url} disabled={active} placeholder="Meeting link" onChange={(e) => setUrl(e.target.value)} />
         {active
-          ? <button type="button" className="btn danger" onClick={leave}>Leave</button>
+          ? <>
+              {live.status === "in_call" && (
+                <button type="button" className="btn primary" title="Peguin tells the room you're taking over, then leaves; the meeting opens in your browser"
+                  onClick={() => void window.penguin.handOver()}>Hand over to me</button>
+              )}
+              <button type="button" className="btn danger" onClick={leave}>Leave</button>
+            </>
           : <button type="submit" className="btn primary" disabled={!url.trim()}><Icon name="send" size={16} />Join</button>}
       </form>
     </>

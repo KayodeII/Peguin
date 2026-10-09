@@ -40,6 +40,8 @@ export function lines(s: Settings, draft: Draft | null, ownVoice = false) {
       + ` ${first} will follow up on anything else after the call.`,
     defer: `Good question. I'll get ${first} to follow up on that after the call.`,
     ack: "Yes, I'm here. Go ahead.",
+    // The owner is joining themselves: say so before leaving, so nobody wonders where the assistant went.
+    handover: `${first} is joining now, so I'll hand over. Thanks, everyone.`,
   };
 }
 
@@ -50,9 +52,11 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
   private readonly detach: Array<() => void> = [];
   /** What happened, for the recap; handed over once, when the meeting ends. */
   private meeting?: MeetingLog;
+  /** Says the hand-over line and waits for it to finish; set once the meeting starts. */
+  private handoff?: () => Promise<void>;
 
   constructor(
-    private readonly url: string,
+    readonly url: string,
     private readonly settings: Settings,
     private readonly whisper: Whisper,
     private readonly paths: { preload: string; inject: string },
@@ -91,6 +95,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
       update: synthesize(say.update, voice(standard.update)),
       defer: synthesize(say.defer, voice()),
       ack: synthesize(say.ack, voice()),
+      handover: synthesize(say.handover, voice()),
     };
     for (const a of Object.values(audio)) a.catch((e) => this.log(`speech output failed: ${e}`));
 
@@ -165,6 +170,17 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
       }
       if (id === turnId) for (const f of frames()) f.send("mtg:speak-end");
     };
+    let playbackDone: (() => void) | undefined;
+    this.handoff = async () => {
+      turnId++;
+      for (const f of frames()) f.send("mtg:stop"); // cut off anything still playing
+      const line = await audio.handover.catch(() => null);
+      if (!line) return;
+      log.said("handover", say.handover);
+      const finished = new Promise<void>((r) => { playbackDone = r; setTimeout(r, 12000); });
+      void speak(Promise.resolve(line), "handing over to you");
+      await finished;
+    };
     const interrupt = () => {
       if (!s.stopWhenInterrupted || !turn.isSpeaking) return;
       turnId++;
@@ -206,13 +222,22 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
     on("mtg:type", (_e, text: string) => { void wc.debugger.sendCommand("Input.insertText", { text }).catch(() => {}); });
     on("mtg:pcm", (_e, buf: ArrayBuffer) => onPcm(buf));
     on("mtg:in-call", () => { log.joined(); this.setStatus("in_call", `Joined as "${name}". Muted until someone calls ${first || "you"}.`); });
-    on("mtg:playback-ended", () => turn.setSpeaking(false, Date.now()));
+    on("mtg:playback-ended", () => { turn.setSpeaking(false, Date.now()); playbackDone?.(); playbackDone = undefined; });
     on("mtg:ended", () => { this.setStatus("ended", "The call ended or Peguin was removed."); this.stop(); });
     on("mtg:level", () => {});
 
     win.on("closed", () => { this.setStatus("ended"); this.cleanup(); });
     this.setStatus("joining", `Joining as "${name}"`);
     await win.loadURL(webClientUrl(this.url, this.platform));
+  }
+
+  /** The owner is taking over: Peguin says so in the call, then leaves. */
+  async handOver() {
+    if (this.status === "in_call" && this.handoff) {
+      this.log("Handing over to you.");
+      await this.handoff().catch(() => {});
+    }
+    this.stop();
   }
 
   stop() {

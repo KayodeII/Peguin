@@ -107,6 +107,9 @@ function openWindow() {
   const snap = process.env.PENGUIN_SNAPSHOT;
   // PENGUIN_SNAPSHOT_SCROLL=<css selector> scrolls that element into view first.
   if (snap) win.webContents.once("did-finish-load", () => setTimeout(async () => {
+    // PENGUIN_SNAPSHOT_EVENTS=<JSON array of app events> replays them first (e.g. a meeting in progress).
+    for (const ev of JSON.parse(process.env.PENGUIN_SNAPSHOT_EVENTS ?? "[]") as AppEvent[]) send(ev);
+    await new Promise((r) => setTimeout(r, 300));
     const target = process.env.PENGUIN_SNAPSHOT_SCROLL;
     if (target) await win!.webContents.executeJavaScript(`document.querySelector(${JSON.stringify(target)})?.scrollIntoView({ block: "start" })`);
     // PENGUIN_SNAPSHOT_PROBE=<js expression> prints its value (layout checks in development).
@@ -158,6 +161,18 @@ async function join(url: string) {
     if (event.kind === "status" && (event.status === "ended" || event.status === "failed") && meeting === runner) meeting = null;
   });
   await runner.start();
+}
+
+/**
+ * The owner is joining themselves: open the meeting in their browser so they join
+ * under their own name, while Peguin tells the room and leaves.
+ */
+async function handOver() {
+  const m = meeting;
+  if (!m) return;
+  void shell.openExternal(m.url);
+  await m.handOver();
+  if (meeting === m) meeting = null;
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -354,6 +369,7 @@ ipcMain.handle("calendar:remove-calendly-token", () => {
 ipcMain.handle("calendar:upcoming", (_e, fresh?: boolean) => { if (fresh) refreshCalendars(); return upcoming(loadSettings()); });
 ipcMain.handle("meeting:join", (_e, url: string) => join(url));
 ipcMain.handle("meeting:leave", () => { meeting?.stop(); meeting = null; });
+ipcMain.handle("meeting:handover", () => handOver());
 ipcMain.handle("account:get", () => account);
 ipcMain.handle("meetings:list", () => listMeetings(loadSettings().recap.keepDays));
 ipcMain.handle("meetings:follow-up", (_e, id: string, index: number, done: boolean) => setFollowUpDone(String(id), Number(index), !!done));
@@ -415,6 +431,7 @@ app.whenReady().then(() => {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "Open Peguin", click: openWindow },
     { label: "Prepare today's update", click: () => void prepare().catch(() => {}) },
+    { label: "Hand over to me", click: () => void handOver() },
     { label: "Leave meeting", click: () => { meeting?.stop(); meeting = null; } },
     { type: "separator" },
     { label: "Quit Peguin", role: "quit" },
