@@ -48,17 +48,13 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 ## Handoff (2026-10-09)
 
 ### What's live
-- Release **v0.3.0**. The Worker was last deployed before the recaps merge (`/api/recap` 404s live) and has no `ANTHROPIC_API_KEY` (help chat 503s).
+- Release **v0.5.0** (`launch`, pricing tour, link preview, handover all merged). Worker last deployed 2026-10-09 13:24, before the copilot merge (#13), so `/api/suggest` 404s live; still no `ANTHROPIC_API_KEY` on the Worker.
+- `/api/release` once answered the `0.1.0` fallback (a failed GitHub lookup) and the edge cached it, sending `/download/mac` to "download soon"; fixed on `auto-update` (no-store when nothing is available).
 
-### The `launch` branch (local until the owner pushes)
-`main` + everything finished since v0.3.0, merged and tested together (118 tests):
-- `natural-voice-sample`: consent sentence and natural talk recorded separately; the talk is the voice.
-- `elevenlabs-voice`: Settings > Voice > "Where your voice is made": On this Mac or ElevenLabs (own API key; Eleven v4 for prepared lines, v4 Turbo for answers). Untested against the real API (no key here); the clone-verification step may need adjusting once tried.
-- `plans-waitlist-oauth`: Free/Basic/Pro/Team (`src/core/plans.ts`), `SIGNUPS` waitlist switch with admin invites, one-click Google Calendar/Outlook/Calendly through the Worker. Untested against real OAuth providers.
-- `legal-pages` (updated for all of the above, including Google's Limited Use statement) and `google-signin-reasons`.
-- Dev aids: meeting progress prints to the terminal; `PENGUIN_PLAN=pro` lifts plan limits when running from source signed out (signed out counts as Free).
+### The `auto-update` branch (local until the owner pushes)
+One commit plus the cache fix: releases also publish `Peguin-mac-arm64.zip` and `SHA256SUMS.txt`; the app downloads newer versions in the background, verifies checksum and bundle version, shows "Restart to update" and installs on quit (Settings > Advanced > Update automatically, on by default). 132 tests. Before/after screenshots are in `~/Desktop/peguin-pr-auto-update/` (uploading to `pr-assets` was blocked). Not yet tried end to end: the first release built by the new workflow is the first one that can update in place, and only the release after it proves the swap.
 
-Throwaway, delete when done: `try-everything`. Kept for reference: `voice-finetune-spike` (merged into the voice work).
+Throwaway, delete when done: `try-everything`. Kept for reference: `voice-finetune-spike`.
 
 ### Owner's end-to-end test (not done yet)
 Local site (`cd cloud && npx wrangler dev`) and app (`cd desktop && PEGUIN_VOICE_MODEL_DIR=~/Desktop/penguin/spikes/voice/vendor/models/chatterbox-turbo npm run dev`, not signed in so drafts use the Claude CLI): onboarding, prepare, record voice, connect Mac Calendar, a real Meet with the owner on a phone (update, follow-up, talk-over, deferral), then the recap.

@@ -15,6 +15,7 @@ import { nextCalendarStandup, refreshCalendars, upcoming } from "./calendar/inde
 import { macCalendarAccess, requestMacCalendarAccess } from "./calendar/mac.js";
 import { loadCalendarSecrets, maskLink, saveCalendarSecrets, upsertAccount } from "./calendar/secrets.js";
 import { allowed, checkWeeklyLimit, currentFeatures, currentPlan, recordJoin } from "./plan.js";
+import { canSelfUpdate, installOnExit, prepareUpdate, updateReady, type UpdateState } from "./updater.js";
 import { loadSettings, saveSettings } from "./settings.js";
 import { fixPath, outDir, resource } from "./paths.js";
 import { ensureModel } from "./speech/model.js";
@@ -61,10 +62,16 @@ let meeting: MeetingRunner | null = null;
 let copilot: CopilotSession | null = null;
 let preparing: Promise<Draft> | null = null;
 let update: Update | null = null;
+let updateState: UpdateState | null = null;
 
 async function refreshUpdate() {
   update = await checkForUpdate();
   send({ kind: "update", update });
+  // Fetch it in the background so updating is one click (owner's setting; needs a writable install).
+  if (update?.zip && update.sums && loadSettings().autoUpdate && canSelfUpdate()) {
+    const u = { version: update.version, zip: update.zip, sums: update.sums };
+    void prepareUpdate(u, (st) => { updateState = st; send({ kind: "update-state", state: st }); }).catch(() => {});
+  }
 }
 
 export type AppEvent =
@@ -74,6 +81,7 @@ export type AppEvent =
   | { kind: "account"; account: Account | null; error?: string }
   | { kind: "model"; progress: number; error?: string }
   | { kind: "update"; update: Update | null }
+  | { kind: "update-state"; state: UpdateState }
   | { kind: "voice"; progress: number; error?: string }
   | { kind: "recaps" }
   | { kind: "calendar"; error?: string }
@@ -450,6 +458,13 @@ ipcMain.handle("voice:say-word", async (_e, word: string) => {
 });
 ipcMain.handle("update:get", () => update);
 ipcMain.handle("update:open", () => { if (update) void shell.openExternal(update.url); });
+ipcMain.handle("update:state", () => updateState);
+// Restart to update: hand the swap to the helper, then quit; it reopens the new version.
+ipcMain.handle("update:install", () => {
+  if (meeting || copilot) throw new Error("Peguin is in a meeting. Update after it ends.");
+  if (!installOnExit(true)) throw new Error("The update isn't ready yet.");
+  app.quit();
+});
 ipcMain.handle("account:signin", () => startSignIn());
 ipcMain.handle("account:open-page", () => shell.openExternal(`${CLOUD_URL}/account`));
 ipcMain.handle("account:signout", () => updateAccount(async () => { await signOut(); return null; }));
@@ -493,6 +508,8 @@ app.on("second-instance", (_e, argv) => {
 // Keep running in the menu bar when the window closes.
 app.on("window-all-closed", () => {});
 app.on("will-quit", () => {
+  // Quitting with a downloaded update installs it, without reopening.
+  if (updateReady()) installOnExit(false);
   meeting?.stop();
   void whisper?.then((w) => w.stop()).catch(() => {});
 });

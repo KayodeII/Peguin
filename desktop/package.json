@@ -60,6 +60,10 @@
         "to": "meeting-inject.js"
       },
       {
+        "from": "resources/copilot-inject.js",
+        "to": "copilot-inject.js"
+      },
+      {
         "from": "resources/trayTemplate.png",
         "to": "trayTemplate.png"
       },
@@ -91,6 +95,12 @@
           "arch": [
             "arm64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.productivity",
@@ -98,6 +108,7 @@
       "identity": "-",
       "hardenedRuntime": false,
       "minimumSystemVersion": "12.0",
+      "artifactName": "Peguin-${version}-mac-${arch}.${ext}",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Peguin records a short sample of your voice when you choose to, and uses your microphone in your own meetings when you join with the copilot.",
         "NSCameraUsageDescription": "Peguin uses your camera only in your own meetings when you join with the copilot.",

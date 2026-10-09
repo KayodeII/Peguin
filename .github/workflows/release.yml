@@ -50,7 +50,9 @@ jobs:
         run: |
           cd desktop/release
           dmg=$(ls Peguin-*-mac-arm64.dmg)
-          cp "$dmg" Peguin-mac-arm64.dmg # stable name for /releases/latest/download/
-          shasum -a 256 "$dmg" Peguin-mac-arm64.dmg > SHA256SUMS.txt
-          gh release create "$GITHUB_REF_NAME" "$dmg" Peguin-mac-arm64.dmg SHA256SUMS.txt \
+          zip=$(ls Peguin-*-mac-arm64.zip)
+          cp "$dmg" Peguin-mac-arm64.dmg # stable names for /releases/latest/download/
+          cp "$zip" Peguin-mac-arm64.zip # the app updates itself from this
+          shasum -a 256 "$dmg" Peguin-mac-arm64.dmg "$zip" Peguin-mac-arm64.zip > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" "$dmg" Peguin-mac-arm64.dmg "$zip" Peguin-mac-arm64.zip SHA256SUMS.txt \
             --title "Peguin $GITHUB_REF_NAME" --generate-notes
