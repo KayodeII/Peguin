@@ -86,7 +86,7 @@ function Walker({ onOpen, onDone }: { onOpen: () => void; onDone: () => void }) 
 }
 
 /** Side profile, facing right; flipped with --dir when walking left. */
-function PenguinSide() {
+export function PenguinSide() {
   return (
     <svg className="hp-sprite hp-side" viewBox="0 0 80 100" width={W} height={80} aria-hidden>
       <g className="hp-roller">
@@ -109,7 +109,7 @@ function PenguinSide() {
 }
 
 /** Facing the viewer: standing, holding the flag. */
-function PenguinSprite() {
+export function PenguinSprite() {
   return (
     <svg className="hp-sprite hp-front" viewBox="0 0 80 100" width={W} height={80} aria-hidden>
       <g className="hp-roller">
