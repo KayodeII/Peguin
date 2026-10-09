@@ -1,14 +1,17 @@
 // Settings > Voice: the standard voice, or the owner's own (opt-in). Record a
 // sample live (with the consent sentence), download the model, teach it how
 // words sound, tune pace and expressiveness, try it, switch it on. Every value
-// is the owner's; nothing about how they sound is built in. All on this Mac.
+// is the owner's; nothing about how they sound is built in. The voice is made
+// on this Mac, or (the owner's choice, with their own key) by ElevenLabs.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Settings } from "../main/settings";
 import { message, Toggle } from "./ui";
 
 type VoiceStatus = {
   mode: Settings["voice"]["mode"];
+  engine: Settings["voice"]["engine"];
   modelReady: boolean;
+  elevenConnected: boolean;
   sample: { recordedAt: string; seconds: number; kind?: "talk" } | null;
   modelBytes: number;
   download: { progress: number; error?: string } | null;
@@ -42,6 +45,7 @@ export function VoiceSettings({ settings, draft, setDraft, save }: {
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [apiKey, setApiKey] = useState("");
 
   const refresh = useCallback(() => { void window.penguin.voiceStatus().then(setStatus); }, []);
   useEffect(() => {
@@ -54,12 +58,18 @@ export function VoiceSettings({ settings, draft, setDraft, save }: {
   }, [refresh]);
 
   if (!status) return null;
-  const ready = status.modelReady && !!status.sample;
+  const eleven = settings.voice.engine === "elevenlabs";
+  const ready = !!status.sample && (eleven ? status.elevenConnected : status.modelReady);
   const run = (label: string, fn: () => Promise<unknown>) => {
     setBusy(label); setError("");
     fn().catch((e) => setError(message(e))).finally(() => { setBusy(""); refresh(); });
   };
   const setMode = (mine: boolean) => run("mode", () => save({ ...settings, voice: { ...settings.voice, mode: mine ? "mine" : "standard" } }));
+  // Switching engine keeps the toggle only when the other engine is ready too.
+  const setEngine = (engine: Settings["voice"]["engine"]) => run("engine", () => {
+    const canSpeak = engine === "elevenlabs" ? status.elevenConnected : status.modelReady;
+    return save({ ...settings, voice: { ...settings.voice, engine, mode: canSpeak ? settings.voice.mode : "standard" } });
+  });
 
   return (
     <>
@@ -68,22 +78,72 @@ export function VoiceSettings({ settings, draft, setDraft, save }: {
           <strong>Speak in your own voice</strong>
           <p>{settings.voice.mode === "mine"
             ? "On. Peguin still says it's your AI assistant, and adds that it's speaking in your voice."
-            : ready ? "Ready to switch on." : "Record a sample and download the voice model to switch this on."}</p>
+            : ready ? "Ready to switch on." : eleven ? "Record a sample and add your ElevenLabs key to switch this on." : "Record a sample and download the voice model to switch this on."}</p>
         </div>
         <Toggle on={settings.voice.mode === "mine"} onChange={(v) => (ready || !v) && setMode(v)} label="Speak in your own voice" />
+      </div>
+
+      <div className="row-card column">
+        <div className="row-main">
+          <strong>Where your voice is made</strong>
+          <p>{eleven
+            ? "ElevenLabs: the most natural and expressive. Your sample and every line Peguin says are sent to ElevenLabs, under your own account."
+            : "On this Mac: private, nothing is sent anywhere. Less natural than ElevenLabs."}</p>
+        </div>
+        <div className="segmented" role="radiogroup" aria-label="Where your voice is made">
+          {([["mac", "On this Mac"], ["elevenlabs", "ElevenLabs"]] as const).map(([id, label]) => (
+            <button key={id} role="radio" aria-checked={settings.voice.engine === id} className={settings.voice.engine === id ? "on" : ""}
+              disabled={!!busy} onClick={() => settings.voice.engine !== id && setEngine(id)}>{label}</button>
+          ))}
+        </div>
       </div>
 
       <div className="row-card">
         <div className="row-main">
           <strong>Your voice sample</strong>
           <p>{status.sample
-            ? `${status.sample.seconds} seconds, recorded ${new Date(status.sample.recordedAt).toLocaleDateString()}. Encrypted on this Mac.${status.sample.kind === "talk" ? "" : " Recorded the old way (reading a script): record again and just talk, for a more accurate voice."}`
+            ? `${status.sample.seconds} seconds, recorded ${new Date(status.sample.recordedAt).toLocaleDateString()}. Encrypted on this Mac${eleven ? "; ElevenLabs gets a copy to make your voice" : ""}.${status.sample.kind === "talk" ? "" : " Recorded the old way (reading a script): record again and just talk, for a more accurate voice."}`
             : "About 20 seconds, read aloud. You can only record your own voice here, not upload a file."}</p>
         </div>
         {status.sample && <button className="btn link" disabled={!!busy} onClick={() => run("delete", () => window.penguin.voiceDelete())}>Delete</button>}
         <button className="btn ghost" disabled={!!busy} onClick={() => setRecording(true)}>{status.sample ? "Record again" : "Record"}</button>
       </div>
 
+      {eleven ? (
+        <div className="row-card column">
+          <div className="row-head">
+            <div className="row-main">
+              <strong>ElevenLabs</strong>
+              <p>{status.elevenConnected
+                ? "Connected with your API key (kept in the Keychain). Peguin makes a voice from your sample in your ElevenLabs account; ElevenLabs may ask you to confirm it's your voice the first time."
+                : "Paste an API key from elevenlabs.io, Developers, API keys. ElevenLabs bills your account for what Peguin says."}</p>
+            </div>
+            {status.elevenConnected && <button className="btn link" disabled={!!busy} onClick={() => run("eleven", () => window.penguin.voiceElevenDisconnect())}>Disconnect</button>}
+          </div>
+          {!status.elevenConnected && (
+            <form className="inline-form" onSubmit={(e) => { e.preventDefault(); const k = apiKey; setApiKey(""); run("eleven", () => window.penguin.voiceElevenConnect(k)); }}>
+              <input value={apiKey} type="password" placeholder="ElevenLabs API key" autoComplete="off" onChange={(e) => setApiKey(e.target.value)} />
+              <button className="btn ghost" disabled={!apiKey.trim() || !!busy}>{busy === "eleven" ? "Checking" : "Connect"}</button>
+            </form>
+          )}
+          {status.elevenConnected && (
+            <div className="field-grid">
+              <label>Prepared update
+                <select value={draft.voice.eleven.model} onChange={(e) => setDraft({ ...draft, voice: { ...draft.voice, eleven: { ...draft.voice.eleven, model: e.target.value as Settings["voice"]["eleven"]["model"] } } })}>
+                  <option value="eleven_v4">Eleven v4 (most expressive)</option>
+                  <option value="eleven_v4_turbo">Eleven v4 Turbo (faster)</option>
+                </select>
+              </label>
+              <label>Live answers
+                <select value={draft.voice.eleven.liveModel} onChange={(e) => setDraft({ ...draft, voice: { ...draft.voice, eleven: { ...draft.voice.eleven, liveModel: e.target.value as Settings["voice"]["eleven"]["liveModel"] } } })}>
+                  <option value="eleven_v4_turbo">Eleven v4 Turbo (fastest reply)</option>
+                  <option value="eleven_v4">Eleven v4 (more expressive, slower)</option>
+                </select>
+              </label>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="row-card">
         <div className="row-main">
           <strong>Voice model</strong>
@@ -101,15 +161,16 @@ export function VoiceSettings({ settings, draft, setDraft, save }: {
           ? <button className="btn link" disabled={!!busy} onClick={() => run("remove", () => window.penguin.voiceDeleteModel())}>Remove</button>
           : <button className="btn ghost" disabled={!!busy || (!!status.download && !status.download.error)} onClick={() => run("download", () => window.penguin.voiceDownload())}>Download</button>}
       </div>
+      )}
 
       <Pronunciations draft={draft} setDraft={setDraft} canHear={ready && !busy} hear={(w) => run(`word:${w}`, async () => playWav(await window.penguin.voiceSayWord(w)))} busy={busy} />
 
       <div className="field-grid">
-        <label>Pause between sentences <span className="value">{draft.voice.pause.toFixed(2)} s</span>
+        {!eleven && <label>Pause between sentences <span className="value">{draft.voice.pause.toFixed(2)} s</span>
           <input type="range" min={0.1} max={1} step={0.02} value={draft.voice.pause}
             onChange={(e) => setDraft({ ...draft, voice: { ...draft.voice, pause: Number(e.target.value) } })} />
           <span className="range-ends"><span>Quick</span><span>Unhurried</span></span>
-        </label>
+        </label>}
         <label>Expressiveness <span className="value">{draft.voice.expressiveness.toFixed(2)}</span>
           <input type="range" min={0.3} max={0.9} step={0.05} value={draft.voice.expressiveness}
             onChange={(e) => setDraft({ ...draft, voice: { ...draft.voice, expressiveness: Number(e.target.value) } })} />

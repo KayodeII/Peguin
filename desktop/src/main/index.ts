@@ -16,8 +16,9 @@ import { ensureModel } from "./speech/model.js";
 import { synthesize } from "./speech/tts.js";
 import {
   CONSENT_SENTENCE, deleteSample, deleteVoiceModel, ensureVoiceModel, forgetVoice, ownVoiceStatus, saveSample,
-  speakInOwnVoice, usingOwnVoice, VOICE_MODEL_BYTES, voiceModelReady,
+  engineReady, speakInOwnVoice, usingOwnVoice, VOICE_MODEL_BYTES,
 } from "./speech/voice/index.js";
+import { checkKey, clearEleven, deleteVoice, loadEleven, saveEleven } from "./speech/voice/eleven.js";
 import { sentences } from "./speech/voice/text.js";
 import { startWhisper, transcribeSamples, type Whisper } from "./speech/whisper.js";
 
@@ -256,7 +257,9 @@ ipcMain.handle("settings:save", (_e, input: unknown) => {
   const s = saveSettings(input);
   if (s.voice.mode === "mine" && !usingOwnVoice(s)) {
     useStandardVoice();
-    throw new Error("Record your voice and download the voice model first; Peguin keeps the standard voice until then.");
+    throw new Error(s.voice.engine === "elevenlabs"
+      ? "Record your voice and add your ElevenLabs API key first; Peguin keeps the standard voice until then."
+      : "Record your voice and download the voice model first; Peguin keeps the standard voice until then.");
   }
   return s;
 });
@@ -320,16 +323,38 @@ ipcMain.handle("voice:save", (_e, consent: ArrayBuffer, talk: ArrayBuffer) => {
   forgetVoice();
   return voiceStatus();
 });
-ipcMain.handle("voice:delete", () => { useStandardVoice(); deleteSample(); forgetVoice(); return voiceStatus(); });
+ipcMain.handle("voice:eleven-connect", async (_e, apiKey: string) => {
+  const key = String(apiKey ?? "").trim();
+  if (!key) throw new Error("Paste your ElevenLabs API key.");
+  await checkKey(key);
+  saveEleven({ apiKey: key, voiceId: null, sampleId: null });
+  return voiceStatus();
+});
+// Disconnecting also removes the clone Peguin made in the owner's ElevenLabs account.
+ipcMain.handle("voice:eleven-disconnect", async () => {
+  const a = loadEleven();
+  if (a?.voiceId) await deleteVoice(a.apiKey, a.voiceId);
+  clearEleven();
+  const s = loadSettings();
+  if (s.voice.engine === "elevenlabs") saveSettings({ ...s, voice: { ...s.voice, engine: "mac", mode: "standard" } });
+  return voiceStatus();
+});
+ipcMain.handle("voice:delete", async () => {
+  useStandardVoice(); deleteSample(); forgetVoice();
+  // The ElevenLabs clone was made from this sample, so it goes too.
+  const a = loadEleven();
+  if (a?.voiceId) { await deleteVoice(a.apiKey, a.voiceId); saveEleven({ ...a, voiceId: null, sampleId: null }); }
+  return voiceStatus();
+});
 ipcMain.handle("voice:delete-model", () => { useStandardVoice(); deleteVoiceModel(); return voiceStatus(); });
 // Previews use the owner's own lines: the disclosure and the start of their latest update.
 ipcMain.handle("voice:preview", async () => {
   const s = loadSettings();
-  if (!voiceModelReady()) throw new Error("Download the voice model first.");
+  if (!engineReady(loadSettings())) throw new Error(loadSettings().voice.engine === "elevenlabs" ? "Add your ElevenLabs API key first." : "Download the voice model first.");
   return speakInOwnVoice(sentences(lines(s, loadDraft(), true).update).slice(0, 3).join(" "), s);
 });
 ipcMain.handle("voice:say-word", async (_e, word: string) => {
-  if (!voiceModelReady()) throw new Error("Download the voice model first.");
+  if (!engineReady(loadSettings())) throw new Error(loadSettings().voice.engine === "elevenlabs" ? "Add your ElevenLabs API key first." : "Download the voice model first.");
   return speakInOwnVoice(`This is how I say ${String(word).slice(0, 40)}.`, loadSettings());
 });
 ipcMain.handle("update:get", () => update);
