@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { Link } from "../ui";
 
-const UPDATED = "8 October 2026";
+const UPDATED = "9 October 2026";
 
 function LegalPage({ title, intro, children }: { title: string; intro: ReactNode; children: ReactNode }) {
   return (
@@ -37,7 +37,9 @@ export function Privacy() {
         <li><strong>Subscription:</strong> your Paystack customer and subscription codes, plan status and renewal date. We never see or store your card details; Paystack handles payment.</li>
         <li><strong>Usage counts:</strong> how many updates, answers and recaps you asked our server for each day, to enforce fair-use limits. Not their content.</li>
         <li><strong>Help messages:</strong> if you message the team from the help chat, your email address, your message, the chat before it and the page you were on.</li>
-        <li><strong>Abuse protection:</strong> a one-way hash of your IP address with a daily count, for the help chat.</li>
+        <li><strong>Waitlist:</strong> if you join it, your email address, the plan you said you were interested in, and when you joined and were invited.</li>
+        <li><strong>Calendar connections:</strong> when you connect Google Calendar, Outlook or Calendly, our server completes the sign-in with that service and hands the access to your Mac. For up to 5 minutes it holds that hand-off, encrypted with a key only your Mac receives, then deletes it. It doesn't keep your calendar access or your events.</li>
+        <li><strong>Abuse protection:</strong> a one-way hash of your IP address with a daily count, for the help chat and the waitlist.</li>
       </ul>
       <p>When our server sends your work or meeting text to Claude for you, it passes it on and returns the result. It doesn't keep a copy.</p>
 
@@ -46,7 +48,7 @@ export function Privacy() {
         <li>Your settings, prepared updates, and the meeting audio Peguin hears, which is transcribed on your Mac and not recorded.</li>
         <li>If you turn on <strong>Speak in your own voice</strong>: your voice sample, which you record yourself in the app, and the audio made from it. Both are encrypted and you can delete them in Settings.</li>
         <li>Meeting recaps and transcripts, encrypted, kept for the period you choose in Settings (30 days unless you change it), then deleted.</li>
-        <li>Calendar links and your Calendly token, encrypted. Calendar events are read on your Mac to find standups.</li>
+        <li>Access to the calendars you connect (Google Calendar, Outlook, Calendly), calendar links, and, if you use it, your ElevenLabs API key, all encrypted. Calendar events are read on your Mac to find standups and aren't sent to us.</li>
       </ul>
       <p>Peguin reads your work from git on your Mac, from GitHub through your own <code>gh</code> sign-in, and, if you allow it, the prompts you gave Claude Code. It reads titles and statuses, never code.</p>
 
@@ -56,11 +58,16 @@ export function Privacy() {
         <li><strong>Cloudflare:</strong> hosts peguin.co and our database.</li>
         <li><strong>Paystack:</strong> processes payments and manages your subscription.</li>
         <li><strong>Resend:</strong> sends sign-in and welcome emails.</li>
-        <li><strong>Google:</strong> if you choose Continue with Google, to confirm your email address.</li>
-        <li><strong>Calendly:</strong> if you connect it, to read your scheduled meetings with your token.</li>
+        <li><strong>Google:</strong> if you choose Continue with Google, to confirm your email address. If you connect Google Calendar, Peguin reads the events on your primary calendar, read-only, on your Mac, to find your standups and their meeting links. Fresh access is requested through our server, which doesn't keep it.</li>
+        <li><strong>Microsoft:</strong> if you connect Outlook, the same for your Outlook or Microsoft 365 calendar, read-only.</li>
+        <li><strong>Calendly:</strong> if you connect it, to read your scheduled meetings.</li>
+        <li><strong>ElevenLabs:</strong> only if you choose ElevenLabs for <strong>Speak in your own voice</strong>. Your voice sample is sent to make a voice in your own ElevenLabs account, and each line Peguin speaks is sent to be read in that voice. This happens under your agreement with ElevenLabs, using your API key. Deleting your sample or disconnecting ElevenLabs in Settings deletes that voice from your ElevenLabs account. The default, <strong>On this Mac</strong>, sends nothing.</li>
         <li><strong>GitHub and Hugging Face:</strong> app downloads, and the speech and voice models the app downloads on first use, come from these. They see your IP address when you download.</li>
         <li><strong>The meetings you send Peguin to:</strong> Peguin joins as a guest named with "(AI)", and the meeting service (Google Meet, Zoom) handles its audio like any participant's.</li>
       </ul>
+
+      <h2>Google user data</h2>
+      <p>Peguin's use and transfer of information received from Google APIs to any other app adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">Google API Services User Data Policy</a>, including the Limited Use requirements. Calendar data is used only to find your standups, is read on your Mac, isn't stored on our servers, isn't used for advertising or to train AI models, and isn't shared with anyone else.</p>
 
       <h2>Other people in your meetings</h2>
       <p>Peguin always introduces itself as your AI assistant, and its name ends in "(AI)". It transcribes what others say on your Mac so it knows when you're called on and can answer; the parts described above go to Claude. It does not identify who said what. You're responsible for using Peguin only in meetings where that's allowed, and for telling your team you use it.</p>
@@ -68,12 +75,13 @@ export function Privacy() {
       <h2>How long we keep things</h2>
       <ul>
         <li>Account and subscription data: while your account exists. Sign-in links expire after 15 minutes and sessions after 30 days.</li>
+        <li>Waitlist entries: until you're invited and have created an account, or you ask us to remove you.</li>
         <li>Help messages: until they're resolved and no longer needed.</li>
         <li>Data on your Mac: until you delete it, or the period you set for recaps.</li>
       </ul>
 
       <h2>Your choices and rights</h2>
-      <p>You can switch off any work source, your own voice and recap summaries in the app, and delete your voice sample and recaps at any time. To get a copy of the data our server holds about you, correct it, or delete your account, <Contact />. Depending on where you live (for example under Nigeria's Data Protection Act or the GDPR), you may have further rights, including to object to processing and to complain to your data protection authority.</p>
+      <p>You can switch off any work source, your own voice and recap summaries in the app, disconnect any calendar, and delete your voice sample and recaps at any time. You can also remove Peguin's access from your Google, Microsoft or Calendly account settings. To get a copy of the data our server holds about you, correct it, or delete your account, <Contact />. Depending on where you live (for example under Nigeria's Data Protection Act or the GDPR), you may have further rights, including to object to processing and to complain to your data protection authority.</p>
 
       <h2>Security</h2>
       <p>Connections use HTTPS. Sign-in tokens are stored only as hashes, licences are signed, and data on your Mac is encrypted with the Keychain. No system is perfectly secure; if something goes wrong that affects you, we'll tell you.</p>
@@ -108,7 +116,7 @@ export function Terms() {
       <ul>
         <li>Not to remove, obscure or work around the "(AI)" name or the spoken introduction.</li>
         <li>To use Peguin only in meetings where an AI assistant may attend and listen, following your organisation's policies and the law where you and the other participants are, including on recording and consent.</li>
-        <li>To record only your own voice for <strong>Speak in your own voice</strong>, never anyone else's.</li>
+        <li>To record only your own voice for <strong>Speak in your own voice</strong>, never anyone else's, on this Mac or through ElevenLabs.</li>
         <li>Not to use Peguin to deceive, harass or impersonate anyone, or for anything unlawful.</li>
         <li>Not to resell Peguin, get around licence checks or usage limits, or overload our service.</li>
       </ul>
@@ -116,10 +124,11 @@ export function Terms() {
       <h2>What Peguin says for you</h2>
       <p>Peguin speaks on your behalf from your own work, and it can get things wrong: speech recognition mishears, and summaries can miss nuance. Review your update in the app when it matters, and follow up on anything it deferred. You're responsible for what's said in your name in your meetings.</p>
 
-      <h2>Trial, subscription and cancelling</h2>
+      <h2>Plans, trial, subscription and cancelling</h2>
       <ul>
-        <li>New accounts get a free trial (shown on the pricing page) with no card needed.</li>
-        <li>After that, Peguin is a monthly subscription, charged in advance through Paystack at the price shown when you subscribe. It renews each month until you cancel.</li>
+        <li>Peguin has a Free plan and paid plans; what each includes is on the <Link to="/pricing">pricing page</Link>.</li>
+        <li>New accounts get a free trial of a paid plan (shown on the pricing page) with no card needed. When it ends you move to the Free plan unless you choose a paid one.</li>
+        <li>Paid plans are monthly subscriptions, charged in advance through Paystack at the price shown when you subscribe. They renew each month until you cancel.</li>
         <li>Cancel any time from your account (Manage billing). You keep access until the end of the period you've paid for.</li>
         <li>Payments aren't refunded for part of a month, except where the law requires it.</li>
         <li>If we change the price, we'll tell you by email at least 30 days before it applies to you.</li>
@@ -131,6 +140,9 @@ export function Terms() {
       <h2>Our service</h2>
       <p>The app, website and everything we make for them belong to Peguin. While your account is in good standing, you may install and use the app on your own Macs. We keep improving Peguin, so features may change; we'll give notice before removing something you pay for.</p>
       <p>We may suspend or close an account that breaks these terms, after telling you why where we can. You can close your account any time.</p>
+
+      <h2>Other services you connect</h2>
+      <p>If you connect a calendar or choose ElevenLabs for your voice, your use of those services is also under their own terms, and anything they charge you (for example ElevenLabs usage on your API key) is between you and them.</p>
 
       <h2>No guarantees</h2>
       <p>Peguin depends on meeting services, speech recognition and AI models that we don't control, and it is provided as it is, without promises that it will always be available, join every meeting, or be error-free.</p>

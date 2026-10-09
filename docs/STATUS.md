@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-08 (evening). Earlier history is in `git log` and `docs/DECISIONS.md`. **Start with "Handoff" below.**
+Last updated: 2026-10-09. Earlier history is in `git log` and `docs/DECISIONS.md`. **Start with "Handoff" below.**
 
 ## Phase: private beta
 
@@ -38,27 +38,27 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 
 ## Next
 
-1. Real-call test of the current app: own voice, sentence-by-sentence answers, talking over Peguin. (Owner.)
-2. Plans, waitlist and one-click calendars (branch `plans-waitlist-oauth`) are built and tested locally (unit tests, local Worker with curl, screenshots), not against real providers. To go live: register the OAuth apps (Google: add `https://www.peguin.co/calendar/callback` and the `calendar.events.readonly` scope to the sign-in client, then Google review; Microsoft Entra app; Calendly OAuth app), set their secrets, `ADMIN_TOKEN`, run `paystack-setup.mjs` with the tier prices, `npm run db:migrate` (0005), deploy. Real test of the Mac Calendar permission flow in the packaged app.
-3. Optional Slack post of each recap (per-user webhook).
-4. Before charging strangers: owner review of the Privacy Policy and Terms (/privacy, /terms; add a legal entity and contact email), Paystack live keys and final price, Resend DNS, `ANTHROPIC_API_KEY`, Apple Developer ID (notarised app, auto-update), watermarking cloned audio.
-5. Later: streaming Claude's answer text, Linear and Jira sources, Teams via ACS, Windows.
+1. Merge `launch` (below), deploy the Worker with migration 0005, release v0.4.0.
+2. Owner setup for the new features: OAuth apps (`docs/OAUTH_SETUP.md`), `ADMIN_TOKEN`, tier prices (`cloud/scripts/paystack-setup.mjs`), and Google's review for the calendar scope.
+3. Real-call test: own voice (both engines), answers, talk-over, recap. Meet refused the owner's last test link ("You can't join this video call"): check the meeting allows signed-out guests before blaming the app.
+4. Emotion cues for ElevenLabs (v4 audio tags such as [excited]) added while drafting, stripped for the other engines.
+5. Before charging strangers: legal entity and contact email in /privacy and /terms, Paystack live keys, Resend DNS, `ANTHROPIC_API_KEY`, Apple Developer ID (notarised app, auto-update), watermarking cloned audio.
+6. Later: Team seats, streaming answer text, Linear and Jira, Teams via ACS, Windows.
 
-## Handoff (2026-10-08 evening)
+## Handoff (2026-10-09)
 
 ### What's live
-- Latest release **v0.3.0** (own voice, sentence-by-sentence answers, talk-over, recaps, calendars); `www.peguin.co/api/release` serves it.
-- The Worker was last deployed **before** the recaps merge: `POST /api/recap` returns 404 live. Deploy from an up-to-date `main` (`cd cloud && npx wrangler deploy`) so subscribers get recap summaries.
-- `POST /api/support/chat` returns 503 live: `ANTHROPIC_API_KEY` isn't set in the Worker yet (same for server-side drafts and answers).
+- Release **v0.3.0**. The Worker was last deployed before the recaps merge (`/api/recap` 404s live) and has no `ANTHROPIC_API_KEY` (help chat 503s).
 
-### Branches not on GitHub yet (local only, on the owner's Mac)
-| Branch | What | Next |
-|---|---|---|
-| `legal-pages` | `/privacy` and `/terms`, written from the code; footer and sign-in links | Owner to confirm: refunds, 30-day price notice, liability cap, Nigerian law / Lagos courts, 18+, breach notice; add legal entity and a contact email. Then push and PR. |
-| `google-signin-reasons` | Google sign-in failures show which step failed and log Google's error code | Push, PR, deploy, retry sign-in; if the log says `invalid_client`, regenerate `GOOGLE_CLIENT_SECRET`. |
-| `voice-finetune-spike` | Fine-tuning test (see `spikes/voice/README.md`, v3) | Finish the comparison, then decide. |
-| `try-everything` | Throwaway: `main` + the two branches above, for local end-to-end testing | Delete when done. |
-| `natural-voice-sample` | The voice sample becomes two recordings: the consent sentence (kept encrypted as the record) and ~20 s of unscripted natural talk, which becomes the voice; old scripted samples get a "record again" note. Includes the merged voice spike notes. | Owner records a new sample in the app and listens; push and PR. |
+### The `launch` branch (local until the owner pushes)
+`main` + everything finished since v0.3.0, merged and tested together (118 tests):
+- `natural-voice-sample`: consent sentence and natural talk recorded separately; the talk is the voice.
+- `elevenlabs-voice`: Settings > Voice > "Where your voice is made": On this Mac or ElevenLabs (own API key; Eleven v4 for prepared lines, v4 Turbo for answers). Untested against the real API (no key here); the clone-verification step may need adjusting once tried.
+- `plans-waitlist-oauth`: Free/Basic/Pro/Team (`src/core/plans.ts`), `SIGNUPS` waitlist switch with admin invites, one-click Google Calendar/Outlook/Calendly through the Worker. Untested against real OAuth providers.
+- `legal-pages` (updated for all of the above, including Google's Limited Use statement) and `google-signin-reasons`.
+- Dev aids: meeting progress prints to the terminal; `PENGUIN_PLAN=pro` lifts plan limits when running from source signed out (signed out counts as Free).
+
+Throwaway, delete when done: `try-everything`. Kept for reference: `voice-finetune-spike` (merged into the voice work).
 
 ### Owner's end-to-end test (not done yet)
 Local site (`cd cloud && npx wrangler dev`) and app (`cd desktop && PEGUIN_VOICE_MODEL_DIR=~/Desktop/penguin/spikes/voice/vendor/models/chatterbox-turbo npm run dev`, not signed in so drafts use the Claude CLI): onboarding, prepare, record voice, connect Mac Calendar, a real Meet with the owner on a phone (update, follow-up, talk-over, deferral), then the recap.
