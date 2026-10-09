@@ -2,7 +2,8 @@
 // and hands anything else to a person by email. Anonymous, so it's rate limited.
 import { faq } from "../../web/src/faq.js";
 import { sessionUser } from "./auth.js";
-import { currentPlan } from "./billing.js";
+import { FEATURE_ROWS, PLANS, TRIAL_PLAN } from "../../src/core/plans.js";
+import { plans, type PlanOffer } from "./billing.js";
 import { ask, type Turn } from "./claude.js";
 import { latestRelease } from "./release.js";
 import { sha256 } from "./crypto.js";
@@ -16,7 +17,7 @@ const MAX_TURNS = 12;
 const MAX_CHARS = 1000;
 export const HANDOFF = "<handoff/>";
 
-async function limit(env: Env, req: Request, kind: string, max: number) {
+export async function limit(env: Env, req: Request, kind: string, max: number) {
   const ip = req.headers.get("cf-connecting-ip") ?? "local";
   const day = new Date().toISOString().slice(0, 10);
   const row = await env.DB.prepare(
@@ -26,25 +27,35 @@ async function limit(env: Env, req: Request, kind: string, max: number) {
   if ((row?.count ?? 0) > max) throw new HttpError(429, "That's the limit for questions today. You can message the team instead.");
 }
 
-async function priceLine(env: Env): Promise<string> {
-  try {
-    const p = await currentPlan(env);
-    const money = new Intl.NumberFormat("en", { style: "currency", currency: p.currency, maximumFractionDigits: p.amount % 100 ? 2 : 0 }).format(p.amount / 100);
-    return `The plan costs ${money} per ${p.interval === "monthly" ? "month" : p.interval}, billed through Paystack.`;
-  } catch {
-    return "The price is shown on the pricing page (peguin.co/pricing).";
-  }
+export const formatMoney = (p: { amount: number; currency: string }) =>
+  new Intl.NumberFormat("en", { style: "currency", currency: p.currency, maximumFractionDigits: p.amount % 100 ? 2 : 0 }).format(p.amount / 100);
+
+/** One line per plan, from the plan table and live prices (pure). */
+export function plansText(offers: PlanOffer[]): string {
+  return offers.map((o) => {
+    const price = o.id === "free" ? "free" : o.price ? `${formatMoney(o.price)} per ${o.price.interval === "monthly" ? "month" : o.price.interval}` : "not on sale yet (people can join the waitlist for it)";
+    const has = FEATURE_ROWS.map((r) => ({ label: r.label.toLowerCase(), v: r.value(o.features) })).filter((r) => r.v !== false)
+      .map((r) => (typeof r.v === "string" ? `${r.label}: ${r.v}` : r.label));
+    return `- ${o.name}, ${price}. ${o.blurb} Includes: ${has.join("; ")}.`;
+  }).join("\n");
 }
 
-export function supportSystem(trialDays: number, price: string, downloadable: boolean): string {
+async function plansLine(env: Env): Promise<string> {
+  try { return plansText(await plans(env)); }
+  catch { return "- The plans and prices are on the pricing page (peguin.co/pricing)."; }
+}
+
+export function supportSystem(trialDays: number, plansList: string, downloadable: boolean, waitlist = false): string {
   const qa = faq(trialDays).map((f) => `Q: ${f.q}\nA: ${f.a}`).join("\n\n");
   return `You are the help assistant on peguin.co, the website for Peguin. You are an AI; if asked, say so.
 
 Peguin is a Mac app that joins your daily standup on Google Meet or Zoom as "Your name (AI)" when you can't be there. It writes your update from git commits, GitHub pull requests and Claude Code sessions, stays muted until someone says your name, then speaks the update and answers follow-ups only from facts it prepared.
 
 Everything you know:
-- One plan. ${price} There's a ${trialDays}-day free trial with no card. Cancel any time from the account page (peguin.co/account), under Manage billing.
-- Sign in at peguin.co/signin with Google or an email link. The desktop app signs in from its Settings.
+- Plans, billed monthly through Paystack:
+${plansList}
+- New accounts get ${PLANS[TRIAL_PLAN].name} free for ${trialDays} days with no card, then move to Free unless they pick a paid plan. Cancel a paid plan any time from the account page (peguin.co/account), under Manage billing.
+${waitlist ? "- New sign-ups are invite-only right now. People join the waitlist on the website and get an email when their invite is ready. People who already have an account sign in as usual." : "- Sign in at peguin.co/signin with Google or an email link."} The desktop app signs in from its Settings.
 ${downloadable ? "- Download the Mac app from the account page after signing in. It needs an Apple silicon Mac." : "- The Mac app isn't publicly downloadable yet; it ships with the first public release."}
 
 ${qa}
@@ -79,7 +90,7 @@ export async function supportChat(env: Env, req: Request): Promise<Response> {
   const { messages } = await body<{ messages?: unknown }>(req);
   const turns = cleanTurns(messages);
   await limit(env, req, "chat", CHATS_PER_DAY);
-  const reply = await ask(env, supportSystem(Number(env.TRIAL_DAYS), await priceLine(env), (await latestRelease(env)).available), turns, "low", 1024);
+  const reply = await ask(env, supportSystem(Number(env.TRIAL_DAYS), await plansLine(env), (await latestRelease(env)).available, env.SIGNUPS === "waitlist"), turns, "low", 1024);
   return json(parseReply(reply));
 }
 

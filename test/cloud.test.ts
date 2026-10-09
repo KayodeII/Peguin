@@ -1,11 +1,13 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { isEntitled, normaliseStatus, verifyPaystackSignature } from "../cloud/src/billing.js";
+import { accessOf, isEntitled, normaliseStatus, planCodes, planForCode, verifyPaystackSignature } from "../cloud/src/billing.js";
+import { availableProviders, emailFromIdToken, isProvider, seal, unseal } from "../cloud/src/calendars.js";
 import { signEd25519, verifyEd25519 } from "../cloud/src/crypto.js";
 import { escapeHtml, signInEmail, supportInboxEmail } from "../cloud/src/email.js";
 import { safeNext } from "../cloud/src/http.js";
 import { DMG_ASSET, fromGithub } from "../cloud/src/release.js";
-import { HANDOFF, parseReply, supportSystem } from "../cloud/src/support.js";
+import { HANDOFF, parseReply, plansText, supportSystem } from "../cloud/src/support.js";
+import { PLANS } from "../src/core/plans.js";
 import { compareVersions, isNewer } from "../src/core/version.js";
 
 describe("Paystack webhook signatures", () => {
@@ -79,11 +81,13 @@ describe("help chat", () => {
     expect(parseReply("Yes, Google Meet and Zoom.")).toEqual({ text: "Yes, Google Meet and Zoom.", handoff: false });
   });
 
-  it("grounds the prompt in the site FAQ and the live price", () => {
-    const s = supportSystem(14, "The plan costs NGN 7,500 per month.", false);
+  it("grounds the prompt in the site FAQ and the live plans", () => {
+    const s = supportSystem(14, "- Basic, NGN 7,500 per month.", false);
     expect(s).toContain("Is there a Windows version?");
-    expect(s).toContain("14-day free trial");
+    expect(s).toContain("Pro free for 14 days");
     expect(s).toContain("NGN 7,500");
+    expect(s).not.toContain("invite-only");
+    expect(supportSystem(14, "", false, true)).toContain("invite-only");
     expect(s).toContain(HANDOFF);
     expect(s).toContain("isn't publicly downloadable");
     expect(supportSystem(14, "", true)).toContain("account page");
@@ -126,5 +130,67 @@ describe("releases", () => {
     expect(fromGithub({ tag_name: "v0.2.0", prerelease: true, assets: [asset] })).toBeNull();
     expect(fromGithub({ tag_name: "nightly", assets: [asset] })).toBeNull();
     expect(fromGithub({ tag_name: "v0.2.0", assets: [] })).toBeNull();
+  });
+});
+
+describe("plans", () => {
+  const at = 1_800_000_000;
+  const day = 86400;
+  const env = { PAYSTACK_PLANS: JSON.stringify({ basic: "PLN_b", pro: "PLN_p" }), PAYSTACK_PLAN_CODE: "PLN_old" };
+
+  it("trial is Pro, then Free; a paid plan wins over both", () => {
+    expect(accessOf(null, at + day, at)).toEqual({ plan: "pro", status: "trialing" });
+    expect(accessOf(null, at - 1, at)).toEqual({ plan: "free", status: "free" });
+    expect(accessOf({ status: "active", current_period_end: at + day, plan: "basic" }, at + day, at)).toEqual({ plan: "basic", status: "active" });
+    expect(accessOf({ status: "canceled", current_period_end: at + day, plan: "basic" }, null, at).plan).toBe("free");
+    expect(accessOf({ status: "past_due", current_period_end: at - day, plan: "team" }, null, at)).toEqual({ plan: "team", status: "past_due" });
+  });
+  it("subscriptions from before plans count as Pro", () => {
+    expect(accessOf({ status: "active", current_period_end: null, plan: null }, null, at).plan).toBe("pro");
+    expect(accessOf({ status: "active", current_period_end: null, plan: "gold" }, null, at).plan).toBe("pro");
+  });
+  it("maps Paystack plan codes both ways", () => {
+    expect(planCodes(env)).toEqual({ basic: "PLN_b", pro: "PLN_p" });
+    expect(planForCode(env, "PLN_b")).toBe("basic");
+    expect(planForCode(env, "PLN_unknown")).toBe("pro");
+    // The old single plan stands in for Pro only when PAYSTACK_PLANS doesn't name one.
+    expect(planCodes({ PAYSTACK_PLAN_CODE: "PLN_old" })).toEqual({ pro: "PLN_old" });
+    expect(planCodes({ PAYSTACK_PLANS: "not json", PAYSTACK_PLAN_CODE: undefined })).toEqual({});
+  });
+  it("Free has no follow-ups or recaps; Pro and Team have own voice", () => {
+    expect(PLANS.free.features.perDay.answer).toBe(0);
+    expect(PLANS.free.features.followUps).toBe(false);
+    expect(PLANS.basic.features.ownVoice).toBe(false);
+    expect(PLANS.pro.features.ownVoice && PLANS.team.features.ownVoice).toBe(true);
+  });
+  it("the help chat lists every plan, with prices only where Paystack has one", () => {
+    const offers = Object.values(PLANS).map((p) => ({ ...p, onSale: p.id !== "team", price: p.id === "basic" ? { amount: 300000, currency: "NGN", interval: "monthly" } : null }));
+    const text = plansText(offers);
+    expect(text).toContain("Free, free.");
+    expect(text).toMatch(/Basic, NGN\s?3,000 per month/);
+    expect(text).toContain("Team, not on sale yet");
+    expect(text.split("\n").find((l) => l.startsWith("- Free"))).not.toContain("own voice");
+  });
+});
+
+describe("calendar connections", () => {
+  it("the hand-off opens only with the same one-time code", async () => {
+    const sealed = await seal("code-1", { provider: "google", accessToken: "a", refreshToken: "r" });
+    expect(sealed).not.toContain("refreshToken");
+    expect(await unseal("code-1", sealed)).toEqual({ provider: "google", accessToken: "a", refreshToken: "r" });
+    await expect(unseal("code-2", sealed)).rejects.toThrow();
+  });
+  it("reads the account email from an id token", () => {
+    const tok = (claims: object) => `x.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.y`;
+    expect(emailFromIdToken(tok({ email: "a@b.co" }))).toBe("a@b.co");
+    expect(emailFromIdToken(tok({ preferred_username: "m@corp.com" }))).toBe("m@corp.com");
+    expect(emailFromIdToken(undefined)).toBeNull();
+    expect(emailFromIdToken("garbage")).toBeNull();
+  });
+  it("only offers providers whose OAuth client is configured", () => {
+    const env = { GOOGLE_CLIENT_ID: "g", GOOGLE_CLIENT_SECRET: "s", CALENDLY_CLIENT_ID: "c" } as unknown as Parameters<typeof availableProviders>[0];
+    expect(availableProviders(env)).toEqual(["google"]);
+    expect(isProvider("google")).toBe(true);
+    expect(isProvider("yahoo")).toBe(false);
   });
 });

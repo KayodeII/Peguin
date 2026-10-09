@@ -1,7 +1,9 @@
-// One shape for events from every calendar Peguin can read (the Mac's
-// Calendar, calendar links, Calendly, and later Google and Microsoft directly).
+// One shape for events from every calendar Peguin can read: the Mac's
+// Calendar, connected Google, Outlook and Calendly accounts, and calendar links.
 
-export type CalendarKind = "mac" | "ics" | "calendly";
+/** Calendars connected with one click (OAuth through the Peguin server). */
+export type OAuthProvider = "google" | "microsoft" | "calendly";
+export type CalendarKind = "mac" | "ics" | OAuthProvider;
 
 export type CalendarEvent = {
   /** Stable for one occurrence: the same meeting on another day has a different id. */

@@ -274,6 +274,11 @@ input[type="range"]:focus { outline: none; }
 .row-card.column { flex-direction: column; align-items: stretch; gap: 10px; }
 .row-head { display: flex; align-items: center; gap: 16px; }
 .link-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; background: var(--main); }
+.link-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+details.advanced > summary { display: flex; align-items: center; gap: 16px; cursor: pointer; list-style: none; }
+details.advanced > summary::-webkit-details-marker { display: none; }
+details.advanced > summary::after { content: "›"; color: var(--muted); font-size: 18px; transition: transform .15s; }
+details.advanced[open] > summary::after { transform: rotate(90deg); }
 .link-row .mono { flex: 1; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
 .inline-form { display: flex; gap: 8px; }
 .words { margin: 12px 0; }

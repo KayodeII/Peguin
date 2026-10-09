@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { PHOTOS } from "../photos";
 import { Brand, Icon, Img, Link, Logo, reducedMotion, Rise } from "../ui";
 import { SoundField } from "./Backgrounds";
-import { TRIAL_DAYS } from "./Sections";
+import { StartButton, TRIAL_DAYS, useWaitlist } from "./Sections";
 
 const SOURCES = [
   { id: "github", text: "Merged #482: retry payment webhooks" },
@@ -84,6 +84,7 @@ function Stage() {
 }
 
 export function Hero() {
+  const waitlist = useWaitlist();
   return (
     <section className="hero">
       <SoundField />
@@ -95,10 +96,10 @@ export function Hero() {
             The room always knows it's an AI.
           </p>
           <div className="cta fade-up" style={{ animationDelay: "700ms" }}>
-            <Link to="/signin?next=/account" className="btn big">Try it free for {TRIAL_DAYS} days</Link>
+            <StartButton className="btn big">Try it free for {TRIAL_DAYS} days</StartButton>
             <Link to="/#demo" className="btn big ghost">See a standup it covered</Link>
           </div>
-          <p className="hero-note fade-up" style={{ animationDelay: "900ms" }}>Mac app. Works with Google Meet and Zoom. No card for the trial.</p>
+          <p className="hero-note fade-up" style={{ animationDelay: "900ms" }}>Mac app. Works with Google Meet and Zoom. {waitlist ? "Letting people in a few at a time." : "No card for the trial."}</p>
         </div>
         <Stage />
       </div>

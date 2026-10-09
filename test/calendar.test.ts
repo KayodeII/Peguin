@@ -154,3 +154,63 @@ describe("scheduling a calendar standup", () => {
     expect(Settings.parse({}).calendar).toEqual({ enabled: false, mac: false, words: WORDS });
   });
 });
+
+describe("connected calendars", async () => {
+  const { fromGoogle } = await import("../desktop/src/main/calendar/google.js");
+  const { fromGraph } = await import("../desktop/src/main/calendar/microsoft.js");
+
+  it("Google: Meet link first; all-day, cancelled and declined events left out", () => {
+    const out = fromGoogle([
+      { id: "a", summary: "Daily standup", start: { dateTime: "2026-10-09T09:00:00+01:00" }, end: { dateTime: "2026-10-09T09:15:00+01:00" },
+        hangoutLink: "https://meet.google.com/abc-defg-hij", description: "Agenda https://example.com" },
+      { id: "b", summary: "Offsite", start: { date: "2026-10-09" }, end: { date: "2026-10-10" } },
+      { id: "c", summary: "Standup", status: "cancelled", start: { dateTime: "2026-10-09T09:00:00Z" }, end: { dateTime: "2026-10-09T09:15:00Z" } },
+      { id: "d", summary: "Standup", attendees: [{ self: true, responseStatus: "declined" }], start: { dateTime: "2026-10-09T09:00:00Z" }, end: { dateTime: "2026-10-09T09:15:00Z" } },
+      { id: "e", summary: "Zoom sync", start: { dateTime: "2026-10-09T10:00:00Z" }, end: { dateTime: "2026-10-09T10:30:00Z" },
+        conferenceData: { entryPoints: [{ entryPointType: "phone", uri: "tel:+1" }, { entryPointType: "video", uri: "https://acme.zoom.us/j/1" }] } },
+    ], "me@acme.com");
+    expect(out.map((e) => e.id)).toEqual(["google:a", "google:e"]);
+    expect(out[0]).toMatchObject({ start: Date.parse("2026-10-09T08:00:00Z"), calendar: "me@acme.com", source: "google" });
+    expect(joinLink(out[0]!.text)?.platform).toBe("google_meet");
+    expect(joinLink(out[1]!.text)?.platform).toBe("zoom");
+  });
+
+  it("Outlook: UTC times without a zone marker; Teams join link; declined left out", () => {
+    const out = fromGraph([
+      { id: "x", subject: "Scrum", start: { dateTime: "2026-10-09T08:00:00.0000000" }, end: { dateTime: "2026-10-09T08:15:00.0000000" },
+        onlineMeeting: { joinUrl: "https://teams.microsoft.com/l/meetup-join/19%3a" }, body: { content: "Notes" } },
+      { id: "y", subject: "Scrum", responseStatus: { response: "declined" }, start: { dateTime: "2026-10-09T08:00:00" }, end: { dateTime: "2026-10-09T08:15:00" } },
+      { id: "z", subject: "Holiday", isAllDay: true, start: { dateTime: "2026-10-09T00:00:00" }, end: { dateTime: "2026-10-10T00:00:00" } },
+    ], "me@corp.com");
+    expect(out).toHaveLength(1);
+    expect(out[0]!.start).toBe(Date.parse("2026-10-09T08:00:00Z"));
+    expect(joinLink(out[0]!.text)?.platform).toBe("teams");
+    expect(standups(out, WORDS)).toHaveLength(1);
+  });
+});
+
+describe("plan limits", async () => {
+  const { allowed, joinsThisWeek, weekOf } = await import("../desktop/src/main/plan.js");
+  const { PLANS } = await import("../src/core/plans.js");
+
+  it("weeks start on Monday in the owner's timezone", () => {
+    expect(weekOf(new Date("2026-10-08T12:00:00Z"), "Africa/Lagos")).toBe("2026-10-05"); // Thursday
+    expect(weekOf(new Date("2026-10-05T00:30:00Z"), "Africa/Lagos")).toBe("2026-10-05"); // Monday 01:30 in Lagos
+    // Sunday 23:30 UTC is already Monday in Lagos, still Sunday in New York.
+    expect(weekOf(new Date("2026-10-11T23:30:00Z"), "Africa/Lagos")).toBe("2026-10-12");
+    expect(weekOf(new Date("2026-10-11T23:30:00Z"), "America/New_York")).toBe("2026-10-05");
+  });
+  it("counts only this week's standups", () => {
+    const now = new Date("2026-10-08T12:00:00Z");
+    const joins = [Date.parse("2026-10-02T09:00:00Z"), Date.parse("2026-10-05T09:00:00Z"), Date.parse("2026-10-07T09:00:00Z")];
+    expect(joinsThisWeek(joins, now, "Africa/Lagos")).toBe(2);
+    expect(joinsThisWeek([], now, "Africa/Lagos")).toBe(0);
+  });
+  it("own voice is used only when the plan has it; the owner's choice is kept", () => {
+    const s = Settings.parse({ voice: { mode: "mine" } });
+    expect(allowed(s, PLANS.free.features).voice.mode).toBe("standard");
+    expect(allowed(s, PLANS.basic.features).voice.mode).toBe("standard");
+    expect(allowed(s, PLANS.pro.features).voice.mode).toBe("mine");
+    expect(s.voice.mode).toBe("mine");
+  });
+});
