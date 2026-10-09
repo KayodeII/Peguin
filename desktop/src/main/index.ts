@@ -72,6 +72,8 @@ export type AppEvent =
   | { kind: "show"; view: string };
 
 function send(e: AppEvent) {
+  // Development: meeting progress in the terminal too, so a failed join can be diagnosed from the logs.
+  if (!app.isPackaged && (e.kind === "log" || e.kind === "meeting")) console.log("[peguin]", JSON.stringify(e).slice(0, 600));
   if (win && !win.isDestroyed()) win.webContents.send("app:event", e);
   if (e.kind === "meeting" && e.event.kind === "status") tray?.setTitle(e.event.status === "in_call" ? " ●" : "");
 }
