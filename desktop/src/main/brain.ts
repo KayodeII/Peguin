@@ -42,6 +42,17 @@ function claude(prompt: string, timeoutMs: number): Promise<string> {
   });
 }
 
+/** The server's AI is unavailable (no credit, outage): use the owner's own Claude Code sign-in instead. */
+const serverAiDown = (e: unknown) => (e as { status?: number }).status === 503;
+
+async function viaAccount<T>(subscribed: boolean, server: () => Promise<T>, local: () => Promise<T>): Promise<{ value: T; via: Draft["via"] }> {
+  if (subscribed) {
+    try { return { value: await server(), via: "account" }; }
+    catch (e) { if (!serverAiDown(e)) throw e; }
+  }
+  return { value: await local(), via: "claude_cli" };
+}
+
 const draftFile = () => path.join(app.getPath("userData"), "draft.json");
 
 export function loadDraft(): Draft | null {
@@ -82,6 +93,7 @@ export function isFresh(d: Draft | null, timezone: string, now = new Date()): bo
 
 /** Summary and extra follow-ups for a meeting, from its transcript only (same routing as drafts). */
 export async function summarizeMeeting(s: Settings, lines: string[]): Promise<{ summary: string; followUps: string[] }> {
-  if (await offlineLicense()) return cloudRecap(s.displayName, lines);
-  return parseRecap(await claude(`${recapSystem(s.displayName)}\n\n${recapUser(lines)}`, 60000));
+  return (await viaAccount(!!(await offlineLicense()),
+    () => cloudRecap(s.displayName, lines),
+    async () => parseRecap(await claude(`${recapSystem(s.displayName)}\n\n${recapUser(lines)}`, 60000)))).value;
 }

@@ -39,7 +39,7 @@ export function Transform() {
     <div className="transform" ref={ref}>
       <div className="transform-sticky">
         <div className="transform-head">
-          <h2>From yesterday's commits to a 40-second update</h2>
+          <h2>From yesterday's commits to a 40‑second update</h2>
           <p className="section-lead">Scroll to watch Peguin decide what your team needs to hear.</p>
         </div>
         <div className="transform-grid">
