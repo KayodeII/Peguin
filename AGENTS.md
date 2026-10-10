@@ -91,7 +91,8 @@ Live meetings need public URLs (ngrok) for `API_PUBLIC_URL` and `REALTIME_PUBLIC
 - Work on a short-lived branch, open a PR into `main`, merge when CI is green. `main` is always releasable.
 - The product version is `desktop/package.json` (semver). Patch for fixes, minor for new features, major for breaking changes (for example a settings format the old app can't read).
 - Release from an up-to-date `main`: `npm run release -- patch|minor|major|x.y.z` bumps the version, commits `Release vX.Y.Z` and tags it. `git push origin main --follow-tags` publishes; `.github/workflows/release.yml` builds the .dmg and the site picks it up within ten minutes. See `docs/RELEASING.md`.
-- The Worker and website aren't versioned: deploy them after merging with `cd cloud && npx wrangler deploy`, which builds `web/dist` first (and `npx wrangler d1 migrations apply penguin --remote` first when there's a new migration).
+- The Worker and website aren't versioned. `.github/workflows/deploy.yml` deploys them after CI passes on `main` (migrations, then `wrangler deploy`, which builds `web/dist` first), using the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets; run it by hand from the Actions tab if needed. Deploying from a laptop (`cd cloud && npx wrangler deploy`) still works, but Cloudflare's API rate-limits some shared mobile IPs for hours.
+- A migration that removes something the live Worker still uses must ship in a later PR than the code change (the deploy job migrates before it deploys).
 
 ## Privacy Policy and Terms
 
