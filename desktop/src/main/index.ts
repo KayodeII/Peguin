@@ -418,6 +418,7 @@ ipcMain.handle("copilot:start", (_e, url: string) => startCopilot(String(url ?? 
 ipcMain.handle("copilot:state", () => copilot?.state() ?? null);
 // Closing the window leaves the call: the meeting page goes with it.
 ipcMain.handle("copilot:collapse", (_e, collapsed: boolean) => copilot?.setCollapsed(!!collapsed));
+ipcMain.handle("copilot:pop-out", (_e, out: boolean) => copilot?.popOut(!!out));
 ipcMain.handle("copilot:stop", () => { copilot?.stop(); copilot = null; });
 ipcMain.handle("account:get", () => account);
 ipcMain.handle("meetings:list", () => listMeetings(loadSettings().recap.keepDays));

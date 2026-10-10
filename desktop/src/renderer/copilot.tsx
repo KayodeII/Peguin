@@ -1,5 +1,6 @@
-// The private copilot's panel: beside the owner's own meeting, visible only on
-// their screen. The newest question and a suggested answer sit at the top;
+// The private copilot's panel: beside the owner's own meeting, or popped out
+// into its own window (#copilot-out) so they can share the meeting window, or
+// another one, without it. Never sent to the call itself. The newest question and a suggested answer sit at the top;
 // earlier ones and the running transcript below.
 import { useEffect, useRef, useState } from "react";
 import type { Settings } from "../main/settings";
@@ -33,6 +34,7 @@ export function CopilotPanel() {
     void window.penguin.saveSettings(next).then(setSettings);
   };
   const hide = (h: boolean) => { setHidden(h); void window.penguin.copilotCollapse(h); };
+  const out = location.hash === "#copilot-out";
 
   // Same look as the main window.
   useEffect(() => {
@@ -79,13 +81,17 @@ export function CopilotPanel() {
     );
   }
   return (
-    <div className="copilot">
+    <div className={`copilot ${out ? "out" : ""}`}>
       <aside className="cp-panel">
         <header className="cp-head">
           <Logo size={22} />
-          <div><strong>Peguin copilot</strong><span>Not sent to the call</span></div>
-          <i className={`cp-dot ${status.status}`} title={status.status} />
-          <button className="btn ghost cp-leave" onClick={() => hide(true)} title="Hide this panel; the meeting takes the space">Hide</button>
+          <div><strong>Peguin copilot <i className={`cp-dot ${status.status}`} title={status.status} /></strong><span>Not sent to the call</span></div>
+          {out
+            ? <button className="btn ghost cp-btn" onClick={() => void window.penguin.copilotPopOut(false)} title="Put the notes back beside the meeting">Dock</button>
+            : <>
+                <button className="btn ghost cp-btn" onClick={() => void window.penguin.copilotPopOut(true)} title="Move the notes into their own window. Share the meeting window, or another window, and they stay out of the share.">Pop out</button>
+                <button className="btn ghost cp-btn" onClick={() => hide(true)} title="Hide this panel; the meeting takes the space">Hide</button>
+              </>}
           <button className="btn ghost cp-leave" onClick={() => void window.penguin.copilotStop()} title="Leave the meeting and close this window">Leave</button>
         </header>
         {settings && (

@@ -48,6 +48,8 @@ export class CopilotSession {
   private readonly waiting: CopilotCard[] = [];
   private ended = false;
   private collapsed = false;
+  /** The panel in its own window, so the owner can share the meeting window, or another one, without it. */
+  private notes?: BrowserWindow;
   private relayout = () => {};
   /** Everything shown so far, for the panel to catch up when it opens (it may subscribe after the first events). */
   private snapshot: { status?: Extract<CopilotEvent, { type: "status" }>; heard: { text: string; at: number }[]; cards: Map<number, CopilotCard> } = { heard: [], cards: new Map() };
@@ -71,8 +73,9 @@ export class CopilotSession {
     if (e.type === "status") this.snapshot.status = e;
     if (e.type === "heard") this.snapshot.heard = [...this.snapshot.heard.slice(-199), { text: e.text, at: e.at }];
     if (e.type === "card") this.snapshot.cards.set(e.card.id, e.card);
-    const wc = this.win?.webContents;
-    if (wc && !wc.isDestroyed()) wc.send("app:event", { kind: "copilot", event: e });
+    for (const w of [this.win, this.notes]) {
+      if (w && !w.isDestroyed()) w.webContents.send("app:event", { kind: "copilot", event: e });
+    }
   }
 
   /** What the panel should show right now. */
@@ -108,7 +111,8 @@ export class CopilotSession {
     win.contentView.addChildView(view);
     const layout = () => {
       const [w, h] = win.getContentSize() as [number, number];
-      view.setBounds({ x: 0, y: 0, width: Math.max(0, w - (this.collapsed ? PANEL_COLLAPSED : PANEL_WIDTH)), height: h });
+      const panel = this.notes ? 0 : this.collapsed ? PANEL_COLLAPSED : PANEL_WIDTH;
+      view.setBounds({ x: 0, y: 0, width: Math.max(0, w - panel), height: h });
     };
     layout();
     this.relayout = layout;
@@ -116,7 +120,13 @@ export class CopilotSession {
 
     const wc = view.webContents;
     // The owner's real mic and camera, for their own meeting.
-    wc.session.setPermissionRequestHandler((_wc, perm, cb) => cb(perm === "media" || perm === "notifications" || perm === "fullscreen"));
+    wc.session.setPermissionRequestHandler((_wc, perm, cb) => cb(perm === "media" || perm === "display-capture" || perm === "notifications" || perm === "fullscreen"));
+    // Sharing their screen from the meeting: macOS's own picker, where they choose a display, an app or one window.
+    // Electron only calls this handler where that picker doesn't exist (before macOS 15).
+    wc.session.setDisplayMediaRequestHandler((_req, cb) => {
+      this.send({ type: "status", status: this.snapshot.status?.status ?? "joining", detail: "Sharing your screen from Peguin needs macOS 15 or later. Share from the meeting's own app instead." });
+      cb(null);
+    }, { useSystemPicker: true });
     wc.session.setPermissionCheckHandler((_wc, perm) => perm === "media");
     wc.setWindowOpenHandler(({ url }) => (/^https:\/\//.test(url) ? { action: "allow" } : { action: "deny" }));
     wc.on("will-frame-navigate", (e) => { if (!/^(https?|about|blob|data):/i.test(e.url)) e.preventDefault(); });
@@ -140,8 +150,8 @@ export class CopilotSession {
     on("cop:log", (_e, msg: string) => { if (/listening to/.test(msg)) this.send({ type: "status", status: "listening", detail: "Listening. Questions show up here." }); });
     on("cop:pcm", (_e, buf: ArrayBuffer) => { if (!this.ended) listen(buf); });
 
-    win.on("closed", () => this.end());
-    this.send({ type: "status", status: "joining", detail: "Join the meeting on the left. Peguin starts listening once you're in." });
+    win.on("closed", () => { this.notes?.destroy(); this.end(); });
+    this.send({ type: "status", status: "joining", detail: "Join the meeting. Peguin starts listening once you're in." });
     if (!app.isPackaged) this.devDemo(win, wc);
     await wc.loadURL(webClientUrl(this.url, platform));
   }
@@ -149,17 +159,20 @@ export class CopilotSession {
   /**
    * Development only. PENGUIN_COPILOT_DEMO=<JSON array of lines> feeds them in as if
    * heard (real question detection and suggestions); PENGUIN_COPILOT_SNAPSHOT=<dir>
-   * then saves the meeting and the panel as PNGs after PENGUIN_COPILOT_SNAPSHOT_MS.
+   * then saves the meeting and the panel as PNGs after PENGUIN_COPILOT_SNAPSHOT_MS
+   * (and the notes window, when PENGUIN_COPILOT_POPOUT=1 pops it out).
    */
   private devDemo(win: BrowserWindow, meeting: Electron.WebContents) {
     const lines = JSON.parse(process.env.PENGUIN_COPILOT_DEMO ?? "[]") as string[];
     lines.forEach((t, i) => setTimeout(() => { if (!this.ended) this.heard(t); }, 2500 + i * 3000));
+    if (process.env.PENGUIN_COPILOT_POPOUT) setTimeout(() => this.popOut(true), 1500);
     const dir = process.env.PENGUIN_COPILOT_SNAPSHOT;
     if (!dir) return;
     setTimeout(async () => {
       mkdirSync(dir, { recursive: true });
       writeFileSync(path.join(dir, "panel.png"), (await win.webContents.capturePage()).toPNG());
       writeFileSync(path.join(dir, "meeting.png"), (await meeting.capturePage()).toPNG());
+      if (this.notes) writeFileSync(path.join(dir, "notes.png"), (await this.notes.webContents.capturePage()).toPNG());
       app.exit(0);
     }, Number(process.env.PENGUIN_COPILOT_SNAPSHOT_MS ?? 30000));
   }
@@ -212,7 +225,35 @@ export class CopilotSession {
     this.relayout();
   }
 
+  /** Moves the panel into its own small window (out) or back beside the meeting. */
+  popOut(out: boolean) {
+    if (this.ended || !this.win || this.win.isDestroyed() || out === !!this.notes) return;
+    if (!out) {
+      const notes = this.notes!;
+      this.notes = undefined;
+      notes.destroy();
+      this.relayout();
+      return;
+    }
+    const [x, y] = this.win.getPosition() as [number, number];
+    const [w, h] = this.win.getSize() as [number, number];
+    const notes = new BrowserWindow({
+      width: PANEL_WIDTH, height: Math.min(h, 820), minWidth: 300, minHeight: 360, x: x + w - PANEL_WIDTH, y, title: "Peguin notes",
+      // Stays above the window being shared, so the owner can read it. It isn't hidden from screen capture:
+      // it shows in any share that includes it (the whole screen, or this window).
+      alwaysOnTop: true,
+      webPreferences: { preload: path.join(outDir, "preload/app.cjs"), sandbox: true, contextIsolation: true },
+    });
+    this.notes = notes;
+    if (this.panel.url) void notes.loadURL(`${this.panel.url}#copilot-out`);
+    else void notes.loadFile(this.panel.file!, { hash: "copilot-out" });
+    // Closing it docks the panel again.
+    notes.on("closed", () => { if (this.notes === notes) { this.notes = undefined; this.relayout(); } });
+    this.relayout();
+  }
+
   stop() {
+    this.notes?.destroy();
     if (this.win && !this.win.isDestroyed()) this.win.destroy();
     this.end();
   }
