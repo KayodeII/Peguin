@@ -238,12 +238,24 @@ export class CopilotSession {
     const [x, y] = this.win.getPosition() as [number, number];
     const [w, h] = this.win.getSize() as [number, number];
     const notes = new BrowserWindow({
-      width: PANEL_WIDTH, height: Math.min(h, 820), minWidth: 300, minHeight: 360, x: x + w - PANEL_WIDTH, y, title: "Peguin notes",
-      // Stays above the window being shared, so the owner can read it. It isn't hidden from screen capture:
-      // it shows in any share that includes it (the whole screen, or this window).
+      width: PANEL_WIDTH,
+      height: Math.min(h, 820),
+      minWidth: 300,
+      minHeight: 360,
+      x: x + w - PANEL_WIDTH,
+      y,
+      title: "Peguin notes",
+      // Stays above the shared window so the owner can read it while presenting.
       alwaysOnTop: true,
-      webPreferences: { preload: path.join(outDir, "preload/app.cjs"), sandbox: true, contextIsolation: true },
+      webPreferences: {
+        preload: path.join(outDir, "preload/app.cjs"),
+        sandbox: true,
+        contextIsolation: true,
+      },
     });
+    // Exclude from screen capture where the OS supports it (Windows; older macOS /
+    // CoreGraphics). ScreenCaptureKit on macOS 15+ may still include it.
+    notes.setContentProtection(true);
     this.notes = notes;
     if (this.panel.url) void notes.loadURL(`${this.panel.url}#copilot-out`);
     else void notes.loadFile(this.panel.file!, { hash: "copilot-out" });

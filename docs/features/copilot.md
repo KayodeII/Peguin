@@ -5,7 +5,7 @@ The owner joins their own meeting as themselves in a Peguin window. Peguin liste
 - Suggestions are labelled **From your notes**, **Not in your notes** or **General knowledge**. Work questions stay to the prepared facts; experience is never invented.
 - **Work / Interview** switch and **Check online** (a second, web-searched pass for general questions), both saved straight away.
 - Questions queue (up to three waiting); older overflow is marked skipped, never left on "Thinking…".
-- **Hide** collapses the panel to a strip. **Pop out** moves it into its own always-on-top window, so sharing the meeting window or any other single window leaves it out; **Dock** puts it back. Sharing the entire screen shows it.
+- **Hide** collapses the panel to a strip. **Pop out** moves it into its own always-on-top window (with content protection so capture can omit it where the OS supports that); **Dock** puts it back. Sharing the meeting window alone always leaves docked notes out of that share.
 - Screen sharing from the meeting uses macOS's own picker (macOS 15+).
 
 ## Decisions
