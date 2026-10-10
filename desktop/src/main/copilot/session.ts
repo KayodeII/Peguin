@@ -26,6 +26,15 @@ export const PANEL_COLLAPSED = 52;
 const MAX_WAITING = 3;
 /** Lines of conversation Claude sees with each question. */
 const CONTEXT_LINES = 16;
+/** How long Peguin waits to see the AI notice land in the meeting chat. */
+const DISCLOSE_TIMEOUT_MS = 20_000;
+/**
+ * Posted in the meeting chat from the owner's own account before the popped-out
+ * notes are hidden from screen capture, and when they join in Interview mode. The
+ * people in the call learn that AI is helping; they just don't see the notes.
+ * Fixed text, not a setting: it's the condition for hiding the notes.
+ */
+export const AI_NOTICE = "Heads-up: I'm using Peguin, an AI assistant, in this call. It hears the conversation and privately suggests answers to me.";
 
 export type CopilotCard = {
   id: number; question: string; at: number; answer?: string; error?: string;
@@ -51,6 +60,9 @@ export class CopilotSession {
   /** The panel in its own window, so the owner can share the meeting window, or another one, without it. */
   private notes?: BrowserWindow;
   private relayout = () => {};
+  /** The AI notice is in the meeting chat (confirmed in the chat log, not just typed). */
+  private disclosed = false;
+  private disclosing?: Promise<boolean>;
   /** Everything shown so far, for the panel to catch up when it opens (it may subscribe after the first events). */
   private snapshot: { status?: Extract<CopilotEvent, { type: "status" }>; heard: { text: string; at: number }[]; cards: Map<number, CopilotCard> } = { heard: [], cards: new Map() };
 
@@ -147,7 +159,12 @@ export class CopilotSession {
       this.detach.push(() => ipcMain.removeListener(channel, h));
     };
     on("cop:inject", (e) => { e.returnValue = inject; });
-    on("cop:log", (_e, msg: string) => { if (/listening to/.test(msg)) this.send({ type: "status", status: "listening", detail: "Listening. Questions show up here." }); });
+    on("cop:log", (_e, msg: string) => {
+      if (!/listening to/.test(msg)) return;
+      this.send({ type: "status", status: "listening", detail: "Listening. Questions show up here." });
+      if (this.settings.copilot.mode === "interview") void this.disclose();
+    });
+    on("cop:disclosed", (_e, error: unknown) => this.chatReply?.(typeof error === "string" && error ? error : null));
     on("cop:pcm", (_e, buf: ArrayBuffer) => { if (!this.ended) listen(buf); });
 
     win.on("closed", () => { this.notes?.destroy(); this.end(); });
@@ -175,6 +192,37 @@ export class CopilotSession {
       if (this.notes) writeFileSync(path.join(dir, "notes.png"), (await this.notes.webContents.capturePage()).toPNG());
       app.exit(0);
     }, Number(process.env.PENGUIN_COPILOT_SNAPSHOT_MS ?? 30000));
+  }
+
+  private chatReply?: (error: string | null) => void;
+
+  /** Asks every frame of the meeting page to post the AI notice in the chat; resolves once one confirms it, or with the last error. */
+  protected postNotice(text: string): Promise<void> {
+    const frames = this.view?.webContents.mainFrame.framesInSubtree ?? [];
+    return new Promise((resolve, reject) => {
+      let lastError = "Peguin couldn't find the meeting's chat.";
+      const done = (fn: () => void) => { clearTimeout(timer); this.chatReply = undefined; fn(); };
+      const timer = setTimeout(() => done(() => reject(new Error(lastError))), DISCLOSE_TIMEOUT_MS);
+      this.chatReply = (error) => { if (error) lastError = error; else done(resolve); };
+      for (const f of frames) { try { f.send("cop:disclose", text); } catch { /* frame went away */ } }
+    });
+  }
+
+  /** Posts the AI notice once per meeting. True when it's confirmed in the chat. */
+  disclose(): Promise<boolean> {
+    if (this.disclosed) return Promise.resolve(true);
+    this.disclosing ??= this.postNotice(AI_NOTICE)
+      .then(() => {
+        this.disclosed = true;
+        this.send({ type: "status", status: "listening", detail: "Posted in the meeting chat that you're using an AI assistant." });
+        return true;
+      })
+      .catch((e: unknown) => {
+        this.send({ type: "status", status: this.snapshot.status?.status ?? "listening", detail: `Couldn't post the AI notice in the meeting chat (${e instanceof Error ? e.message : e}). The popped-out notes stay visible in a full-screen share. Dock and pop out again to retry.` });
+        return false;
+      })
+      .finally(() => { this.disclosing = undefined; });
+    return this.disclosing;
   }
 
   private heard(text: string) {
@@ -253,10 +301,11 @@ export class CopilotSession {
         contextIsolation: true,
       },
     });
-    // Exclude from screen capture where the OS supports it (Windows; older macOS /
-    // CoreGraphics). ScreenCaptureKit on macOS 15+ may still include it.
-    notes.setContentProtection(true);
     this.notes = notes;
+    // Left out of screen capture only once the call has been told in the chat that
+    // AI is helping. Where the OS honours it: Windows, and older macOS capture;
+    // ScreenCaptureKit on macOS 15+ may still include it.
+    void this.disclose().then((ok) => { if (ok && this.notes === notes && !notes.isDestroyed()) notes.setContentProtection(true); });
     if (this.panel.url) void notes.loadURL(`${this.panel.url}#copilot-out`);
     else void notes.loadFile(this.panel.file!, { hash: "copilot-out" });
     // Closing it docks the panel again.

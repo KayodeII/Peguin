@@ -62,6 +62,54 @@
     }
     bridge.pcm(out.buffer);
   };
+  // The AI notice in the meeting chat (Meet, Teams, Zoom web). Opens the chat if
+  // it's closed, types the notice, sends it, and reports success only once the
+  // text shows up in the chat log. A frame with no meeting UI stays quiet (null).
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const visible = (el) => !!el && el.getClientRects().length > 0;
+  const until = async (fn, ms) => {
+    for (const end = Date.now() + ms; Date.now() < end; await sleep(250)) { const v = fn(); if (v) return v; }
+    return null;
+  };
+  const button = (re) => [...document.querySelectorAll("button, [role=button]")]
+    .find((b) => visible(b) && !b.disabled && (re.test(b.getAttribute("aria-label") || "") || re.test((b.textContent || "").trim())));
+  const composer = () => [...document.querySelectorAll('textarea, [contenteditable="true"], [role=textbox]')]
+    .find((el) => visible(el) && /message|chat|type/i.test(["aria-label", "placeholder", "aria-placeholder", "data-placeholder"].map((a) => el.getAttribute(a) || "").join(" ")));
+  const inLog = (snippet, box) => {
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) if (n.nodeValue.includes(snippet) && !box.contains(n)) return true;
+    return false;
+  };
+  bridge.onDisclose(async (text) => {
+    try {
+      let box = composer();
+      if (!box) {
+        const open = button(/^(chat with everyone|chat|open (the )?chat( panel)?|show conversation)\b/i);
+        if (!open) return frame === "top" ? "Peguin couldn't find the meeting's chat button." : null;
+        open.click();
+        box = await until(composer, 5000);
+        if (!box) return "The chat opened, but Peguin couldn't find where to type.";
+      }
+      box.focus();
+      if (box instanceof HTMLTextAreaElement) {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(box, text);
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        document.execCommand("selectAll");
+        document.execCommand("insertText", false, text);
+      }
+      await sleep(300);
+      const send = button(/^send( a)?( message)?$/i);
+      if (send) send.click();
+      else box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, bubbles: true }));
+      const posted = await until(() => inLog(text.slice(0, 40), box), 6000);
+      log(posted ? "AI notice posted in chat" : "AI notice not seen in chat");
+      return posted ? "" : "Peguin typed the notice, but it didn't appear in the chat.";
+    } catch (e) {
+      return `Chat error: ${e && e.message ? e.message : e}`;
+    }
+  });
+
   // Autoplay rules can start the context suspended; resume on the first interaction too.
   const resume = () => { if (ctx.state !== "running") void ctx.resume(); };
   resume();

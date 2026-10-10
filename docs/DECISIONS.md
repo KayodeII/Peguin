@@ -2,7 +2,15 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
-## 2026-10-10: Copilot: Work/Interview switch, Check online, Hide; Pop out excluded from capture
+## 2026-10-10: Copilot: the call is told in chat, then popped-out notes leave screen shares
+
+Earlier the same day, hiding the copilot from screen capture was declined: with Interview mode, it would hide AI help from an interviewer. The owner's answer: the other side should know AI is helping, just not see the notes. So the hiding is conditional on telling them.
+
+- **AI notice in the meeting chat** (`AI_NOTICE` in `desktop/src/main/copilot/session.ts`), posted from the owner's own account: when they pop out the notes, and as soon as they're in the call in Interview mode. Fixed text, not a setting, since it's the condition for hiding. `copilot-inject.js` opens the chat (Meet, Teams, Zoom web), types and sends it, and only reports success once the text shows up in the chat log. Once per meeting.
+- **`setContentProtection(true)` on the popped-out notes only after that confirmation.** If the notice can't be posted, the notes still pop out but stay visible in shares, and the panel says so; docking and popping out again retries. Checked on macOS 26: a protected window is left out of `screencapture`.
+- Not done: the docked panel can't be excluded (it's part of the meeting window), and nothing hides Peguin from proctoring software.
+
+## 2026-10-10: Copilot: Work/Interview switch, Check online, Hide, Pop out
 
 From the owner's live test: general questions need current facts from the web; the copilot should know whether it's a work meeting or an interview; and the panel should be hidden from the other side when the owner shares their screen.
 
@@ -10,7 +18,7 @@ From the owner's live test: general questions need current facts from the web; t
 - **Check online** (panel switch, off by default): the quick answer still comes in about 4 s; for General knowledge cards a second pass searches the web with the user's own AI (Claude Code `WebSearch`, `codex --search`, xAI Responses `web_search`) and replaces it about 15 s later, labelled "Checked online · <site>". Measured 17 to 19 s per web answer, too slow to wait on.
 - **Hide** collapses the panel to a 52 px strip; the meeting takes the space. While hidden the owner doesn't see it either.
 - **Pop out** moves the panel into its own small always-on-top window. The meeting window then has no panel in it, so sharing that window (or any other single window or app) leaves the notes out. **Dock** (or closing the notes window) puts it back.
-  - **Content protection on the pop-out** (`notes.setContentProtection(true)`): where the OS supports it, the notes window is excluded from screen capture so a full-screen share can omit it while the owner still sees it. Works on Windows and on older macOS / CoreGraphics capture; macOS 15+ ScreenCaptureKit may still include it. When the panel is docked it is part of the meeting window and cannot be excluded separately.
+  - Hiding it from screen capture was declined here, then built later the same day on condition the call is told in chat (see "the call is told in chat" above).
   - **Screen sharing from the copilot window works.** Electron rejects `getDisplayMedia` without a handler. The meeting session uses macOS's own picker (`setDisplayMediaRequestHandler` with `useSystemPicker`, macOS 15+). On older macOS the panel says to share from the meeting's own app.
 - Fixed with it: a burst of questions left all but the newest stuck on "Thinking…" (only the newest waited). Now up to three wait in order and an older overflow is marked skipped.
 
@@ -30,7 +38,7 @@ The owner wants the copilot to help with any question, including in interviews, 
 
 - Suggestions start with a label: "From your notes:" (about the owner's work, facts only), "Not in your notes." (about the owner's work, not covered; a holding answer, or for "tell me about a time…" a way to structure their own real example), or "General knowledge:" (concepts, trade-offs, technical questions; at most three short sentences). It never invents the owner's status, numbers, projects or personal experiences. The panel shows the label.
 - Settings > AI picks the AI for everything (see "Every user's own AI"); Codex runs `codex exec` read-only, about 10 s a suggestion versus about 4 s for Claude.
-- The Terms say the user follows each interview's or exam's rules on AI help. Privacy Policy lists OpenAI for the Codex option. The popped-out notes window uses `setContentProtection` where the OS allows (see the Pop out entry above); that is not a guarantee against every capture path or proctoring tool.
+- The Terms say the user follows each interview's or exam's rules on AI help. Privacy Policy lists OpenAI for the Codex option. The popped-out notes leave screen shares only after the call is told in chat that AI is helping (see "the call is told in chat"); nothing hides Peguin from proctoring tools.
 - Peguin's own spoken answers (non-negotiable 2) are unchanged: facts only, defer otherwise.
 
 ## 2026-10-10: Speech recognition: whisper large-v3-turbo, neutral prompt, vocabulary from the facts
