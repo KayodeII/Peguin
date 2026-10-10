@@ -4,9 +4,6 @@ export interface Env {
   APP_ORIGIN: string;
   CLAUDE_MODEL: string;
   TRIAL_DAYS: string;
-  DRAFTS_PER_DAY: string;
-  ANSWERS_PER_DAY: string;
-  RECAPS_PER_DAY: string;
   ANTHROPIC_API_KEY?: string;
   PAYSTACK_SECRET_KEY?: string;
   /** The single plan from before tiers; treated as Pro when PAYSTACK_PLANS doesn't name one. */

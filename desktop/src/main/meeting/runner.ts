@@ -89,7 +89,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
     const voice = (standardText?: string): SynthesizeOptions => ({
       settings: s, standardText,
       check: (wav) => transcribeSamples(this.whisper.url, wav, names),
-      onFallback: (reason) => this.log(`Your voice wasn't available (${reason}); using the standard voice.`),
+      onFallback: (reason) => this.log(`${reason.startsWith("Grok") ? reason : `Your voice wasn't available (${reason})`}; using ${reason.startsWith("Grok") ? "the Mac voice" : "the standard voice"}.`),
     });
     // Pre-synthesize so Peguin answers instantly when called on (usually already cached from preparing).
     const audio = {

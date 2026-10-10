@@ -2,12 +2,22 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-10: Every user's own AI; Grok as an alternative standard voice
+
+The owner: "it is the users connected claude grok whatever service token we should use, not mine for everyone". So:
+
+- The app's drafts, answers, copilot suggestions and recap summaries always use the user's own AI, chosen in Settings > AI: Claude (their Claude Code sign-in, the default), Codex (their ChatGPT sign-in via the Codex CLI) or Grok (their xAI API key, sealed with the Keychain in `xai.sealed`). `brain.ts` has one `generate()`; there's no server route any more.
+- The Worker's `/api/draft`, `/api/answer`, `/api/suggest` and `/api/recap` answer 503. Apps before 0.7 treat 503 as "use your own Claude Code", so old installs keep working without Peguin's key. The per-plan daily AI caps and the `usage` table are gone (migration 0006). Peguin's own Anthropic key is only for the website help chat.
+- Plans still gate features (follow-up answers, recaps, own voice, copilot); they no longer include AI usage.
+- Standard voice (when not speaking in the owner's own voice): the Mac voice (default, private) or an xAI voice with the user's key (`voice.standard`, `voice.grokVoice`, default "eve"). If xAI fails mid-meeting Peguin falls back to the Mac voice and logs why, so it never goes silent. The owner's own voice (on the Mac or ElevenLabs) is unchanged.
+- Grok chat models come from the key's `/v1/models` list (image, video, speech and embedding models filtered out); the user picks one, nothing is hardcoded.
+
 ## 2026-10-10: The copilot answers general questions, interviews included
 
 The owner wants the copilot to help with any question, including in interviews, and to offer Codex as well as Claude. This reverses the earlier "interviews out of scope" line (the agent recommended keeping it; the owner decided otherwise).
 
 - Suggestions start with a label: "From your notes:" (about the owner's work, facts only), "Not in your notes." (about the owner's work, not covered; a holding answer, or for "tell me about a time…" a way to structure their own real example), or "General knowledge:" (concepts, trade-offs, technical questions; at most three short sentences). It never invents the owner's status, numbers, projects or personal experiences. The panel shows the label.
-- Settings > Copilot > AI for suggestions: Claude (default, the plan's or the Claude Code sign-in) or Codex (the owner's Codex CLI sign-in, `codex exec` read-only, about 10 s versus about 4 s for Claude).
+- Settings > AI picks the AI for everything (see "Every user's own AI"); Codex runs `codex exec` read-only, about 10 s a suggestion versus about 4 s for Claude.
 - Lines not crossed: nothing hides the copilot from screen sharing or proctoring tools, and the Terms say the user follows each interview's or exam's rules on AI help. Privacy Policy lists OpenAI for the Codex option.
 - Peguin's own spoken answers (non-negotiable 2) are unchanged: facts only, defer otherwise.
 

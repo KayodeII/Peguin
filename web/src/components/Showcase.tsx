@@ -105,7 +105,7 @@ export function Tiles() {
         <h3>Stays on your Mac</h3>
         <div className="local">
           <span><Icon name="laptop" size={18} />Joining, listening, speech recognition</span>
-          <span className="arrow-out">Only titles and statuses go to Claude to write the update</span>
+          <span className="arrow-out">Only titles and statuses go to your own AI to write the update</span>
         </div>
       </div>
 

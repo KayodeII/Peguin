@@ -6,9 +6,10 @@ import { promisify } from "node:util";
 import type { Settings } from "../settings.js";
 import { stripCues } from "../../../../src/core/brain/prompts.js";
 import { speakInOwnVoice, usingOwnVoice } from "./voice/index.js";
+import { grokSpeak, loadXai } from "../xai.js";
 
 /** The built-in voice: macOS `say` (Piper replaces it for other platforms). */
-async function standardVoice(text: string): Promise<Buffer> {
+async function macVoice(text: string): Promise<Buffer> {
   if (process.platform !== "darwin") throw new Error("Speech output currently needs macOS (Piper support is coming).");
   const dir = await mkdtemp(path.join(tmpdir(), "penguin-tts-"));
   try {
@@ -19,6 +20,20 @@ async function standardVoice(text: string): Promise<Buffer> {
     await rm(dir, { recursive: true, force: true });
   }
 }
+
+/** The standard voice: an xAI voice when the owner chose Grok and has a key, else the Mac's, which is also the fallback. */
+async function standardVoice(text: string, s: Settings | undefined, onFallback?: (reason: string) => void): Promise<Buffer> {
+  const x = s?.voice.standard === "grok" ? loadXai() : null;
+  if (s?.voice.standard === "grok" && !x) onFallback?.("Grok voice is chosen but there's no xAI key");
+  if (x) {
+    try { return await grokSpeak(x.apiKey, s!.voice.grokVoice, text); }
+    catch (e) { onFallback?.(`Grok voice failed: ${e instanceof Error ? e.message : String(e)}`); }
+  }
+  return macVoice(text);
+}
+
+/** A short line in the chosen standard voice, for the Settings sample button. */
+export const standardSample = (s: Settings, text: string) => standardVoice(text, s, (reason) => { throw new Error(reason); });
 
 export type SynthesizeOptions = {
   settings: Settings;
@@ -42,5 +57,5 @@ export async function synthesize(text: string, o?: SynthesizeOptions): Promise<B
     try { return await speakInOwnVoice(said, o.settings, { check: o.check, takes: o.takes }); }
     catch (e) { o.onFallback?.(e instanceof Error ? e.message : String(e)); }
   }
-  return standardVoice(stripCues(o?.standardText ?? text));
+  return standardVoice(stripCues(o?.standardText ?? text), o?.settings, o?.onFallback);
 }

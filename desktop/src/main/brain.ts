@@ -1,22 +1,23 @@
-// Drafts the update and answers follow-ups: through the Peguin account's
-// server-side Claude when subscribed, otherwise through the Claude Code CLI
-// with the user's own Claude login (development and power users).
+// Drafts the update, answers follow-ups, suggests copilot answers and summarises
+// recaps, always with the owner's own AI: their Claude Code sign-in, their Codex
+// CLI sign-in, or their xAI key (Settings > AI). Peguin's server never pays for it.
 import { app } from "electron";
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { answerContext, answerSystem, copilotSystem, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
-import { cloudAnswer, cloudDraft, cloudRecap, cloudSuggest, offlineLicense } from "./account.js";
 import { gatherContext, type SourceReport } from "./context/index.js";
 import { wantsCues, type Settings } from "./settings.js";
+import { grokChat, loadXai } from "./xai.js";
 
 export type Draft = {
   script: string;
   facts: string[];
   generatedAt: string;
   since: string;
-  via: "account" | "claude_cli";
+  /** Which of the owner's AIs wrote it. */
+  via: Settings["ai"];
   reports: SourceReport[];
   activityCount: number;
 };
@@ -64,15 +65,16 @@ function codex(prompt: string, timeoutMs: number): Promise<string> {
   });
 }
 
-/** The server's AI is unavailable (no credit, outage): use the owner's own Claude Code sign-in instead. */
-const serverAiDown = (e: unknown) => (e as { status?: number }).status === 503;
-
-async function viaAccount<T>(subscribed: boolean, server: () => Promise<T>, local: () => Promise<T>): Promise<{ value: T; via: Draft["via"] }> {
-  if (subscribed) {
-    try { return { value: await server(), via: "account" }; }
-    catch (e) { if (!serverAiDown(e)) throw e; }
+/** One prompt to the owner's chosen AI. */
+function generate(s: Settings, prompt: string, timeoutMs: number): Promise<string> {
+  if (s.ai === "codex") return codex(prompt, timeoutMs);
+  if (s.ai === "grok") {
+    const x = loadXai();
+    if (!x) return Promise.reject(new Error("Grok is chosen in Settings > AI but there's no xAI key. Add one there, or pick Claude or Codex."));
+    const model = s.grokModel && x.models.includes(s.grokModel) ? s.grokModel : x.models[0]!;
+    return grokChat(x.apiKey, model, prompt, timeoutMs);
   }
-  return { value: await local(), via: "claude_cli" };
+  return claude(prompt, timeoutMs);
 }
 
 const draftFile = () => path.join(app.getPath("userData"), "draft.json");
@@ -84,13 +86,11 @@ export function loadDraft(): Draft | null {
 /** Gather today's work, have Claude write the spoken update + facts, and keep it. */
 export async function prepareDraft(s: Settings): Promise<Draft> {
   const ctx = await gatherContext(s.sources, s.timezone);
-  const subscribed = !!(await offlineLicense());
   // Only titles, statuses and times leave the machine; never code.
   const activity = ctx.activity.map(({ source, kind, title, status, at }) => ({ source, kind, title, status, at }));
   const cues = wantsCues(s);
-  const { value: { script, facts }, via } = await viaAccount(subscribed,
-    () => cloudDraft(s.displayName, activity, ctx.failed, cues),
-    async () => parseDraft(await claude(`${draftSystem(s.displayName, { cues })}\n\n${draftUser(s.displayName, activity, "", ctx.failed)}`, 120000)));
+  const { script, facts } = parseDraft(await generate(s, `${draftSystem(s.displayName, { cues })}\n\n${draftUser(s.displayName, activity, "", ctx.failed)}`, 120000));
+  const via = s.ai;
   const draft: Draft = {
     script, facts, generatedAt: new Date().toISOString(), since: ctx.since, reports: ctx.reports,
     activityCount: ctx.activity.length, via,
@@ -104,18 +104,12 @@ export async function prepareDraft(s: Settings): Promise<Draft> {
 /** A spoken answer from the facts only; the prompt makes Claude defer otherwise. */
 export async function answerQuestion(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
   const cues = wantsCues(s);
-  return (await viaAccount(!!(await offlineLicense()),
-    () => cloudAnswer(s.displayName, draft?.facts ?? [], draft?.script, recent, question, cues),
-    () => claude(`${answerSystem(s.displayName, { cues })}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000))).value;
+  return generate(s, `${answerSystem(s.displayName, { cues })}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000);
 }
 
-/** A private copilot suggestion for the owner to say themselves: same routing as answers, or the owner's Codex CLI if they chose it. */
+/** A private copilot suggestion for the owner to say themselves. */
 export async function suggestAnswer(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
-  const prompt = () => `${copilotSystem(s.displayName)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`;
-  if (s.copilotAi === "codex") return codex(prompt(), 45000);
-  return (await viaAccount(!!(await offlineLicense()),
-    () => cloudSuggest(s.displayName, draft?.facts ?? [], draft?.script, recent, question),
-    () => claude(prompt(), 40000))).value;
+  return generate(s, `${copilotSystem(s.displayName)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 45000);
 }
 
 /** Is this draft from today (in the user's timezone)? */
@@ -125,9 +119,7 @@ export function isFresh(d: Draft | null, timezone: string, now = new Date()): bo
   return day(new Date(d.generatedAt)) === day(now);
 }
 
-/** Summary and extra follow-ups for a meeting, from its transcript only (same routing as drafts). */
+/** Summary and extra follow-ups for a meeting, from its transcript only. */
 export async function summarizeMeeting(s: Settings, lines: string[]): Promise<{ summary: string; followUps: string[] }> {
-  return (await viaAccount(!!(await offlineLicense()),
-    () => cloudRecap(s.displayName, lines),
-    async () => parseRecap(await claude(`${recapSystem(s.displayName)}\n\n${recapUser(lines)}`, 60000)))).value;
+  return parseRecap(await generate(s, `${recapSystem(s.displayName)}\n\n${recapUser(lines)}`, 60000));
 }

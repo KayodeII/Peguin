@@ -27,9 +27,6 @@
     "TRIAL_DAYS": "14",
     "SIGNUPS": "waitlist", // "open" lets anyone sign up; "waitlist" needs an invite (POST /api/admin/invite)
     // Server-wide ceilings; each plan's own daily limits are in src/core/plans.ts.
-    "DRAFTS_PER_DAY": "20",
-    "ANSWERS_PER_DAY": "200",
-    "RECAPS_PER_DAY": "20",
     "RELEASES_REPO": "KayodeII/Peguin", // GitHub Releases built by .github/workflows/release.yml
     "APP_LATEST_VERSION": "0.1.0" // fallback only, when GitHub has no release
   }

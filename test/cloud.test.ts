@@ -158,7 +158,6 @@ describe("plans", () => {
     expect(planCodes({ PAYSTACK_PLANS: "not json", PAYSTACK_PLAN_CODE: undefined })).toEqual({});
   });
   it("Free has no follow-ups or recaps; Pro and Team have own voice", () => {
-    expect(PLANS.free.features.perDay.answer).toBe(0);
     expect(PLANS.free.features.followUps).toBe(false);
     expect(PLANS.basic.features.ownVoice).toBe(false);
     expect(PLANS.pro.features.ownVoice && PLANS.team.features.ownVoice).toBe(true);
@@ -287,5 +286,14 @@ describe("release lookup when GitHub fails", () => {
     stubCache();
     vi.stubGlobal("fetch", vi.fn(async () => new Response("rate limited", { status: 403 })));
     await expect(githubLatest("o/r")).rejects.toThrow("403");
+  });
+});
+
+describe("the app's AI is each user's own", async () => {
+  const { ownAiOnly } = await import("../cloud/src/claude.js");
+  it("answers the old app AI routes with 503, which older apps treat as 'use your own Claude'", async () => {
+    const res = ownAiOnly();
+    expect(res.status).toBe(503);
+    expect((await res.json() as { error: string }).error).toContain("your own AI");
   });
 });
