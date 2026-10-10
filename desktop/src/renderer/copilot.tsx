@@ -57,6 +57,7 @@ export function CopilotPanel() {
           <Logo size={22} />
           <div><strong>Peguin copilot</strong><span>Only you can see this</span></div>
           <i className={`cp-dot ${status.status}`} title={status.status} />
+          <button className="btn ghost cp-leave" onClick={() => void window.penguin.copilotStop()} title="Leave the meeting and close this window">Leave</button>
         </header>
         {status.detail && <p className="cp-status">{status.detail}</p>}
         <div className="cp-tabs" role="tablist">

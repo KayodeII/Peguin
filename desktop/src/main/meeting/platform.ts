@@ -27,3 +27,11 @@ export function botName(displayName: string, platform: Platform): string {
   if (platform === "teams") return `${base.replace(/[^\p{L}\p{N} '._@-]/gu, "").trim()} - AI`;
   return `${base} (AI)`;
 }
+
+/**
+ * Electron's user agent with only the tokens a real Chrome sends. Meeting sites
+ * refuse unknown browsers, and Electron adds "Electron/x" and "<productName>/x".
+ */
+export function chromeUserAgent(ua: string): string {
+  return ua.replace(/ (?!(?:Mozilla|AppleWebKit|Chrome|Safari|Mobile)\/)[^\s/()]+\/\S+/g, "");
+}
