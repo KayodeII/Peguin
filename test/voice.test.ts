@@ -98,9 +98,11 @@ describe("own voice: audio", () => {
 describe("own voice: settings and disclosure", () => {
   it("starts with no built-in pronunciations and default tuning the owner can change", () => {
     expect(Settings.parse({}).voice).toEqual({
-      mode: "standard", engine: "mac", eleven: { model: "eleven_v4", liveModel: "eleven_v4_turbo", cues: true },
+      mode: "standard", standard: "mac", grokVoice: "eve", engine: "mac", eleven: { model: "eleven_v4", liveModel: "eleven_v4_turbo", cues: true },
       pronunciations: [], pause: 0.32, expressiveness: 0.6, attempts: 3,
     });
+    // The standard voice stays the Mac's, and the AI the owner's Claude Code, until they choose otherwise.
+    expect(Settings.parse({}).ai).toBe("claude");
     // Settings from before engines keep working and stay on this Mac.
     expect(Settings.parse({ voice: { mode: "mine", pause: 0.4 } }).voice).toMatchObject({ mode: "mine", engine: "mac", pause: 0.4 });
     expect(Settings.parse({}).recap).toEqual({ summarize: true, keepDays: 30 });

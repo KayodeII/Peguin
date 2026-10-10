@@ -2,7 +2,7 @@ import { appConnect, appSignOut, appToken, emailStart, emailVerify, googleCallba
 import { TRIAL_PLAN } from "../../src/core/plans.js";
 import { accessOf, checkout, plans, portal, subscriptionOf, webhook } from "./billing.js";
 import { availableProviders, connectCallback, connectStart, connectToken, refreshToken } from "./calendars.js";
-import { answer, draft, recap, suggest } from "./claude.js";
+import { ownAiOnly } from "./claude.js";
 import { HttpError, type Env } from "./env.js";
 import { json } from "./http.js";
 import { issueLicense } from "./license.js";
@@ -44,10 +44,10 @@ const routes: Record<string, Handler> = {
   "POST /api/billing/checkout": authed((env, req, user) => checkout(env, req, user)),
   "POST /api/billing/portal": authed((env, _req, user) => portal(env, user)),
   "GET /api/license": authed((env, _req, user) => issueLicense(env, user)),
-  "POST /api/draft": authed((env, req, user) => draft(env, req, user)),
-  "POST /api/answer": authed((env, req, user) => answer(env, req, user)),
-  "POST /api/recap": authed((env, req, user) => recap(env, req, user)),
-  "POST /api/suggest": authed((env, req, user) => suggest(env, req, user)),
+  "POST /api/draft": async () => ownAiOnly(),
+  "POST /api/answer": async () => ownAiOnly(),
+  "POST /api/recap": async () => ownAiOnly(),
+  "POST /api/suggest": async () => ownAiOnly(),
 
   "GET /calendar/connect": (env, _req, url) => connectStart(env, url),
   "GET /calendar/callback": (env, req, url) => connectCallback(env, req, url),

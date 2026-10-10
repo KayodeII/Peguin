@@ -20,7 +20,8 @@ import { canSelfUpdate, installOnExit, prepareUpdate, updateReady, type UpdateSt
 import { loadSettings, saveSettings } from "./settings.js";
 import { fixPath, outDir, resource } from "./paths.js";
 import { ensureModel } from "./speech/model.js";
-import { synthesize } from "./speech/tts.js";
+import { standardSample, synthesize } from "./speech/tts.js";
+import { checkXaiKey, clearXai, loadXai, saveXai } from "./xai.js";
 import {
   CONSENT_SENTENCE, deleteSample, deleteVoiceModel, ensureVoiceModel, forgetVoice, ownVoiceStatus, saveSample,
   engineReady, speakInOwnVoice, usingOwnVoice, VOICE_MODEL_BYTES,
@@ -459,6 +460,23 @@ ipcMain.handle("voice:say-word", async (_e, word: string) => {
   if (!engineReady(loadSettings())) throw new Error(loadSettings().voice.engine === "elevenlabs" ? "Add your ElevenLabs API key first." : "Download the voice model first.");
   return speakInOwnVoice(`This is how I say ${String(word).slice(0, 40)}.`, loadSettings());
 });
+// The owner's xAI key: Grok as their AI (Settings > AI) and/or as the standard voice.
+const xaiStatus = () => { const x = loadXai(); return { connected: !!x, models: x?.models ?? [] }; };
+ipcMain.handle("xai:status", () => xaiStatus());
+ipcMain.handle("xai:connect", async (_e, apiKey: string) => {
+  const key = String(apiKey ?? "").trim();
+  if (!key) throw new Error("Paste your xAI API key.");
+  saveXai({ apiKey: key, models: await checkXaiKey(key) });
+  return xaiStatus();
+});
+// Without a key, nothing may stay pointed at Grok.
+ipcMain.handle("xai:disconnect", () => {
+  clearXai();
+  const s = loadSettings();
+  saveSettings({ ...s, ai: s.ai === "grok" ? "claude" : s.ai, voice: { ...s.voice, standard: "mac" } });
+  return xaiStatus();
+});
+ipcMain.handle("voice:standard-sample", () => standardSample(loadSettings(), "Hi, I'm Peguin, an AI assistant. This is how I'll sound in your meetings."));
 ipcMain.handle("update:get", () => update);
 ipcMain.handle("update:open", () => { if (update) void shell.openExternal(update.url); });
 ipcMain.handle("update:state", () => updateState);

@@ -25,7 +25,7 @@ const RATE = 24000;
 const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)} GB`;
 
 /** Plays WAV bytes with Web Audio (an <audio> element with a blob: URL is blocked by the window's CSP). */
-async function playWav(data: Uint8Array) {
+export async function playWav(data: Uint8Array) {
   const ctx = new AudioContext();
   const bytes = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
   const src = ctx.createBufferSource();
@@ -130,7 +130,7 @@ export function VoiceSettings({ settings, draft, setDraft, save }: {
             <label className="check-row">
               <input type="checkbox" checked={draft.voice.eleven.cues}
                 onChange={(e) => setDraft({ ...draft, voice: { ...draft.voice, eleven: { ...draft.voice.eleven, cues: e.target.checked } } })} />
-              <span><strong>Emotion cues</strong> Claude marks a few moments in your update and answers ([warmly], [thoughtfully]) and ElevenLabs performs them. Applies from the next update you prepare.</span>
+              <span><strong>Emotion cues</strong> Your AI marks a few moments in your update and answers ([warmly], [thoughtfully]) and ElevenLabs performs them. Applies from the next update you prepare.</span>
             </label>
           )}
           {status.elevenConnected && (

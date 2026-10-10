@@ -24,7 +24,7 @@ export function Privacy() {
       <h2>The short version</h2>
       <ul>
         <li>The Peguin app runs on your Mac. Your meetings are heard and transcribed there, your voice sample and meeting recaps are stored there, encrypted with your Mac's Keychain.</li>
-        <li>To write your update and answer questions, short descriptions of your work (commit messages, pull request titles, statuses) and, for answers and recaps, the relevant part of the meeting transcript are sent to Anthropic's Claude. Never your code.</li>
+        <li>To write your update and answer questions, short descriptions of your work (commit messages, pull request titles, statuses) and, for answers and recaps, the relevant part of the meeting transcript are sent to the AI you choose in the app (Claude, Codex or Grok), under your own account with that provider. Never your code, and never through our server.</li>
         <li>Our server keeps your account, your subscription status and little else.</li>
         <li>We don't sell your data or use it for advertising.</li>
       </ul>
@@ -35,27 +35,27 @@ export function Privacy() {
         <li><strong>Account:</strong> your email address, your name and Google account ID if you sign in with Google, and when your account and trial started.</li>
         <li><strong>Sign-in:</strong> sign-in links and sessions, stored only as one-way hashes, and for each Mac signed in to the app, its label, app version and when it was last used.</li>
         <li><strong>Subscription:</strong> your Paystack customer and subscription codes, plan status and renewal date. We never see or store your card details; Paystack handles payment.</li>
-        <li><strong>Usage counts:</strong> how many updates, answers and recaps you asked our server for each day, to enforce fair-use limits. Not their content.</li>
         <li><strong>Help messages:</strong> if you message the team from the help chat, your email address, your message, the chat before it and the page you were on.</li>
         <li><strong>Waitlist:</strong> if you join it, your email address, the plan you said you were interested in, and when you joined and were invited.</li>
         <li><strong>Calendar connections:</strong> when you connect Google Calendar, Outlook or Calendly, our server completes the sign-in with that service and hands the access to your Mac. For up to 5 minutes it holds that hand-off, encrypted with a key only your Mac receives, then deletes it. It doesn't keep your calendar access or your events.</li>
         <li><strong>Abuse protection:</strong> a one-way hash of your IP address with a daily count, for the help chat and the waitlist.</li>
       </ul>
-      <p>When our server sends your work or meeting text to Claude for you, it passes it on and returns the result. It doesn't keep a copy.</p>
+      <p>Our server never sees your work or what's said in your meetings: the app sends those straight to your own AI provider.</p>
 
       <h2>What stays on your Mac</h2>
       <ul>
         <li>Your settings, prepared updates, and the meeting audio Peguin hears, which is transcribed on your Mac and not recorded.</li>
         <li>If you turn on <strong>Speak in your own voice</strong>: your voice sample, which you record yourself in the app, and the audio made from it. Both are encrypted and you can delete them in Settings.</li>
         <li>Meeting recaps and transcripts, encrypted, kept for the period you choose in Settings (30 days unless you change it), then deleted.</li>
-        <li>Access to the calendars you connect (Google Calendar, Outlook, Calendly), calendar links, and, if you use it, your ElevenLabs API key, all encrypted. Calendar events are read on your Mac to find standups and aren't sent to us.</li>
+        <li>Access to the calendars you connect (Google Calendar, Outlook, Calendly), calendar links, and, if you use them, your ElevenLabs and xAI API keys, all encrypted. Calendar events are read on your Mac to find standups and aren't sent to us.</li>
       </ul>
       <p>Peguin reads your work from git on your Mac, from GitHub through your own <code>gh</code> sign-in, and, if you allow it, the prompts you gave Claude Code. It reads titles and statuses, never code.</p>
 
       <h2>What is sent to other services, and why</h2>
       <ul>
-        <li><strong>Anthropic (Claude):</strong> to write your update, the titles, statuses and times of your recent work. To answer a follow-up question in a meeting, the facts from your update and the last few lines of the conversation. For a recap summary (you can turn this off), the meeting transcript. If you're subscribed this goes through our server; otherwise through your own Claude Code sign-in, under your agreement with Anthropic. Questions you type into the help chat on peguin.co also go to Claude, through our server, and aren't stored unless you message the team.</li>
-        <li><strong>OpenAI (Codex):</strong> only if you choose Codex for the copilot's suggestions in Settings. The question, the recent conversation and your prepared facts go through the Codex CLI on your Mac, under your own ChatGPT or OpenAI sign-in and your agreement with OpenAI. The default, Claude, sends nothing to OpenAI.</li>
+        <li><strong>Your AI: Anthropic (Claude), OpenAI (Codex) or xAI (Grok)</strong>, whichever you choose in Settings, AI (Claude is the default). To write your update, the titles, statuses and times of your recent work. To answer a follow-up question in a meeting or suggest a copilot answer, the facts from your update, the question and the last few lines of the conversation. For a recap summary (you can turn this off), the meeting transcript. This goes from your Mac to that provider under your own account and your agreement with them: your Claude Code sign-in, your Codex (ChatGPT) sign-in, or your xAI API key. Only the one you chose receives anything.</li>
+        <li><strong>xAI voice:</strong> only if you choose the Grok voice as Peguin's standard voice. Each line Peguin says is sent to xAI with your API key to be spoken. The default, the Mac voice, sends nothing.</li>
+        <li><strong>Anthropic (help chat):</strong> questions you type into the help chat on peguin.co go to Claude through our server, and aren't stored unless you message the team.</li>
         <li><strong>Cloudflare:</strong> hosts peguin.co and our database.</li>
         <li><strong>Paystack:</strong> processes payments and manages your subscription.</li>
         <li><strong>Resend:</strong> sends sign-in and welcome emails.</li>
@@ -71,8 +71,8 @@ export function Privacy() {
       <p>Peguin's use and transfer of information received from Google APIs to any other app adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">Google API Services User Data Policy</a>, including the Limited Use requirements. Calendar data is used only to find your standups, is read on your Mac, isn't stored on our servers, isn't used for advertising or to train AI models, and isn't shared with anyone else.</p>
 
       <h2>Other people in your meetings</h2>
-      <p>Peguin always introduces itself as your AI assistant, and its name ends in "(AI)". It transcribes what others say on your Mac so it knows when you're called on and can answer; the parts described above go to Claude. It does not identify who said what.</p>
-      <p>With the <strong>private copilot</strong>, you're in your own meeting as yourself and Peguin doesn't join or speak. It transcribes what others say on your Mac, and when someone asks you something, the question, the recent conversation and your prepared facts go to Claude (or Codex, if you chose it) for a suggested answer that only you see. Questions about your own work are answered only from your prepared facts; general questions get a general answer, marked as such. Your own microphone isn't transcribed.</p>
+      <p>Peguin always introduces itself as your AI assistant, and its name ends in "(AI)". It transcribes what others say on your Mac so it knows when you're called on and can answer; the parts described above go to your AI. It does not identify who said what.</p>
+      <p>With the <strong>private copilot</strong>, you're in your own meeting as yourself and Peguin doesn't join or speak. It transcribes what others say on your Mac, and when someone asks you something, the question, the recent conversation and your prepared facts go to your AI for a suggested answer that only you see. Questions about your own work are answered only from your prepared facts; general questions get a general answer, marked as such. Your own microphone isn't transcribed.</p>
       <p>You're responsible for using Peguin only in meetings where that's allowed, and for telling the people you meet with that you use it.</p>
 
       <h2>How long we keep things</h2>

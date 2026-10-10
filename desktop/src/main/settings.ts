@@ -11,6 +11,10 @@ const Pronunciation = z.object({ word: z.string().trim().min(1).max(40), sayAs: 
 
 const Voice = z.object({
   mode: z.enum(["standard", "mine"]).default("standard"),
+  /** The standard voice (not the owner's own): the Mac's built-in voice, or one of xAI's voices with the owner's xAI key. */
+  standard: z.enum(["mac", "grok"]).default("mac"),
+  /** Which xAI voice, when the standard voice is Grok. */
+  grokVoice: z.string().trim().min(1).max(40).default("eve"),
   /** Where the owner's voice is made: on this Mac (private), or ElevenLabs with their own key (most natural; the sample and lines are sent there). */
   engine: z.enum(["mac", "elevenlabs"]).default("mac"),
   /** ElevenLabs models: one for lines prepared before the meeting, a faster one for live answers. */
@@ -89,8 +93,14 @@ export const Settings = z.preprocess(migrate, z.object({
   /** Stop speaking when someone talks over Peguin, and listen to them. */
   stopWhenInterrupted: z.boolean().default(true),
   runHidden: z.boolean().default(true),
-  /** Who writes the copilot's suggestions: Claude (the plan's, or the owner's Claude Code sign-in) or the owner's Codex CLI sign-in. */
-  copilotAi: z.enum(["claude", "codex"]).default("claude"),
+  /**
+   * The AI that writes the update, answers follow-ups, suggests copilot answers and
+   * summarises recaps. Always the owner's own: their Claude Code sign-in, their
+   * Codex CLI sign-in, or their xAI key. Peguin never pays for anyone's AI.
+   */
+  ai: z.enum(["claude", "codex", "grok"]).default("claude"),
+  /** The Grok chat model, from the ones the owner's key can use. */
+  grokModel: z.string().trim().max(80).optional(),
   /** Download new versions in the background and offer "Restart to update" (installs on quit too). */
   autoUpdate: z.boolean().default(true),
   onboarded: z.boolean().default(false),

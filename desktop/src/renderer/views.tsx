@@ -6,6 +6,7 @@ import { botName } from "../main/meeting/platform";
 import type { Settings } from "../main/settings";
 import { Avatar, BrandIcon, dayTime, Icon, Logo, message, Toggle, Typing } from "./ui";
 import { VoiceSettings } from "./voice";
+import { AiSettings, StandardVoice, useXai } from "./ai";
 import { stripCues } from "../../../src/core/brain/prompts";
 import { PLANS } from "../../../src/core/plans";
 import { CalendarSettings } from "./calendars";
@@ -175,6 +176,7 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
   const [aliases, setAliases] = useState(settings.aliases.join(", "));
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [xai, setXai] = useXai();
   // Appearance saves instantly; keep other unsaved edits when it does.
   useEffect(() => { setS((prev) => ({ ...prev, appearance: settings.appearance })); }, [settings.appearance]);
   // The voice switch also saves instantly.
@@ -244,23 +246,16 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
         </div>
 
         <h3 className="section-label" id="voice">Voice</h3>
+        <StandardVoice s={s} setS={setS} saved={settings} xai={xai} setXai={setXai} />
         <VoiceSettings settings={settings} draft={s} setDraft={setS} save={save} />
 
-        <h3 className="section-label">Copilot</h3>
-        <label>AI for suggestions
-          <select value={s.copilotAi} onChange={(e) => setS({ ...s, copilotAi: e.target.value as Settings["copilotAi"] })}>
-            <option value="claude">Claude (your plan, or your Claude Code sign-in)</option>
-            <option value="codex">Codex (your ChatGPT sign-in through the Codex CLI)</option>
-          </select>
-        </label>
-        <p className="hint">{s.copilotAi === "codex"
-          ? "Uses the Codex CLI on this Mac (install it and run codex login). Slower than Claude, about ten seconds a suggestion. What's said in the meeting goes to OpenAI under your own agreement with them."
-          : "Answers about your work come only from your notes; general questions get a short answer marked “General knowledge”."}</p>
+        <h3 className="section-label">AI</h3>
+        <AiSettings s={s} setS={setS} xai={xai} setXai={setXai} />
 
         <h3 className="section-label">Recaps</h3>
         <div className="row-card">
-          <div className="row-main"><strong>Summarize with Claude</strong><p>Sends the meeting transcript for a short summary and extra follow-ups. Off: you still get every question Peguin deferred.</p></div>
-          <Toggle on={s.recap.summarize} onChange={(v) => setS({ ...s, recap: { ...s.recap, summarize: v } })} label="Summarize with Claude" />
+          <div className="row-main"><strong>Summarize with your AI</strong><p>Sends the meeting transcript to your AI (Settings, AI) for a short summary and extra follow-ups. Off: you still get every question Peguin deferred.</p></div>
+          <Toggle on={s.recap.summarize} onChange={(v) => setS({ ...s, recap: { ...s.recap, summarize: v } })} label="Summarize with your AI" />
         </div>
         <div className="field-grid">
           <label>Keep recaps for
@@ -315,7 +310,7 @@ function AccountCard({ account }: { account: Account | null }) {
   useEffect(() => { if (account) setWaiting(false); }, [account]);
   if (!account) return (
     <div className="row-card">
-      <div className="row-main"><strong>Not signed in</strong><p>{waiting ? "Finish signing in in your browser." : "Sign in to use your plan's Claude for updates and answers."}</p></div>
+      <div className="row-main"><strong>Not signed in</strong><p>{waiting ? "Finish signing in in your browser." : "Sign in to use your plan's features: answers, recaps, your own voice and the copilot."}</p></div>
       <button className="btn primary" onClick={() => { setWaiting(true); void window.penguin.signIn(); }}>Sign in</button>
     </div>
   );
