@@ -410,6 +410,8 @@ ipcMain.handle("meeting:leave", () => { meeting?.stop(); meeting = null; });
 ipcMain.handle("meeting:handover", () => handOver());
 ipcMain.handle("copilot:start", (_e, url: string) => startCopilot(String(url ?? "").trim()));
 ipcMain.handle("copilot:state", () => copilot?.state() ?? null);
+// Closing the window leaves the call: the meeting page goes with it.
+ipcMain.handle("copilot:stop", () => { copilot?.stop(); copilot = null; });
 ipcMain.handle("account:get", () => account);
 ipcMain.handle("meetings:list", () => listMeetings(loadSettings().recap.keepDays));
 ipcMain.handle("meetings:follow-up", (_e, id: string, index: number, done: boolean) => setFollowUpDone(String(id), Number(index), !!done));
