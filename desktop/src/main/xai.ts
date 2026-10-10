@@ -57,6 +57,26 @@ export async function grokChat(apiKey: string, model: string, prompt: string, ti
   return text;
 }
 
+/** One prompt in, one reply out, with xAI's web search tool (Responses API). */
+export async function grokSearch(apiKey: string, model: string, prompt: string, timeoutMs: number, fetcher: typeof fetch = fetch): Promise<string> {
+  const res = await call(apiKey, "/responses", {
+    method: "POST",
+    body: JSON.stringify({ model, input: [{ role: "user", content: prompt }], tools: [{ type: "web_search" }] }),
+    signal: AbortSignal.timeout(timeoutMs),
+  }, fetcher);
+  const text = responseText(await res.json());
+  if (!text) throw new Error("Grok returned an empty reply.");
+  return text;
+}
+
+/** The answer text of a Responses API reply: `output_text`, or the text parts of its message items (pure). */
+export function responseText(body: unknown): string {
+  const b = body as { output_text?: string; output?: { type?: string; content?: { type?: string; text?: string }[] }[] };
+  if (typeof b.output_text === "string" && b.output_text.trim()) return b.output_text.trim();
+  return (b.output ?? []).filter((o) => o.type === "message")
+    .flatMap((o) => o.content ?? []).filter((c) => c.type === "output_text" && c.text).map((c) => c.text!).join("").trim();
+}
+
 /** Text to 24 kHz 16-bit WAV (what Peguin plays into the meeting), in one of xAI's voices. */
 export async function grokSpeak(apiKey: string, voiceId: string, text: string, fetcher: typeof fetch = fetch): Promise<Buffer> {
   const res = await call(apiKey, "/tts", { method: "POST", body: JSON.stringify({ text, voice_id: voiceId, language: "en" }), signal: AbortSignal.timeout(30000) }, fetcher);

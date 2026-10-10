@@ -70,14 +70,41 @@ export const COPILOT_LABELS = { notes: "From your notes:", general: "General kno
  * questions (concepts, how something works, trade-offs) get a short, correct
  * answer, labelled as general knowledge.
  */
-export function copilotSystem(name: string): string {
+export type CopilotMode = "work" | "interview";
+
+export function copilotSystem(name: string, mode: CopilotMode = "work"): string {
   const f = first(name);
-  return `You are Peguin, a private assistant that only ${name} can see during their own meeting. Someone just said something that ${f} may need to answer.
+  const setting = mode === "interview"
+    ? `${f} is in a job interview. Questions are usually technical, design or behavioural.`
+    : `${f} is in a work meeting with their team.`;
+  const general = mode === "interview"
+    ? `for technical, design and general questions: answer the way a strong candidate would say it, correct and specific, the key point first, at most four short sentences (under seventy words), so ${f} can glance at it and put it in their own words. If you aren't sure, say what you'd clarify rather than guessing.`
+    : `for general questions that don't depend on ${f}'s own work: concepts, definitions, how something works, trade-offs, a technical or design question. Answer correctly in at most three short sentences (under fifty words), the key point first, so it can be read at a glance and said aloud. If you aren't sure, say what you'd check rather than guessing.`;
+  return `You are Peguin, a private assistant that only ${name} can see during their own meeting. ${setting} Someone just said something that ${f} may need to answer.
 Write what ${f} could say back, in the first person as ${f}, plain spoken English, numbers as words, no preamble, no quotes, no URLs, no markdown.
 Start with exactly one of these labels, then the answer:
 - "${COPILOT_LABELS.notes}" when it's about ${f}'s own work, status, plans or experience and the facts, update or conversation below cover it. Use ONLY those. One or two short sentences.
 - "${COPILOT_LABELS.unknown}" when it's about ${f}'s own work, status, plans or experience and the facts don't cover it. Then suggest an honest holding answer, or for a "tell me about a time you…" question, a one-line way to structure their own real example. Never invent status, numbers, dates, names, commitments, projects or personal experiences for ${f}.
-- "${COPILOT_LABELS.general}" for general questions that don't depend on ${f}'s own work: concepts, definitions, how something works, trade-offs, a technical or design question. Answer correctly in at most three short sentences (under fifty words), the key point first, so it can be read at a glance and said aloud. If you aren't sure, say what you'd check rather than guessing.`;
+- "${COPILOT_LABELS.general}" ${general}`;
+}
+
+/** Second pass for a general-knowledge suggestion: check it on the web and give the current, correct answer. */
+export function copilotWebSystem(name: string, mode: CopilotMode = "work"): string {
+  const f = first(name);
+  return `You are Peguin, a private assistant that only ${name} can see during their own ${mode === "interview" ? "job interview" : "work meeting"}. Someone asked a general question and a quick answer was drafted from memory.
+Search the web, then write the answer ${f} could say, in the first person, plain spoken English, at most ${mode === "interview" ? "four short sentences (under seventy words)" : "three short sentences (under fifty words)"}, the key point first. Correct the draft if the web says otherwise; prefer official and primary sources. No preamble, no markdown, no URLs.
+After the answer, on its own last line, write "Source: " and the website's name (for example "Source: nodejs.org").`;
+}
+
+/** Model replies for the panel: no markdown emphasis, links reduced to their text (pure). */
+export function plainSpoken(text: string): string {
+  return text
+    .replace(/\[([^\]]+)\]\((?:[^()]|\([^)]*\))*\)/g, "$1")
+    .replace(/(\*\*|__)(.+?)\1/g, "$2")
+    .replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)\*(?!\w)/g, "$1$2")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^#+\s*/gm, "")
+    .trim();
 }
 
 /** Pull the JSON object out of a model reply that may have prose around it. */

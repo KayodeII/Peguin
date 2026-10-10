@@ -297,3 +297,24 @@ describe("the app's AI is each user's own", async () => {
     expect((await res.json() as { error: string }).error).toContain("your own AI");
   });
 });
+
+describe("copilot modes and checking online", async () => {
+  const { copilotSystem, copilotWebSystem, plainSpoken } = await import("../src/core/brain/prompts.js");
+  it("knows whether it's a work meeting or an interview, and never invents experience in either", () => {
+    expect(copilotSystem("Ada Obi")).toContain("work meeting with their team");
+    const iv = copilotSystem("Ada Obi", "interview");
+    expect(iv).toContain("job interview");
+    expect(iv).toContain("a strong candidate");
+    expect(iv).toContain("Never invent status, numbers, dates, names, commitments, projects or personal experiences for Ada");
+  });
+  it("checks general answers on the web and names the source", () => {
+    const w = copilotWebSystem("Ada Obi", "interview");
+    expect(w).toContain("Search the web");
+    expect(w).toContain('"Source: "');
+  });
+  it("strips markdown the AIs add, keeping link text", () => {
+    expect(plainSpoken("It's **v26.10.0**; see the [download page](https://nodejs.org/en/download). Use `npm` *now*."))
+      .toBe("It's v26.10.0; see the download page. Use npm now.");
+    expect(plainSpoken("2 * 3 * 4 is twenty-four")).toBe("2 * 3 * 4 is twenty-four");
+  });
+});

@@ -16,13 +16,22 @@ import { outDir, resource } from "../paths.js";
 import type { Settings } from "../settings.js";
 import { createListener, type Whisper } from "../speech/whisper.js";
 import { vocabulary } from "../speech/hints.js";
+import { COPILOT_LABELS } from "../../../../src/core/brain/prompts.js";
 
 /** Width of the notes panel on the right, in px. */
 export const PANEL_WIDTH = 380;
+/** The panel's width when the owner hides it: just its Show button. */
+export const PANEL_COLLAPSED = 52;
+/** At most this many questions wait for an answer; beyond it the oldest is marked skipped. */
+const MAX_WAITING = 3;
 /** Lines of conversation Claude sees with each question. */
 const CONTEXT_LINES = 16;
 
-export type CopilotCard = { id: number; question: string; at: number; answer?: string; error?: string };
+export type CopilotCard = {
+  id: number; question: string; at: number; answer?: string; error?: string;
+  /** The general-knowledge answer checked on the web, once it's back ("checking" until then). */
+  online?: "checking" | { answer: string; source?: string } | { error: string };
+};
 export type CopilotEvent =
   | { type: "status"; status: "joining" | "listening" | "ended"; detail?: string }
   | { type: "heard"; text: string; at: number }
@@ -35,8 +44,11 @@ export class CopilotSession {
   private readonly recent: string[] = [];
   private cards = 0;
   private busy = false;
-  private pending: CopilotCard | null = null;
+  /** Questions waiting while one is being answered, oldest first. */
+  private readonly waiting: CopilotCard[] = [];
   private ended = false;
+  private collapsed = false;
+  private relayout = () => {};
   /** Everything shown so far, for the panel to catch up when it opens (it may subscribe after the first events). */
   private snapshot: { status?: Extract<CopilotEvent, { type: "status" }>; heard: { text: string; at: number }[]; cards: Map<number, CopilotCard> } = { heard: [], cards: new Map() };
 
@@ -44,7 +56,12 @@ export class CopilotSession {
     readonly url: string,
     private readonly settings: Settings,
     private readonly whisper: Whisper,
-    private readonly brain: { draft: Draft | null; suggest: (question: string, recent: string[]) => Promise<string> },
+    private readonly brain: {
+      draft: Draft | null;
+      suggest: (question: string, recent: string[]) => Promise<string>;
+      /** Null when "Check online" is off; read at each question, so the panel's toggle applies at once. */
+      online: () => ((question: string, quick: string, recent: string[]) => Promise<{ answer: string; source?: string }>) | null;
+    },
     /** The panel page (the app's renderer at #copilot), loaded into the window itself. */
     private readonly panel: { url?: string; file?: string },
     private readonly onEnd: () => void,
@@ -91,9 +108,10 @@ export class CopilotSession {
     win.contentView.addChildView(view);
     const layout = () => {
       const [w, h] = win.getContentSize() as [number, number];
-      view.setBounds({ x: 0, y: 0, width: Math.max(0, w - PANEL_WIDTH), height: h });
+      view.setBounds({ x: 0, y: 0, width: Math.max(0, w - (this.collapsed ? PANEL_COLLAPSED : PANEL_WIDTH)), height: h });
     };
     layout();
+    this.relayout = layout;
     win.on("resize", layout);
 
     const wc = view.webContents;
@@ -154,20 +172,44 @@ export class CopilotSession {
     if (isQuestion(text)) this.ask({ id: ++this.cards, question: text, at });
   }
 
-  /** One suggestion at a time; while one is being written, only the newest question waits. */
+  /** One suggestion at a time, in order; every card ends up answered, failed or marked skipped (never stuck thinking). */
   private ask(card: CopilotCard) {
     this.send({ type: "card", card });
-    if (this.busy) { this.pending = card; return; }
+    this.waiting.push(card);
+    while (this.waiting.length > MAX_WAITING) {
+      const dropped = this.waiting.shift()!;
+      this.send({ type: "card", card: { ...dropped, error: "Skipped: newer questions came in faster than Peguin could answer." } });
+    }
+    this.next();
+  }
+
+  private next() {
+    if (this.busy || this.ended) return;
+    const card = this.waiting.shift();
+    if (!card) return;
     this.busy = true;
-    void this.brain.suggest(card.question, [...this.recent])
-      .then((answer) => this.send({ type: "card", card: { ...card, answer } }))
+    const recent = [...this.recent];
+    void this.brain.suggest(card.question, recent)
+      .then((answer) => {
+        const online = answer.startsWith(COPILOT_LABELS.general) ? this.brain.online() : null;
+        this.send({ type: "card", card: { ...card, answer, ...(online ? { online: "checking" as const } : {}) } });
+        if (online) {
+          void online(card.question, answer.slice(COPILOT_LABELS.general.length).trim(), recent)
+            .then((r) => this.send({ type: "card", card: { ...card, answer, online: r } }))
+            .catch((e: unknown) => this.send({ type: "card", card: { ...card, answer, online: { error: e instanceof Error ? e.message : String(e) } } }));
+        }
+      })
       .catch((e: unknown) => this.send({ type: "card", card: { ...card, error: e instanceof Error ? e.message : String(e) } }))
       .finally(() => {
         this.busy = false;
-        const next = this.pending;
-        this.pending = null;
-        if (next && !this.ended) this.ask(next);
+        this.next();
       });
+  }
+
+  /** Hide or show the panel; the meeting takes the space. */
+  setCollapsed(collapsed: boolean) {
+    this.collapsed = collapsed;
+    this.relayout();
   }
 
   stop() {

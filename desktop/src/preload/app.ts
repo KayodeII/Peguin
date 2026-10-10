@@ -15,6 +15,7 @@ const api = {
   copilotStart: (url: string) => ipcRenderer.invoke("copilot:start", url),
   copilotState: () => ipcRenderer.invoke("copilot:state"),
   copilotStop: () => ipcRenderer.invoke("copilot:stop"),
+  copilotCollapse: (collapsed: boolean) => ipcRenderer.invoke("copilot:collapse", collapsed),
   getAccount: () => ipcRenderer.invoke("account:get"),
   signIn: () => ipcRenderer.invoke("account:signin"),
   signOut: () => ipcRenderer.invoke("account:signout"),

@@ -103,6 +103,7 @@ describe("own voice: settings and disclosure", () => {
     });
     // The standard voice stays the Mac's, and the AI the owner's Claude Code, until they choose otherwise.
     expect(Settings.parse({}).ai).toBe("claude");
+    expect(Settings.parse({}).copilot).toEqual({ mode: "work", web: false });
     // Settings from before engines keep working and stay on this Mac.
     expect(Settings.parse({ voice: { mode: "mine", pause: 0.4 } }).voice).toMatchObject({ mode: "mine", engine: "mac", pause: 0.4 });
     expect(Settings.parse({}).recap).toEqual({ summarize: true, keepDays: 30 });

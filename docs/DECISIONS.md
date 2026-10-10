@@ -2,6 +2,16 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-10: Copilot: Work/Interview switch, Check online, Hide; not invisible to screen capture
+
+From the owner's live test: general questions need current facts from the web; the copilot should know whether it's a work meeting or an interview; and the panel should be hidden from the other side when the owner shares their screen.
+
+- **Work / Interview** (panel switch, `settings.copilot.mode`): Interview answers technical, design and general questions the way a strong candidate would (up to about seventy words); both modes keep work and experience questions to the notes and never invent experience.
+- **Check online** (panel switch, off by default): the quick answer still comes in about 4 s; for General knowledge cards a second pass searches the web with the user's own AI (Claude Code `WebSearch`, `codex --search`, xAI Responses `web_search`) and replaces it about 15 s later, labelled "Checked online · <site>". Measured 17 to 19 s per web answer, too slow to wait on.
+- **Hide** collapses the panel to a 52 px strip; the meeting takes the space. While hidden the owner doesn't see it either.
+- **Declined: making the panel invisible to screen capture** (`setContentProtection`) while the owner still sees it. Its purpose is hiding AI help from the people in the call, and with Interview mode, from an interviewer; that's the evasion line set when interviews were allowed. The honest ways stay available: share a window instead of the entire screen, or Hide. The subtitle now says "Not sent to the call" instead of "Only you can see this", which was false under full-screen sharing.
+- Fixed with it: a burst of questions left all but the newest stuck on "Thinking…" (only the newest waited). Now up to three wait in order and an older overflow is marked skipped.
+
 ## 2026-10-10: Every user's own AI; Grok as an alternative standard voice
 
 The owner: "it is the users connected claude grok whatever service token we should use, not mine for everyone". So:

@@ -5,7 +5,7 @@ import {
   CLOUD_URL, calendarProviders, checkForUpdate, completeCalendarConnect, completeSignIn, refreshAccount, signOut, startCalendarConnect, startSignIn,
   type Account, type CalendarProvider, type Update,
 } from "./account.js";
-import { answerQuestion, isFresh, loadDraft, prepareDraft, suggestAnswer, summarizeMeeting, type Draft } from "./brain.js";
+import { answerQuestion, checkOnline, isFresh, loadDraft, prepareDraft, suggestAnswer, summarizeMeeting, type Draft } from "./brain.js";
 import { CopilotSession } from "./copilot/session.js";
 import { deferredFollowUps, headline, mergeFollowUps, transcriptLines, worthKeeping, type MeetingRecord } from "./meeting/record.js";
 import { deleteAllMeetings, deleteMeeting, listMeetings, saveMeeting, setFollowUpDone } from "./meetings.js";
@@ -195,7 +195,12 @@ async function startCopilot(url: string) {
   whisper ??= startWhisper();
   whisper.catch(() => { whisper = null; });
   const session = new CopilotSession(url, settings, await whisper,
-    { get draft() { return draft; }, suggest: (q, recent) => suggestAnswer(settings, draft, q, recent) },
+    {
+      get draft() { return draft; },
+      // Read settings at each question, so the panel's Work/Interview and Check online switches apply at once.
+      suggest: (q, recent) => suggestAnswer(loadSettings(), draft, q, recent),
+      online: () => (loadSettings().copilot.web ? (q, quick, recent) => checkOnline(loadSettings(), q, quick, recent) : null),
+    },
     { url: rendererUrl, file: path.join(outDir, "renderer/index.html") },
     () => { if (copilot === session) copilot = null; });
   copilot = session;
@@ -412,6 +417,7 @@ ipcMain.handle("meeting:handover", () => handOver());
 ipcMain.handle("copilot:start", (_e, url: string) => startCopilot(String(url ?? "").trim()));
 ipcMain.handle("copilot:state", () => copilot?.state() ?? null);
 // Closing the window leaves the call: the meeting page goes with it.
+ipcMain.handle("copilot:collapse", (_e, collapsed: boolean) => copilot?.setCollapsed(!!collapsed));
 ipcMain.handle("copilot:stop", () => { copilot?.stop(); copilot = null; });
 ipcMain.handle("account:get", () => account);
 ipcMain.handle("meetings:list", () => listMeetings(loadSettings().recap.keepDays));

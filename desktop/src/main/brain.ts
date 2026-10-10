@@ -6,10 +6,10 @@ import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { answerContext, answerSystem, copilotSystem, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
+import { answerContext, answerSystem, copilotSystem, copilotWebSystem, plainSpoken, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
 import { gatherContext, type SourceReport } from "./context/index.js";
 import { wantsCues, type Settings } from "./settings.js";
-import { grokChat, loadXai } from "./xai.js";
+import { grokChat, grokSearch, loadXai } from "./xai.js";
 
 export type Draft = {
   script: string;
@@ -23,9 +23,10 @@ export type Draft = {
 };
 
 /** One prompt in, one reply out. Runs outside any project so no CLAUDE.md applies. */
-function claude(prompt: string, timeoutMs: number): Promise<string> {
+function claude(prompt: string, timeoutMs: number, web = false): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn("claude", ["-p", "--output-format", "json", "--max-turns", "1"], { cwd: tmpdir(), env: process.env });
+    const args = ["-p", "--output-format", "json", "--max-turns", web ? "4" : "1", ...(web ? ["--allowedTools", "WebSearch"] : [])];
+    const child = spawn("claude", args, { cwd: tmpdir(), env: process.env });
     let out = "", err = "";
     const timer = setTimeout(() => { child.kill(); reject(new Error("Claude took too long to reply")); }, timeoutMs);
     child.stdout.on("data", (d) => (out += d));
@@ -44,11 +45,11 @@ function claude(prompt: string, timeoutMs: number): Promise<string> {
 }
 
 /** One prompt in, one reply out, through the owner's Codex CLI sign-in. Read-only sandbox, no saved session. */
-function codex(prompt: string, timeoutMs: number): Promise<string> {
+function codex(prompt: string, timeoutMs: number, web = false): Promise<string> {
   return new Promise((resolve, reject) => {
     const dir = mkdtempSync(path.join(tmpdir(), "peguin-codex-"));
     const out = path.join(dir, "reply.txt");
-    const child = spawn("codex", ["exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "-C", dir,
+    const child = spawn("codex", [...(web ? ["--search"] : []), "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "-C", dir,
       "-c", 'model_reasoning_effort="low"', "-o", out, "-"], { cwd: dir, env: process.env });
     let err = "";
     const done = (f: () => void) => { clearTimeout(timer); f(); rmSync(dir, { recursive: true, force: true }); };
@@ -65,16 +66,16 @@ function codex(prompt: string, timeoutMs: number): Promise<string> {
   });
 }
 
-/** One prompt to the owner's chosen AI. */
-function generate(s: Settings, prompt: string, timeoutMs: number): Promise<string> {
-  if (s.ai === "codex") return codex(prompt, timeoutMs);
+/** One prompt to the owner's chosen AI; `web` lets it search the web first (much slower). */
+function generate(s: Settings, prompt: string, timeoutMs: number, web = false): Promise<string> {
+  if (s.ai === "codex") return codex(prompt, timeoutMs, web);
   if (s.ai === "grok") {
     const x = loadXai();
     if (!x) return Promise.reject(new Error("Grok is chosen in Settings > AI but there's no xAI key. Add one there, or pick Claude or Codex."));
     const model = s.grokModel && x.models.includes(s.grokModel) ? s.grokModel : x.models[0]!;
-    return grokChat(x.apiKey, model, prompt, timeoutMs);
+    return web ? grokSearch(x.apiKey, model, prompt, timeoutMs) : grokChat(x.apiKey, model, prompt, timeoutMs);
   }
-  return claude(prompt, timeoutMs);
+  return claude(prompt, timeoutMs, web);
 }
 
 const draftFile = () => path.join(app.getPath("userData"), "draft.json");
@@ -109,7 +110,14 @@ export async function answerQuestion(s: Settings, draft: Draft | null, question:
 
 /** A private copilot suggestion for the owner to say themselves. */
 export async function suggestAnswer(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
-  return generate(s, `${copilotSystem(s.displayName)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 45000);
+  return plainSpoken(await generate(s, `${copilotSystem(s.displayName, s.copilot.mode)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 45000));
+}
+
+/** A general-knowledge suggestion checked on the web: the answer, and the site it came from. */
+export async function checkOnline(s: Settings, question: string, quick: string, recent: string[]): Promise<{ answer: string; source?: string }> {
+  const reply = plainSpoken(await generate(s, `${copilotWebSystem(s.displayName, s.copilot.mode)}\n\nRecent conversation:\n${recent.join("\n")}\n\nQuestion: ${question}\n\nQuick answer from memory: ${quick}`, 75000, true));
+  const m = reply.match(/\n?\s*Source:\s*(.+)\s*$/i);
+  return m ? { answer: reply.slice(0, m.index).trim(), source: m[1]!.trim() } : { answer: reply };
 }
 
 /** Is this draft from today (in the user's timezone)? */
