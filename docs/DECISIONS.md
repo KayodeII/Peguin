@@ -2,6 +2,15 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-10: The copilot answers general questions, interviews included
+
+The owner wants the copilot to help with any question, including in interviews, and to offer Codex as well as Claude. This reverses the earlier "interviews out of scope" line (the agent recommended keeping it; the owner decided otherwise).
+
+- Suggestions start with a label: "From your notes:" (about the owner's work, facts only), "Not in your notes." (about the owner's work, not covered; a holding answer, or for "tell me about a time…" a way to structure their own real example), or "General knowledge:" (concepts, trade-offs, technical questions; at most three short sentences). It never invents the owner's status, numbers, projects or personal experiences. The panel shows the label.
+- Settings > Copilot > AI for suggestions: Claude (default, the plan's or the Claude Code sign-in) or Codex (the owner's Codex CLI sign-in, `codex exec` read-only, about 10 s versus about 4 s for Claude).
+- Lines not crossed: nothing hides the copilot from screen sharing or proctoring tools, and the Terms say the user follows each interview's or exam's rules on AI help. Privacy Policy lists OpenAI for the Codex option.
+- Peguin's own spoken answers (non-negotiable 2) are unchanged: facts only, defer otherwise.
+
 ## 2026-10-10: Speech recognition: whisper large-v3-turbo, neutral prompt, vocabulary from the facts
 
 The owner found the copilot mishearing questions. Benchmark: 12 interview and standup questions in three macOS voices (US, UK, Indian English), cut to 8 kHz phone quality with noise added, through the bundled whisper-server on an M-series Mac. Word error rate / sentences perfect / time per sentence:
@@ -24,7 +33,7 @@ Squirrel.Mac and electron-updater only update signed apps, and Peguin is ad-hoc 
 
 The owner wants to step in mid-meeting. Peguin's participant is named "<Name> (AI)" and the platforms don't let a guest rename mid-call, so letting the owner speak through Peguin's window would put a human voice behind an "(AI)" name. Instead, **Hand over to me** (Live view, and the menu bar) opens the meeting link in the owner's browser so they join as themselves, while Peguin stops whatever it was saying, tells the room "<first name> is joining now, so I'll hand over" and leaves. The line is pre-synthesized with the others, so it plays at once; leaving waits for its playback to end (12 s at most).
 
-A private, text-only meeting copilot (the owner's own meeting in Peguin's window, with notes and suggested answers only they can see) is planned next. Answering questions covertly in job interviews is out of scope: it deceives the interviewer and contradicts "the room always knows it's an AI".
+A private, text-only meeting copilot (the owner's own meeting in Peguin's window, with notes and suggested answers only they can see) is planned next. ~~Answering questions covertly in job interviews is out of scope.~~ Reversed by the owner on 2026-10-10; see "The copilot answers general questions, interviews included".
 
 ## 2026-10-09: Work without server-side AI
 

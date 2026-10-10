@@ -246,6 +246,17 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
         <h3 className="section-label" id="voice">Voice</h3>
         <VoiceSettings settings={settings} draft={s} setDraft={setS} save={save} />
 
+        <h3 className="section-label">Copilot</h3>
+        <label>AI for suggestions
+          <select value={s.copilotAi} onChange={(e) => setS({ ...s, copilotAi: e.target.value as Settings["copilotAi"] })}>
+            <option value="claude">Claude (your plan, or your Claude Code sign-in)</option>
+            <option value="codex">Codex (your ChatGPT sign-in through the Codex CLI)</option>
+          </select>
+        </label>
+        <p className="hint">{s.copilotAi === "codex"
+          ? "Uses the Codex CLI on this Mac (install it and run codex login). Slower than Claude, about ten seconds a suggestion. What's said in the meeting goes to OpenAI under your own agreement with them."
+          : "Answers about your work come only from your notes; general questions get a short answer marked “General knowledge”."}</p>
+
         <h3 className="section-label">Recaps</h3>
         <div className="row-card">
           <div className="row-main"><strong>Summarize with Claude</strong><p>Sends the meeting transcript for a short summary and extra follow-ups. Off: you still get every question Peguin deferred.</p></div>
