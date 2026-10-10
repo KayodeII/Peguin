@@ -178,8 +178,11 @@ export class CopilotSession {
    * heard (real question detection and suggestions); PENGUIN_COPILOT_SNAPSHOT=<dir>
    * then saves the meeting and the panel as PNGs after PENGUIN_COPILOT_SNAPSHOT_MS
    * (and the notes window, when PENGUIN_COPILOT_POPOUT=1 pops it out).
+   * PENGUIN_COPILOT_NOTICE=posted counts the AI notice as confirmed without a
+   * meeting chat (a sign-in page has none), to see the notes once they're hidden.
    */
   private devDemo(win: BrowserWindow, meeting: Electron.WebContents) {
+    if (process.env.PENGUIN_COPILOT_NOTICE === "posted") this.postNotice = async () => {};
     const lines = JSON.parse(process.env.PENGUIN_COPILOT_DEMO ?? "[]") as string[];
     lines.forEach((t, i) => setTimeout(() => { if (!this.ended) this.heard(t); }, 2500 + i * 3000));
     if (process.env.PENGUIN_COPILOT_POPOUT) setTimeout(() => this.popOut(true), 1500);
