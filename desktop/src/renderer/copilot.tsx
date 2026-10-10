@@ -89,7 +89,7 @@ export function CopilotPanel() {
           {out
             ? <button className="btn ghost cp-btn" onClick={() => void window.penguin.copilotPopOut(false)} title="Put the notes back beside the meeting">Dock</button>
             : <>
-                <button className="btn ghost cp-btn" onClick={() => void window.penguin.copilotPopOut(true)} title="Move the notes into their own window. Share the meeting window, or another window, and they stay out of the share.">Pop out</button>
+                <button className="btn ghost cp-btn" onClick={() => void window.penguin.copilotPopOut(true)} title="Move the notes into their own window. Peguin posts in the meeting chat that you're using an AI assistant, then leaves the notes out of screen shares where macOS allows it.">Pop out</button>
                 <button className="btn ghost cp-btn" onClick={() => hide(true)} title="Hide this panel; the meeting takes the space">Hide</button>
               </>}
           <button className="btn ghost cp-leave" onClick={() => void window.penguin.copilotStop()} title="Leave the meeting and close this window">Leave</button>

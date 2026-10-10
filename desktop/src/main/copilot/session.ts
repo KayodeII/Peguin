@@ -26,6 +26,19 @@ export const PANEL_COLLAPSED = 52;
 const MAX_WAITING = 3;
 /** Lines of conversation Claude sees with each question. */
 const CONTEXT_LINES = 16;
+/** How long Peguin waits for the meeting to hang up before closing the window anyway. */
+const LEAVE_TIMEOUT_MS = 3000;
+/** After the meeting's own Leave is clicked, a moment for it to reach the others before the window goes. */
+const LEAVE_SETTLE_MS = 800;
+/** How long Peguin waits to see the AI notice land in the meeting chat. */
+const DISCLOSE_TIMEOUT_MS = 20_000;
+/**
+ * Posted in the meeting chat from the owner's own account before the popped-out
+ * notes are hidden from screen capture, and when they join in Interview mode. The
+ * people in the call learn that AI is helping; they just don't see the notes.
+ * Fixed text, not a setting: it's the condition for hiding the notes.
+ */
+export const AI_NOTICE = "Heads-up: I'm using Peguin, an AI assistant, in this call. It hears the conversation and privately suggests answers to me.";
 
 export type CopilotCard = {
   id: number; question: string; at: number; answer?: string; error?: string;
@@ -51,6 +64,11 @@ export class CopilotSession {
   /** The panel in its own window, so the owner can share the meeting window, or another one, without it. */
   private notes?: BrowserWindow;
   private relayout = () => {};
+  /** The AI notice is in the meeting chat (confirmed in the chat log, not just typed). */
+  private disclosed = false;
+  private disclosing?: Promise<boolean>;
+  private leaving?: Promise<void>;
+  private leftReply?: () => void;
   /** Everything shown so far, for the panel to catch up when it opens (it may subscribe after the first events). */
   private snapshot: { status?: Extract<CopilotEvent, { type: "status" }>; heard: { text: string; at: number }[]; cards: Map<number, CopilotCard> } = { heard: [], cards: new Map() };
 
@@ -147,9 +165,17 @@ export class CopilotSession {
       this.detach.push(() => ipcMain.removeListener(channel, h));
     };
     on("cop:inject", (e) => { e.returnValue = inject; });
-    on("cop:log", (_e, msg: string) => { if (/listening to/.test(msg)) this.send({ type: "status", status: "listening", detail: "Listening. Questions show up here." }); });
+    on("cop:log", (_e, msg: string) => {
+      if (!/listening to/.test(msg)) return;
+      this.send({ type: "status", status: "listening", detail: "Listening. Questions show up here." });
+      if (this.settings.copilot.mode === "interview") void this.disclose();
+    });
+    on("cop:disclosed", (_e, error: unknown) => this.chatReply?.(typeof error === "string" && error ? error : null));
+    on("cop:left", () => this.leftReply?.());
     on("cop:pcm", (_e, buf: ArrayBuffer) => { if (!this.ended) listen(buf); });
 
+    // Closing the window hangs up first, like Leave, so the others see you go straight away.
+    win.on("close", (e) => { if (!this.leaving) { e.preventDefault(); void this.stop(); } });
     win.on("closed", () => { this.notes?.destroy(); this.end(); });
     this.send({ type: "status", status: "joining", detail: "Join the meeting. Peguin starts listening once you're in." });
     if (!app.isPackaged) this.devDemo(win, wc);
@@ -161,8 +187,11 @@ export class CopilotSession {
    * heard (real question detection and suggestions); PENGUIN_COPILOT_SNAPSHOT=<dir>
    * then saves the meeting and the panel as PNGs after PENGUIN_COPILOT_SNAPSHOT_MS
    * (and the notes window, when PENGUIN_COPILOT_POPOUT=1 pops it out).
+   * PENGUIN_COPILOT_NOTICE=posted counts the AI notice as confirmed without a
+   * meeting chat (a sign-in page has none), to see the notes once they're hidden.
    */
   private devDemo(win: BrowserWindow, meeting: Electron.WebContents) {
+    if (process.env.PENGUIN_COPILOT_NOTICE === "posted") this.postNotice = async () => {};
     const lines = JSON.parse(process.env.PENGUIN_COPILOT_DEMO ?? "[]") as string[];
     lines.forEach((t, i) => setTimeout(() => { if (!this.ended) this.heard(t); }, 2500 + i * 3000));
     if (process.env.PENGUIN_COPILOT_POPOUT) setTimeout(() => this.popOut(true), 1500);
@@ -175,6 +204,37 @@ export class CopilotSession {
       if (this.notes) writeFileSync(path.join(dir, "notes.png"), (await this.notes.webContents.capturePage()).toPNG());
       app.exit(0);
     }, Number(process.env.PENGUIN_COPILOT_SNAPSHOT_MS ?? 30000));
+  }
+
+  private chatReply?: (error: string | null) => void;
+
+  /** Asks every frame of the meeting page to post the AI notice in the chat; resolves once one confirms it, or with the last error. */
+  protected postNotice(text: string): Promise<void> {
+    const frames = this.view?.webContents.mainFrame.framesInSubtree ?? [];
+    return new Promise((resolve, reject) => {
+      let lastError = "Peguin couldn't find the meeting's chat.";
+      const done = (fn: () => void) => { clearTimeout(timer); this.chatReply = undefined; fn(); };
+      const timer = setTimeout(() => done(() => reject(new Error(lastError))), DISCLOSE_TIMEOUT_MS);
+      this.chatReply = (error) => { if (error) lastError = error; else done(resolve); };
+      for (const f of frames) { try { f.send("cop:disclose", text); } catch { /* frame went away */ } }
+    });
+  }
+
+  /** Posts the AI notice once per meeting. True when it's confirmed in the chat. */
+  disclose(): Promise<boolean> {
+    if (this.disclosed) return Promise.resolve(true);
+    this.disclosing ??= this.postNotice(AI_NOTICE)
+      .then(() => {
+        this.disclosed = true;
+        this.send({ type: "status", status: "listening", detail: "Posted in the meeting chat that you're using an AI assistant." });
+        return true;
+      })
+      .catch((e: unknown) => {
+        this.send({ type: "status", status: this.snapshot.status?.status ?? "listening", detail: `Couldn't post the AI notice in the meeting chat (${e instanceof Error ? e.message : e}). The popped-out notes stay visible in a full-screen share. Dock and pop out again to retry.` });
+        return false;
+      })
+      .finally(() => { this.disclosing = undefined; });
+    return this.disclosing;
   }
 
   private heard(text: string) {
@@ -238,13 +298,26 @@ export class CopilotSession {
     const [x, y] = this.win.getPosition() as [number, number];
     const [w, h] = this.win.getSize() as [number, number];
     const notes = new BrowserWindow({
-      width: PANEL_WIDTH, height: Math.min(h, 820), minWidth: 300, minHeight: 360, x: x + w - PANEL_WIDTH, y, title: "Peguin notes",
-      // Stays above the window being shared, so the owner can read it. It isn't hidden from screen capture:
-      // it shows in any share that includes it (the whole screen, or this window).
+      width: PANEL_WIDTH,
+      height: Math.min(h, 820),
+      minWidth: 300,
+      minHeight: 360,
+      x: x + w - PANEL_WIDTH,
+      y,
+      title: "Peguin notes",
+      // Stays above the shared window so the owner can read it while presenting.
       alwaysOnTop: true,
-      webPreferences: { preload: path.join(outDir, "preload/app.cjs"), sandbox: true, contextIsolation: true },
+      webPreferences: {
+        preload: path.join(outDir, "preload/app.cjs"),
+        sandbox: true,
+        contextIsolation: true,
+      },
     });
     this.notes = notes;
+    // Left out of screen capture only once the call has been told in the chat that
+    // AI is helping. Where the OS honours it: Windows, and older macOS capture;
+    // ScreenCaptureKit on macOS 15+ may still include it.
+    void this.disclose().then((ok) => { if (ok && this.notes === notes && !notes.isDestroyed()) notes.setContentProtection(true); });
     if (this.panel.url) void notes.loadURL(`${this.panel.url}#copilot-out`);
     else void notes.loadFile(this.panel.file!, { hash: "copilot-out" });
     // Closing it docks the panel again.
@@ -252,10 +325,31 @@ export class CopilotSession {
     this.relayout();
   }
 
-  stop() {
-    this.notes?.destroy();
-    if (this.win && !this.win.isDestroyed()) this.win.destroy();
-    this.end();
+  /**
+   * Hangs up in the meeting, then closes the windows. Destroying the window alone
+   * drops the connection without telling the meeting, and the others keep seeing
+   * the owner there until it times out.
+   */
+  stop(): Promise<void> {
+    this.leaving ??= this.hangUp().finally(() => {
+      this.notes?.destroy();
+      if (this.win && !this.win.isDestroyed()) this.win.destroy();
+      this.end();
+    });
+    return this.leaving;
+  }
+
+  /** Asks every frame to click the meeting's own Leave; resolves shortly after one does, or after LEAVE_TIMEOUT_MS. */
+  protected hangUp(): Promise<void> {
+    const wc = this.view?.webContents;
+    const frames = wc && !wc.isDestroyed() ? wc.mainFrame.framesInSubtree : [];
+    if (!frames.length) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => { clearTimeout(timer); resolve(); };
+      const timer = setTimeout(done, LEAVE_TIMEOUT_MS);
+      this.leftReply = () => { this.leftReply = undefined; clearTimeout(timer); setTimeout(done, LEAVE_SETTLE_MS); };
+      for (const f of frames) { try { f.send("cop:leave"); } catch { /* frame went away */ } }
+    });
   }
 
   private end() {
