@@ -110,6 +110,19 @@
     }
   });
 
+  // Leaving: click the meeting's own hang-up (Meet, Teams, Zoom web) so the
+  // others see the owner leave at once, and confirm where Zoom asks.
+  const HANG_UP = '[aria-label="Leave call" i], #hangup-button, [data-tid="hangup-main-btn"], .footer__leave-btn, button[aria-label^="Leave" i]';
+  bridge.onLeave(async () => {
+    const hangUp = [...document.querySelectorAll(HANG_UP)].find(visible);
+    if (!hangUp) return false;
+    hangUp.click();
+    log("left the call");
+    const confirm = await until(() => { const b = button(/^leave( meeting)?$/i); return b && b !== hangUp ? b : null; }, 1000);
+    if (confirm) confirm.click();
+    return true;
+  });
+
   // Autoplay rules can start the context suspended; resume on the first interaction too.
   const resume = () => { if (ctx.state !== "running") void ctx.resume(); };
   resume();

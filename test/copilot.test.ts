@@ -92,3 +92,24 @@ describe("copilot AI notice", () => {
     expect(await session.disclose()).toBe(true);
   });
 });
+
+describe("copilot leave", () => {
+  it("hangs up in the meeting before closing the window, once", async () => {
+    const order: string[] = [];
+    let ended = 0;
+    const session = new CopilotSession("https://meet.google.com/abc-defg-hij", Settings.parse({ displayName: "Ada" }), { url: "", stop: () => {} },
+      { draft: null, suggest: async () => "", online: () => null }, { file: "x.html" }, () => { ended++; });
+    let hungUp = () => {};
+    const s = session as unknown as { hangUp: () => Promise<void>; win: unknown };
+    s.hangUp = () => { order.push("hang up"); return new Promise((r) => { hungUp = r; }); };
+    s.win = { isDestroyed: () => false, destroy: () => order.push("close window"), webContents: { send: () => {} } };
+    const first = session.stop();
+    const second = session.stop();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(order).toEqual(["hang up"]);
+    hungUp();
+    await Promise.all([first, second]);
+    expect(order).toEqual(["hang up", "close window"]);
+    expect(ended).toBe(1);
+  });
+});

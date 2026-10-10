@@ -26,6 +26,10 @@ export const PANEL_COLLAPSED = 52;
 const MAX_WAITING = 3;
 /** Lines of conversation Claude sees with each question. */
 const CONTEXT_LINES = 16;
+/** How long Peguin waits for the meeting to hang up before closing the window anyway. */
+const LEAVE_TIMEOUT_MS = 3000;
+/** After the meeting's own Leave is clicked, a moment for it to reach the others before the window goes. */
+const LEAVE_SETTLE_MS = 800;
 /** How long Peguin waits to see the AI notice land in the meeting chat. */
 const DISCLOSE_TIMEOUT_MS = 20_000;
 /**
@@ -63,6 +67,8 @@ export class CopilotSession {
   /** The AI notice is in the meeting chat (confirmed in the chat log, not just typed). */
   private disclosed = false;
   private disclosing?: Promise<boolean>;
+  private leaving?: Promise<void>;
+  private leftReply?: () => void;
   /** Everything shown so far, for the panel to catch up when it opens (it may subscribe after the first events). */
   private snapshot: { status?: Extract<CopilotEvent, { type: "status" }>; heard: { text: string; at: number }[]; cards: Map<number, CopilotCard> } = { heard: [], cards: new Map() };
 
@@ -165,8 +171,11 @@ export class CopilotSession {
       if (this.settings.copilot.mode === "interview") void this.disclose();
     });
     on("cop:disclosed", (_e, error: unknown) => this.chatReply?.(typeof error === "string" && error ? error : null));
+    on("cop:left", () => this.leftReply?.());
     on("cop:pcm", (_e, buf: ArrayBuffer) => { if (!this.ended) listen(buf); });
 
+    // Closing the window hangs up first, like Leave, so the others see you go straight away.
+    win.on("close", (e) => { if (!this.leaving) { e.preventDefault(); void this.stop(); } });
     win.on("closed", () => { this.notes?.destroy(); this.end(); });
     this.send({ type: "status", status: "joining", detail: "Join the meeting. Peguin starts listening once you're in." });
     if (!app.isPackaged) this.devDemo(win, wc);
@@ -316,10 +325,31 @@ export class CopilotSession {
     this.relayout();
   }
 
-  stop() {
-    this.notes?.destroy();
-    if (this.win && !this.win.isDestroyed()) this.win.destroy();
-    this.end();
+  /**
+   * Hangs up in the meeting, then closes the windows. Destroying the window alone
+   * drops the connection without telling the meeting, and the others keep seeing
+   * the owner there until it times out.
+   */
+  stop(): Promise<void> {
+    this.leaving ??= this.hangUp().finally(() => {
+      this.notes?.destroy();
+      if (this.win && !this.win.isDestroyed()) this.win.destroy();
+      this.end();
+    });
+    return this.leaving;
+  }
+
+  /** Asks every frame to click the meeting's own Leave; resolves shortly after one does, or after LEAVE_TIMEOUT_MS. */
+  protected hangUp(): Promise<void> {
+    const wc = this.view?.webContents;
+    const frames = wc && !wc.isDestroyed() ? wc.mainFrame.framesInSubtree : [];
+    if (!frames.length) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => { clearTimeout(timer); resolve(); };
+      const timer = setTimeout(done, LEAVE_TIMEOUT_MS);
+      this.leftReply = () => { this.leftReply = undefined; clearTimeout(timer); setTimeout(done, LEAVE_SETTLE_MS); };
+      for (const f of frames) { try { f.send("cop:leave"); } catch { /* frame went away */ } }
+    });
   }
 
   private end() {
