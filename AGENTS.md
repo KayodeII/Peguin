@@ -91,7 +91,7 @@ Live meetings need public URLs (ngrok) for `API_PUBLIC_URL` and `REALTIME_PUBLIC
 - Work on a short-lived branch, open a PR into `main`, merge when CI is green. `main` is always releasable.
 - The product version is `desktop/package.json` (semver). Patch for fixes, minor for new features, major for breaking changes (for example a settings format the old app can't read).
 - Release from an up-to-date `main`: `npm run release -- patch|minor|major|x.y.z` bumps the version, commits `Release vX.Y.Z` and tags it. `git push origin main --follow-tags` publishes; `.github/workflows/release.yml` builds the .dmg and the site picks it up within ten minutes. See `docs/RELEASING.md`.
-- The Worker and website aren't versioned: deploy them after merging with `cd cloud && npx wrangler deploy` (and `npx wrangler d1 migrations apply penguin --remote` first when there's a new migration).
+- The Worker and website aren't versioned: deploy them after merging with `cd cloud && npx wrangler deploy`, which builds `web/dist` first (and `npx wrangler d1 migrations apply penguin --remote` first when there's a new migration).
 
 ## Privacy Policy and Terms
 

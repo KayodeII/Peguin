@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { Link } from "../ui";
 
-const UPDATED = "9 October 2026";
+const UPDATED = "10 October 2026";
 
 function LegalPage({ title, intro, children }: { title: string; intro: ReactNode; children: ReactNode }) {
   return (
@@ -55,6 +55,7 @@ export function Privacy() {
       <h2>What is sent to other services, and why</h2>
       <ul>
         <li><strong>Anthropic (Claude):</strong> to write your update, the titles, statuses and times of your recent work. To answer a follow-up question in a meeting, the facts from your update and the last few lines of the conversation. For a recap summary (you can turn this off), the meeting transcript. If you're subscribed this goes through our server; otherwise through your own Claude Code sign-in, under your agreement with Anthropic. Questions you type into the help chat on peguin.co also go to Claude, through our server, and aren't stored unless you message the team.</li>
+        <li><strong>OpenAI (Codex):</strong> only if you choose Codex for the copilot's suggestions in Settings. The question, the recent conversation and your prepared facts go through the Codex CLI on your Mac, under your own ChatGPT or OpenAI sign-in and your agreement with OpenAI. The default, Claude, sends nothing to OpenAI.</li>
         <li><strong>Cloudflare:</strong> hosts peguin.co and our database.</li>
         <li><strong>Paystack:</strong> processes payments and manages your subscription.</li>
         <li><strong>Resend:</strong> sends sign-in and welcome emails.</li>
@@ -71,7 +72,7 @@ export function Privacy() {
 
       <h2>Other people in your meetings</h2>
       <p>Peguin always introduces itself as your AI assistant, and its name ends in "(AI)". It transcribes what others say on your Mac so it knows when you're called on and can answer; the parts described above go to Claude. It does not identify who said what.</p>
-      <p>With the <strong>private copilot</strong>, you're in your own meeting as yourself and Peguin doesn't join or speak. It transcribes what others say on your Mac, and when someone asks you something, the question, the recent conversation and your prepared facts go to Claude for a suggested answer that only you see. Your own microphone isn't transcribed.</p>
+      <p>With the <strong>private copilot</strong>, you're in your own meeting as yourself and Peguin doesn't join or speak. It transcribes what others say on your Mac, and when someone asks you something, the question, the recent conversation and your prepared facts go to Claude (or Codex, if you chose it) for a suggested answer that only you see. Questions about your own work are answered only from your prepared facts; general questions get a general answer, marked as such. Your own microphone isn't transcribed.</p>
       <p>You're responsible for using Peguin only in meetings where that's allowed, and for telling the people you meet with that you use it.</p>
 
       <h2>How long we keep things</h2>
@@ -119,6 +120,7 @@ export function Terms() {
         <li>Not to remove, obscure or work around the "(AI)" name or the spoken introduction.</li>
         <li>To use Peguin only in meetings where an AI assistant may attend and listen, following your organisation's policies and the law where you and the other participants are, including on recording and consent.</li>
         <li>To record only your own voice for <strong>Speak in your own voice</strong>, never anyone else's, on this Mac or through ElevenLabs.</li>
+        <li>In interviews, exams and assessments, to follow that process's rules on AI help. Many don't allow it, and you're responsible for using the copilot only where it's permitted.</li>
         <li>Not to use Peguin to deceive, harass or impersonate anyone, or for anything unlawful.</li>
         <li>Not to resell Peguin, get around licence checks or usage limits, or overload our service.</li>
       </ul>

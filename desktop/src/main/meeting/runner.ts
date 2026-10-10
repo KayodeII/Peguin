@@ -11,6 +11,7 @@ import { synthesize, type SynthesizeOptions } from "../speech/tts.js";
 import { usingOwnVoice } from "../speech/voice/index.js";
 import { sentences } from "../speech/voice/text.js";
 import { createListener, transcribeSamples, type Whisper } from "../speech/whisper.js";
+import { vocabulary } from "../speech/hints.js";
 import { outDir, resource } from "../paths.js";
 import { botName, detectPlatform, webClientUrl, type Platform } from "./platform.js";
 import { MeetingLog, type MeetingRecord } from "./record.js";
@@ -191,6 +192,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
     };
     const onPcm = createListener({
       whisperUrl: this.whisper.url, names,
+      vocab: () => vocabulary(this.brain.draft?.facts ?? []),
       // About a second of someone else's voice while Peguin talks means they're talking over it.
       onSustainedSpeech: interrupt, sustainedMs: INTERRUPT_AFTER_MS,
       onError: (e) => this.log(`speech recognition error: ${e}`),

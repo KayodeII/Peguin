@@ -3,6 +3,7 @@
 // earlier ones and the running transcript below.
 import { useEffect, useRef, useState } from "react";
 import type { Settings } from "../main/settings";
+import { COPILOT_LABELS } from "../../../src/core/brain/prompts";
 import { Logo } from "./ui";
 
 type Card = { id: number; question: string; at: number; answer?: string; error?: string };
@@ -84,14 +85,17 @@ export function CopilotPanel() {
   );
 }
 
+const LABELS = (Object.entries(COPILOT_LABELS) as [keyof typeof COPILOT_LABELS, string][]).map(([kind, text]) => ({ kind, text }));
+
 function CardView({ card, fresh }: { card: Card; fresh?: boolean }) {
   const thinking = !card.answer && !card.error;
-  const outOfNotes = card.answer?.startsWith("Not in your notes");
+  const label = card.answer ? LABELS.find((l) => card.answer!.startsWith(l.text)) : undefined;
+  const outOfNotes = label?.kind === "unknown";
   return (
     <article className={`cp-card ${fresh ? "fresh" : ""} ${outOfNotes ? "unknown" : ""}`}>
       <p className="cp-q"><span>{time(card.at)}</span>“{card.question}”</p>
       {thinking && <p className="cp-a thinking">Thinking<i>.</i><i>.</i><i>.</i></p>}
-      {card.answer && <p className="cp-a">{card.answer}</p>}
+      {card.answer && <p className="cp-a">{label && <span className={`cp-label ${label.kind}`}>{label.text.replace(/[:.]$/, "")}</span>}{label ? card.answer.slice(label.text.length).trim() : card.answer}</p>}
       {card.error && <p className="cp-a error">{card.error}</p>}
     </article>
   );

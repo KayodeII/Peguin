@@ -4,10 +4,11 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import { whisperPaths } from "../paths.js";
+import { whisperPrompt } from "./hints.js";
 
 const RATE = 16000;
 const VOICE_RMS = 0.012;       // above this a chunk counts as speech
-const END_SILENCE_MS = 700;    // pause that ends an utterance
+const END_SILENCE_MS = 700;    // pause that ends an utterance (default; see endSilenceMs)
 const MIN_SPEECH_MS = 300;     // shorter blips are ignored
 const MAX_UTTERANCE_MS = 15000;
 const PREROLL_CHUNKS = 3;      // keep ~250 ms before speech starts
@@ -52,11 +53,11 @@ function clean(text: string): string {
   return text.replace(/\[[^\]]*\]|\([^)]*\)|\*[^*]*\*/g, " ").replace(/\s+/g, " ").trim();
 }
 
-async function transcribe(whisperUrl: string, pcm: Buffer, names: string[]): Promise<string> {
+async function transcribe(whisperUrl: string, pcm: Buffer, names: string[], vocab: string[] = []): Promise<string> {
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(wav(pcm))], { type: "audio/wav" }), "utterance.wav");
   form.append("response_format", "json");
-  form.append("prompt", `Daily standup. ${names.join(", ")}.`); // nudges spelling of names
+  form.append("prompt", whisperPrompt(names, vocab)); // nudges spelling of names and jargon
   const res = await fetch(`${whisperUrl}/inference`, { method: "POST", body: form });
   if (!res.ok) throw new Error(`whisper returned ${res.status}`);
   const body = (await res.json()) as { text?: string };
@@ -81,6 +82,10 @@ export type Utterance = { text: string; sttMs: number; endedAt: number };
 export function createListener(opts: {
   whisperUrl: string;
   names: string[];
+  /** Jargon to spell right (from the owner's facts). */
+  vocab?: () => string[];
+  /** Pause that ends an utterance. Longer keeps questions with a mid-sentence pause whole. */
+  endSilenceMs?: number;
   onUtterance: (u: Utterance) => void;
   onError: (e: unknown) => void;
   /** Called once per utterance, as soon as someone has spoken for `sustainedMs` (talk-over detection). */
@@ -98,7 +103,7 @@ export function createListener(opts: {
     const endedAt = Date.now();
     queue = queue.then(async () => {
       const started = Date.now();
-      const text = await transcribe(opts.whisperUrl, pcm, opts.names);
+      const text = await transcribe(opts.whisperUrl, pcm, opts.names, opts.vocab?.() ?? []);
       if (text) opts.onUtterance({ text, sttMs: Date.now() - started, endedAt });
     }).catch(opts.onError);
   };
@@ -122,6 +127,6 @@ export function createListener(opts: {
     totalMs += ms;
     if (voiced) { speechMs += ms; silentMs = 0; } else silentMs += ms;
     if (!sustained && opts.onSustainedSpeech && speechMs >= (opts.sustainedMs ?? Infinity)) { sustained = true; opts.onSustainedSpeech(); }
-    if (silentMs >= END_SILENCE_MS || totalMs >= MAX_UTTERANCE_MS) finish();
+    if (silentMs >= (opts.endSilenceMs ?? END_SILENCE_MS) || totalMs >= MAX_UTTERANCE_MS) finish();
   };
 }

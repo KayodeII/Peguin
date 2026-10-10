@@ -3,7 +3,7 @@
 // with the user's own Claude login (development and power users).
 import { app } from "electron";
 import { spawn } from "node:child_process";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { answerContext, answerSystem, copilotSystem, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
@@ -38,6 +38,28 @@ function claude(prompt: string, timeoutMs: number): Promise<string> {
         resolve(res.result);
       } catch (e) { reject(new Error(`Claude CLI failed: ${String(e instanceof Error ? e.message : e).slice(0, 300)}`)); }
     });
+    child.stdin.end(prompt);
+  });
+}
+
+/** One prompt in, one reply out, through the owner's Codex CLI sign-in. Read-only sandbox, no saved session. */
+function codex(prompt: string, timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const dir = mkdtempSync(path.join(tmpdir(), "peguin-codex-"));
+    const out = path.join(dir, "reply.txt");
+    const child = spawn("codex", ["exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "-C", dir,
+      "-c", 'model_reasoning_effort="low"', "-o", out, "-"], { cwd: dir, env: process.env });
+    let err = "";
+    const done = (f: () => void) => { clearTimeout(timer); f(); rmSync(dir, { recursive: true, force: true }); };
+    const timer = setTimeout(() => { child.kill(); done(() => reject(new Error("Codex took too long to reply"))); }, timeoutMs);
+    child.stderr.on("data", (d) => (err += d));
+    child.on("error", (e) => done(() => reject(new Error(`Couldn't run the Codex CLI (${e.message}). Install it and sign in with \`codex login\`, or switch the copilot back to Claude in Settings.`))));
+    child.on("close", (code) => done(() => {
+      let text = "";
+      try { text = readFileSync(out, "utf8").trim(); } catch { /* no reply written */ }
+      if (code === 0 && text) resolve(text);
+      else reject(new Error(`Codex CLI failed: ${(err.match(/"message":"([^"]+)"/)?.[1] ?? err ?? `exit ${code}`).slice(0, 300)}`));
+    }));
     child.stdin.end(prompt);
   });
 }
@@ -87,11 +109,13 @@ export async function answerQuestion(s: Settings, draft: Draft | null, question:
     () => claude(`${answerSystem(s.displayName, { cues })}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000))).value;
 }
 
-/** A private copilot suggestion for the owner to say themselves (same routing as answers). */
+/** A private copilot suggestion for the owner to say themselves: same routing as answers, or the owner's Codex CLI if they chose it. */
 export async function suggestAnswer(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
+  const prompt = () => `${copilotSystem(s.displayName)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`;
+  if (s.copilotAi === "codex") return codex(prompt(), 45000);
   return (await viaAccount(!!(await offlineLicense()),
     () => cloudSuggest(s.displayName, draft?.facts ?? [], draft?.script, recent, question),
-    () => claude(`${copilotSystem(s.displayName)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 40000))).value;
+    () => claude(prompt(), 40000))).value;
 }
 
 /** Is this draft from today (in the user's timezone)? */

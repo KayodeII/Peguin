@@ -2,6 +2,25 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-10: The copilot answers general questions, interviews included
+
+The owner wants the copilot to help with any question, including in interviews, and to offer Codex as well as Claude. This reverses the earlier "interviews out of scope" line (the agent recommended keeping it; the owner decided otherwise).
+
+- Suggestions start with a label: "From your notes:" (about the owner's work, facts only), "Not in your notes." (about the owner's work, not covered; a holding answer, or for "tell me about a time…" a way to structure their own real example), or "General knowledge:" (concepts, trade-offs, technical questions; at most three short sentences). It never invents the owner's status, numbers, projects or personal experiences. The panel shows the label.
+- Settings > Copilot > AI for suggestions: Claude (default, the plan's or the Claude Code sign-in) or Codex (the owner's Codex CLI sign-in, `codex exec` read-only, about 10 s versus about 4 s for Claude).
+- Lines not crossed: nothing hides the copilot from screen sharing or proctoring tools, and the Terms say the user follows each interview's or exam's rules on AI help. Privacy Policy lists OpenAI for the Codex option.
+- Peguin's own spoken answers (non-negotiable 2) are unchanged: facts only, defer otherwise.
+
+## 2026-10-10: Speech recognition: whisper large-v3-turbo, neutral prompt, vocabulary from the facts
+
+The owner found the copilot mishearing questions. Benchmark: 12 interview and standup questions in three macOS voices (US, UK, Indian English), cut to 8 kHz phone quality with noise added, through the bundled whisper-server on an M-series Mac. Word error rate / sentences perfect / time per sentence:
+
+- base.en (before), prompt "Daily standup.": 12.9% / 12 of 36 / 55 ms
+- small.en q5_1: 7.1% / 17 / 127 ms
+- large-v3-turbo q5_0: 6.4% / 22 / 403 ms; with the neutral "A meeting with <name>." 5.0%; adding jargon 4.2% / 24
+
+So the app downloads large-v3-turbo q5_0 (~550 MB, was ~150 MB), primes whisper with the owner's names plus distinctive terms from the prepared facts (`speech/hints.ts`), and no longer says "standup". The copilot waits 1.2 s of silence (not 0.7 s) before cutting an utterance, so a question with a pause in it arrives whole, and its question check counts spoken requests ("tell me about…", "walk us through…", "explain…"). Peguin's own turn-taking (`src/realtime/turn.ts`, which has its own `isQuestion`) is unchanged. Synthetic voices are cleaner than real calls; re-measure with recorded call audio if accuracy is questioned again.
+
 ## 2026-10-09: Update in place without a signed app (for now)
 
 Squirrel.Mac and electron-updater only update signed apps, and Peguin is ad-hoc signed until there's an Apple Developer ID. So `desktop/src/main/updater.ts` does it directly: releases also publish `Peguin-mac-arm64.zip` (listed in `SHA256SUMS.txt`); `/api/release` returns both URLs; when a newer version appears (and the owner's `autoUpdate` setting is on, and the install is writable) the app downloads the zip in the background, checks its SHA-256 against the published sum, unpacks it with `ditto`, checks the bundle's version, and offers "Restart to update". A detached `/bin/sh` script waits for Peguin to exit, moves the old bundle aside, moves the new one in (putting the old one back if that fails), clears quarantine and reopens it; quitting with an update ready installs it without reopening. Downloads made by the app carry no quarantine flag, so "Open Anyway" isn't asked again. Each ad-hoc build has a different signature, so macOS may ask once to allow Keychain access after an update. Once there's a Developer ID, switch to electron-updater with signing and notarisation. Versions before this one have to be downloaded once more by hand.
@@ -14,7 +33,7 @@ Squirrel.Mac and electron-updater only update signed apps, and Peguin is ad-hoc 
 
 The owner wants to step in mid-meeting. Peguin's participant is named "<Name> (AI)" and the platforms don't let a guest rename mid-call, so letting the owner speak through Peguin's window would put a human voice behind an "(AI)" name. Instead, **Hand over to me** (Live view, and the menu bar) opens the meeting link in the owner's browser so they join as themselves, while Peguin stops whatever it was saying, tells the room "<first name> is joining now, so I'll hand over" and leaves. The line is pre-synthesized with the others, so it plays at once; leaving waits for its playback to end (12 s at most).
 
-A private, text-only meeting copilot (the owner's own meeting in Peguin's window, with notes and suggested answers only they can see) is planned next. Answering questions covertly in job interviews is out of scope: it deceives the interviewer and contradicts "the room always knows it's an AI".
+A private, text-only meeting copilot (the owner's own meeting in Peguin's window, with notes and suggested answers only they can see) is planned next. ~~Answering questions covertly in job interviews is out of scope.~~ Reversed by the owner on 2026-10-10; see "The copilot answers general questions, interviews included".
 
 ## 2026-10-09: Work without server-side AI
 

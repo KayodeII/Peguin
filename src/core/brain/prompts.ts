@@ -48,22 +48,36 @@ export function answerContext(facts: string[], script: string | undefined, recen
     + `Recent conversation:\n${recent.join("\n")}\n\nQuestion: ${question}`;
 }
 
+/** Spoken requests that work like questions: "tell me about…", "walk us through…", "explain…". */
+const REQUEST = /^(tell|walk|talk|take) (me|us)\b|^(explain|describe|define|compare|elaborate)\b|^(give|show) (me|us) (an? |some |the )?(example|overview|rundown|update|summary|sense)|^(i'?d|we'?d) (like|love) to (hear|know|understand)|^i'?m curious\b|^(what|how) about\b/;
+
 /** Does what someone said sound like a question for the owner to answer (pure)? Short fragments don't count. */
 export function isQuestion(text: string): boolean {
   const t = text.trim().toLowerCase();
   if (t.split(/\s+/).length < 3) return false;
-  return /\?\s*$/.test(t) || /^(so |and |okay,? |ok,? )?(what|why|how|when|where|who|which|can|could|would|will|do|does|did|is|are|was|were|have|has|should|any)\b/.test(t);
+  // Drop a filler opener and a name being addressed ("okay, Sarah, tell me…").
+  const lead = t.replace(/^(so|and|okay|ok|alright|right|now|great|cool)[,.]?\s+/, "").replace(/^[a-z'’-]+,\s+/, "");
+  return /\?\s*$/.test(t) || /^(what|why|how|when|where|who|which|can|could|would|will|do|does|did|is|are|was|were|have|has|should|any)\b/.test(lead) || REQUEST.test(lead);
 }
+
+/** How a copilot suggestion starts, so the panel (and the owner) can tell where it came from. */
+export const COPILOT_LABELS = { notes: "From your notes:", general: "General knowledge:", unknown: "Not in your notes." } as const;
 
 /**
  * The private copilot: a suggestion only the owner sees, in their own meeting,
- * for them to say themselves. Same facts-only rule as Peguin's spoken answers.
+ * for them to say themselves. Questions about the owner's own work, status or
+ * experience are answered from the facts only (never invented); general
+ * questions (concepts, how something works, trade-offs) get a short, correct
+ * answer, labelled as general knowledge.
  */
 export function copilotSystem(name: string): string {
-  return `You are Peguin, a private assistant that only ${name} can see during their own meeting. Someone in the meeting just said something that ${first(name)} may need to answer.
-Write what ${first(name)} could say back: one or two short sentences, in the first person as ${first(name)}, plain spoken English, numbers as words.
-Use ONLY the facts, the update and the conversation below. If they don't cover it, start with "Not in your notes." and suggest an honest holding answer, such as checking and following up after the call.
-Never invent status, numbers, dates, names or commitments. No preamble, no quotes, no URLs.`;
+  const f = first(name);
+  return `You are Peguin, a private assistant that only ${name} can see during their own meeting. Someone just said something that ${f} may need to answer.
+Write what ${f} could say back, in the first person as ${f}, plain spoken English, numbers as words, no preamble, no quotes, no URLs, no markdown.
+Start with exactly one of these labels, then the answer:
+- "${COPILOT_LABELS.notes}" when it's about ${f}'s own work, status, plans or experience and the facts, update or conversation below cover it. Use ONLY those. One or two short sentences.
+- "${COPILOT_LABELS.unknown}" when it's about ${f}'s own work, status, plans or experience and the facts don't cover it. Then suggest an honest holding answer, or for a "tell me about a time you…" question, a one-line way to structure their own real example. Never invent status, numbers, dates, names, commitments, projects or personal experiences for ${f}.
+- "${COPILOT_LABELS.general}" for general questions that don't depend on ${f}'s own work: concepts, definitions, how something works, trade-offs, a technical or design question. Answer correctly in at most three short sentences (under fifty words), the key point first, so it can be read at a glance and said aloud. If you aren't sure, say what you'd check rather than guessing.`;
 }
 
 /** Pull the JSON object out of a model reply that may have prose around it. */

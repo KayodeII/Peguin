@@ -10,6 +10,8 @@
     { "pattern": "peguin.co", "custom_domain": true }
   ],
   // The website (../web) is served from the same Worker and origin as the API.
+  // Build the website first, so a deploy never uploads a stale web/dist.
+  "build": { "command": "npm --prefix ../web run build" },
   "assets": {
     "directory": "../web/dist",
     "binding": "ASSETS",

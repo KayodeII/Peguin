@@ -223,12 +223,29 @@ describe("private copilot", async () => {
     expect(isQuestion("Thanks, everyone.")).toBe(false);
     expect(isQuestion("Let's take that offline.")).toBe(false);
   });
-  it("suggests in the owner's words, from facts only, and says when it doesn't know", () => {
+  it("treats spoken requests as questions, even after a name or filler", () => {
+    expect(isQuestion("tell me about a time you disagreed with your lead")).toBe(true);
+    expect(isQuestion("Okay, Sarah, walk us through the rollout plan")).toBe(true);
+    expect(isQuestion("explain how the retry queue works")).toBe(true);
+    expect(isQuestion("I'd like to hear how the billing move went")).toBe(true);
+  });
+  it("doesn't treat statements that merely contain those words as questions (false positives)", () => {
+    expect(isQuestion("I'll tell him about it after the call")).toBe(false);
+    expect(isQuestion("we talked about the rollout yesterday")).toBe(false);
+    expect(isQuestion("give it another day and we'll see")).toBe(false);
+    expect(isQuestion("Sarah, I merged the fix this morning")).toBe(false);
+  });
+  it("suggests in the owner's words, from facts only for their own work, and says when it doesn't know", () => {
     const s = copilotSystem("Ada Obi");
     expect(s).toContain("only Ada Obi can see");
     expect(s).toContain("first person as Ada");
     expect(s).toContain("Not in your notes.");
-    expect(s).toContain("Never invent");
+    expect(s).toContain("Never invent status, numbers, dates, names, commitments, projects or personal experiences for Ada");
+  });
+  it("answers general questions, labelled so they're never mistaken for the owner's notes", () => {
+    const s = copilotSystem("Ada Obi");
+    for (const label of ["From your notes:", "General knowledge:", "Not in your notes."]) expect(s).toContain(label);
+    expect(s).toContain("don't depend on Ada's own work");
   });
   it("comes with Pro and Team", () => {
     expect([PLANS.free, PLANS.basic, PLANS.pro, PLANS.team].map((p) => p.features.copilot)).toEqual([false, false, true, true]);
