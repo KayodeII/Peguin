@@ -99,6 +99,12 @@ export const Settings = z.preprocess(migrate, z.object({
    * Codex CLI sign-in, or their xAI key. Peguin never pays for anyone's AI.
    */
   ai: z.enum(["claude", "codex", "grok"]).default("claude"),
+  /** The private copilot: what kind of meeting it's helping in, and whether general answers are checked on the web. */
+  copilot: z.object({
+    mode: z.enum(["work", "interview"]).default("work"),
+    /** After the quick answer, look it up on the web (about 15 s more) and replace it. */
+    web: z.boolean().default(false),
+  }).default(() => ({ mode: "work" as const, web: false })),
   /** The Grok chat model, from the ones the owner's key can use. */
   grokModel: z.string().trim().max(80).optional(),
   /** Download new versions in the background and offer "Restart to update" (installs on quit too). */

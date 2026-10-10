@@ -1,12 +1,16 @@
-// The private copilot's panel: beside the owner's own meeting, visible only on
-// their screen. The newest question and a suggested answer sit at the top;
+// The private copilot's panel: beside the owner's own meeting, or popped out
+// into its own window (#copilot-out) so they can share the meeting window, or
+// another one, without it. Never sent to the call itself. The newest question and a suggested answer sit at the top;
 // earlier ones and the running transcript below.
 import { useEffect, useRef, useState } from "react";
 import type { Settings } from "../main/settings";
 import { COPILOT_LABELS } from "../../../src/core/brain/prompts";
 import { Logo } from "./ui";
 
-type Card = { id: number; question: string; at: number; answer?: string; error?: string };
+type Card = {
+  id: number; question: string; at: number; answer?: string; error?: string;
+  online?: "checking" | { answer: string; source?: string } | { error: string };
+};
 type Event =
   | { type: "status"; status: "joining" | "listening" | "ended"; detail?: string }
   | { type: "heard"; text: string; at: number }
@@ -20,10 +24,22 @@ export function CopilotPanel() {
   const [heard, setHeard] = useState<{ text: string; at: number }[]>([]);
   const [tab, setTab] = useState<"notes" | "transcript">("notes");
   const end = useRef<HTMLDivElement>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [hidden, setHidden] = useState(false);
+  // Work/Interview and Check online save straight away; the copilot reads them at each question.
+  const setCopilot = (c: Partial<Settings["copilot"]>) => {
+    if (!settings) return;
+    const next = { ...settings, copilot: { ...settings.copilot, ...c } };
+    setSettings(next);
+    void window.penguin.saveSettings(next).then(setSettings);
+  };
+  const hide = (h: boolean) => { setHidden(h); void window.penguin.copilotCollapse(h); };
+  const out = location.hash === "#copilot-out";
 
   // Same look as the main window.
   useEffect(() => {
     void window.penguin.getSettings().then((s: Settings) => {
+      setSettings(s);
       const t = s.appearance.theme;
       document.documentElement.dataset.theme = t === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
       document.documentElement.dataset.accent = s.appearance.accent;
@@ -51,15 +67,46 @@ export function CopilotPanel() {
   useEffect(() => { if (tab === "transcript") end.current?.scrollIntoView({ block: "end" }); }, [heard, tab]);
 
   const [now, ...earlier] = [...cards].reverse();
+  if (hidden) {
+    return (
+      <div className="copilot">
+        <aside className="cp-panel collapsed">
+          <button className="cp-show" onClick={() => hide(false)} title="Show the copilot">
+            <Logo size={22} />
+            <span>Show</span>
+            {cards.length > 0 && <i>{cards.length}</i>}
+          </button>
+        </aside>
+      </div>
+    );
+  }
   return (
-    <div className="copilot">
+    <div className={`copilot ${out ? "out" : ""}`}>
       <aside className="cp-panel">
         <header className="cp-head">
           <Logo size={22} />
-          <div><strong>Peguin copilot</strong><span>Only you can see this</span></div>
-          <i className={`cp-dot ${status.status}`} title={status.status} />
+          <div><strong>Peguin copilot <i className={`cp-dot ${status.status}`} title={status.status} /></strong><span>Not sent to the call</span></div>
+          {out
+            ? <button className="btn ghost cp-btn" onClick={() => void window.penguin.copilotPopOut(false)} title="Put the notes back beside the meeting">Dock</button>
+            : <>
+                <button className="btn ghost cp-btn" onClick={() => void window.penguin.copilotPopOut(true)} title="Move the notes into their own window. Share the meeting window, or another window, and they stay out of the share.">Pop out</button>
+                <button className="btn ghost cp-btn" onClick={() => hide(true)} title="Hide this panel; the meeting takes the space">Hide</button>
+              </>}
           <button className="btn ghost cp-leave" onClick={() => void window.penguin.copilotStop()} title="Leave the meeting and close this window">Leave</button>
         </header>
+        {settings && (
+          <div className="cp-controls">
+            <div className="segmented small" role="radiogroup" aria-label="Kind of meeting">
+              {([["work", "Work"], ["interview", "Interview"]] as const).map(([id, label]) => (
+                <button key={id} role="radio" aria-checked={settings.copilot.mode === id} className={settings.copilot.mode === id ? "on" : ""} onClick={() => setCopilot({ mode: id })}>{label}</button>
+              ))}
+            </div>
+            <label className="cp-web" title="After the quick answer, look general questions up on the web (about 15 seconds) and replace it">
+              <input type="checkbox" checked={settings.copilot.web} onChange={(e) => setCopilot({ web: e.target.checked })} />
+              Check online
+            </label>
+          </div>
+        )}
         {status.detail && <p className="cp-status">{status.detail}</p>}
         <div className="cp-tabs" role="tablist">
           <button role="tab" aria-selected={tab === "notes"} className={tab === "notes" ? "on" : ""} onClick={() => setTab("notes")}>Notes{cards.length ? ` · ${cards.length}` : ""}</button>
@@ -95,7 +142,11 @@ function CardView({ card, fresh }: { card: Card; fresh?: boolean }) {
     <article className={`cp-card ${fresh ? "fresh" : ""} ${outOfNotes ? "unknown" : ""}`}>
       <p className="cp-q"><span>{time(card.at)}</span>“{card.question}”</p>
       {thinking && <p className="cp-a thinking">Thinking<i>.</i><i>.</i><i>.</i></p>}
-      {card.answer && <p className="cp-a">{label && <span className={`cp-label ${label.kind}`}>{label.text.replace(/[:.]$/, "")}</span>}{label ? card.answer.slice(label.text.length).trim() : card.answer}</p>}
+      {card.online && typeof card.online === "object" && "answer" in card.online ? (
+        <p className="cp-a"><span className="cp-label online">Checked online{card.online.source ? ` · ${card.online.source}` : ""}</span>{card.online.answer}</p>
+      ) : card.answer && <p className="cp-a">{label && <span className={`cp-label ${label.kind}`}>{label.text.replace(/[:.]$/, "")}</span>}{label ? card.answer.slice(label.text.length).trim() : card.answer}</p>}
+      {card.online === "checking" && <p className="cp-online">Checking online<i>.</i><i>.</i><i>.</i></p>}
+      {card.online && typeof card.online === "object" && "error" in card.online && <p className="cp-online">Couldn't check online: {card.online.error}</p>}
       {card.error && <p className="cp-a error">{card.error}</p>}
     </article>
   );
