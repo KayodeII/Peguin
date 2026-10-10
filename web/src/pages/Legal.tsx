@@ -47,7 +47,7 @@ export function Privacy() {
         <li>Your settings, prepared updates, and the meeting audio Peguin hears, which is transcribed on your Mac and not recorded.</li>
         <li>If you turn on <strong>Speak in your own voice</strong>: your voice sample, which you record yourself in the app, and the audio made from it. Both are encrypted and you can delete them in Settings.</li>
         <li>Meeting recaps and transcripts, encrypted, kept for the period you choose in Settings (30 days unless you change it), then deleted.</li>
-        <li>Access to the calendars you connect (Google Calendar, Outlook, Calendly), calendar links, and, if you use it, your ElevenLabs API key, all encrypted. Calendar events are read on your Mac to find standups and aren't sent to us.</li>
+        <li>Access to the calendars you connect (Google Calendar, Outlook, Calendly), calendar links, and, if you use them, your ElevenLabs and xAI API keys, all encrypted. Calendar events are read on your Mac to find standups and aren't sent to us.</li>
       </ul>
       <p>Peguin reads your work from git on your Mac, from GitHub through your own <code>gh</code> sign-in, and, if you allow it, the prompts you gave Claude Code. It reads titles and statuses, never code.</p>
 
