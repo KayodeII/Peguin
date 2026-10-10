@@ -1,4 +1,4 @@
-// The speech model (~150 MB) is downloaded on first run rather than shipped
+// The speech model (~550 MB) is downloaded on first run rather than shipped
 // in the installer. One download at a time; partial files never count.
 import { createWriteStream, existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
@@ -6,7 +6,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { MODEL_URL, whisperPaths } from "../paths.js";
 
-const MIN_BYTES = 100 * 1024 * 1024; // base.en is ~148 MB; anything smaller is broken
+const MIN_BYTES = 500 * 1024 * 1024; // large-v3-turbo-q5_0 is ~547 MB; anything smaller is broken
 
 export const modelReady = () => { const m = whisperPaths().model; return existsSync(m) && statSync(m).size > MIN_BYTES; };
 
@@ -31,6 +31,7 @@ export function ensureModel(onProgress: (fraction: number) => void): Promise<voi
       await pipeline(counted, createWriteStream(tmp));
       if (statSync(tmp).size < MIN_BYTES) throw new Error("The speech model download was incomplete. Try again.");
       renameSync(tmp, target);
+      rmSync(path.join(path.dirname(target), "ggml-base.en.bin"), { force: true }); // the model before 0.6.2
       onProgress(1);
     } finally {
       rmSync(tmp, { force: true });

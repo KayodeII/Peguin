@@ -15,6 +15,7 @@ import { detectPlatform, webClientUrl } from "../meeting/platform.js";
 import { outDir, resource } from "../paths.js";
 import type { Settings } from "../settings.js";
 import { createListener, type Whisper } from "../speech/whisper.js";
+import { vocabulary } from "../speech/hints.js";
 
 /** Width of the notes panel on the right, in px. */
 export const PANEL_WIDTH = 380;
@@ -104,6 +105,9 @@ export class CopilotSession {
 
     const listen = createListener({
       whisperUrl: this.whisper.url, names,
+      vocab: () => vocabulary(this.brain.draft?.facts ?? []),
+      // People pause mid-question ("could you walk me... through it?"); wait longer before cutting.
+      endSilenceMs: 1200,
       onError: (e) => this.send({ type: "status", status: "listening", detail: `Speech recognition error: ${e instanceof Error ? e.message : e}` }),
       onUtterance: ({ text }) => this.heard(text),
     });

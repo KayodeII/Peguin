@@ -223,6 +223,18 @@ describe("private copilot", async () => {
     expect(isQuestion("Thanks, everyone.")).toBe(false);
     expect(isQuestion("Let's take that offline.")).toBe(false);
   });
+  it("treats spoken requests as questions, even after a name or filler", () => {
+    expect(isQuestion("tell me about a time you disagreed with your lead")).toBe(true);
+    expect(isQuestion("Okay, Sarah, walk us through the rollout plan")).toBe(true);
+    expect(isQuestion("explain how the retry queue works")).toBe(true);
+    expect(isQuestion("I'd like to hear how the billing move went")).toBe(true);
+  });
+  it("doesn't treat statements that merely contain those words as questions (false positives)", () => {
+    expect(isQuestion("I'll tell him about it after the call")).toBe(false);
+    expect(isQuestion("we talked about the rollout yesterday")).toBe(false);
+    expect(isQuestion("give it another day and we'll see")).toBe(false);
+    expect(isQuestion("Sarah, I merged the fix this morning")).toBe(false);
+  });
   it("suggests in the owner's words, from facts only, and says when it doesn't know", () => {
     const s = copilotSystem("Ada Obi");
     expect(s).toContain("only Ada Obi can see");

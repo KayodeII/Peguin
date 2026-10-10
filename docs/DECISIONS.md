@@ -2,6 +2,16 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-10: Speech recognition: whisper large-v3-turbo, neutral prompt, vocabulary from the facts
+
+The owner found the copilot mishearing questions. Benchmark: 12 interview and standup questions in three macOS voices (US, UK, Indian English), cut to 8 kHz phone quality with noise added, through the bundled whisper-server on an M-series Mac. Word error rate / sentences perfect / time per sentence:
+
+- base.en (before), prompt "Daily standup.": 12.9% / 12 of 36 / 55 ms
+- small.en q5_1: 7.1% / 17 / 127 ms
+- large-v3-turbo q5_0: 6.4% / 22 / 403 ms; with the neutral "A meeting with <name>." 5.0%; adding jargon 4.2% / 24
+
+So the app downloads large-v3-turbo q5_0 (~550 MB, was ~150 MB), primes whisper with the owner's names plus distinctive terms from the prepared facts (`speech/hints.ts`), and no longer says "standup". The copilot waits 1.2 s of silence (not 0.7 s) before cutting an utterance, so a question with a pause in it arrives whole, and its question check counts spoken requests ("tell me about…", "walk us through…", "explain…"). Peguin's own turn-taking (`src/realtime/turn.ts`, which has its own `isQuestion`) is unchanged. Synthetic voices are cleaner than real calls; re-measure with recorded call audio if accuracy is questioned again.
+
 ## 2026-10-09: Update in place without a signed app (for now)
 
 Squirrel.Mac and electron-updater only update signed apps, and Peguin is ad-hoc signed until there's an Apple Developer ID. So `desktop/src/main/updater.ts` does it directly: releases also publish `Peguin-mac-arm64.zip` (listed in `SHA256SUMS.txt`); `/api/release` returns both URLs; when a newer version appears (and the owner's `autoUpdate` setting is on, and the install is writable) the app downloads the zip in the background, checks its SHA-256 against the published sum, unpacks it with `ditto`, checks the bundle's version, and offers "Restart to update". A detached `/bin/sh` script waits for Peguin to exit, moves the old bundle aside, moves the new one in (putting the old one back if that fails), clears quarantine and reopens it; quitting with an update ready installs it without reopening. Downloads made by the app carry no quarantine flag, so "Open Anyway" isn't asked again. Each ad-hoc build has a different signature, so macOS may ask once to allow Keychain access after an update. Once there's a Developer ID, switch to electron-updater with signing and notarisation. Versions before this one have to be downloaded once more by hand.

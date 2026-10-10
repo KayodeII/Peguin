@@ -48,11 +48,16 @@ export function answerContext(facts: string[], script: string | undefined, recen
     + `Recent conversation:\n${recent.join("\n")}\n\nQuestion: ${question}`;
 }
 
+/** Spoken requests that work like questions: "tell me about…", "walk us through…", "explain…". */
+const REQUEST = /^(tell|walk|talk|take) (me|us)\b|^(explain|describe|define|compare|elaborate)\b|^(give|show) (me|us) (an? |some |the )?(example|overview|rundown|update|summary|sense)|^(i'?d|we'?d) (like|love) to (hear|know|understand)|^i'?m curious\b|^(what|how) about\b/;
+
 /** Does what someone said sound like a question for the owner to answer (pure)? Short fragments don't count. */
 export function isQuestion(text: string): boolean {
   const t = text.trim().toLowerCase();
   if (t.split(/\s+/).length < 3) return false;
-  return /\?\s*$/.test(t) || /^(so |and |okay,? |ok,? )?(what|why|how|when|where|who|which|can|could|would|will|do|does|did|is|are|was|were|have|has|should|any)\b/.test(t);
+  // Drop a filler opener and a name being addressed ("okay, Sarah, tell me…").
+  const lead = t.replace(/^(so|and|okay|ok|alright|right|now|great|cool)[,.]?\s+/, "").replace(/^[a-z'’-]+,\s+/, "");
+  return /\?\s*$/.test(t) || /^(what|why|how|when|where|who|which|can|could|would|will|do|does|did|is|are|was|were|have|has|should|any)\b/.test(lead) || REQUEST.test(lead);
 }
 
 /**

@@ -149,7 +149,7 @@ export function App() {
                 {model.error ? <span className="warn">{model.error}</span> : <>
                   <strong>Downloading {Math.round(model.progress * 100)}%</strong>
                   <div className="progress"><i style={{ width: `${Math.round(model.progress * 100)}%` }} /></div>
-                  <span>One time, about 150 MB</span>
+                  <span>One time, about 550 MB</span>
                 </>}
               </div>
             </>
