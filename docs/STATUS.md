@@ -48,9 +48,12 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 ## Handoff (2026-10-09)
 
 ### What's live
-- Release **v0.6.0** (copilot, update in place). Its zip and SHA256SUMS.txt are verified (checksum and bundle version match). It's the first build that can update itself; the swap is only proven when 0.7.0 ships and a 0.6.0 install takes it.
-- Worker deployed 2026-10-09 after #14 (`/api/suggest` live). Still no `ANTHROPIC_API_KEY` on the Worker.
-- `/api/release` sometimes answers the `0.1.0` fallback: the unauthenticated GitHub API call fails now and then (likely rate limits on shared Worker IPs). #14 stopped the edge caching that; #15 (merged, deployed 2026-10-09) serves the last good release, kept 30 days, when GitHub fails.
+- Release **v0.6.1**: Meet joins again (the app had been sending "Peguin/0.6.0" in its browser identity), copilot Leave button. Worker deployed after #15.
+- Owner's account `olukayodedayo200@gmail.com` was created by hand in D1 with Pro to 2100 (sign-ups are waitlist-only). The live website was a stale `web/dist` build; deploys now build it first (on `copilot-hearing`).
+
+### Waiting to be pushed (stacked: merge in this order)
+1. `copilot-hearing`: whisper large-v3-turbo (word errors 12.9% to ~4-5% in a phone-quality benchmark), neutral prompt with jargon from the facts, copilot keeps paused questions whole and spots spoken requests; labelled answers (From your notes / Not in your notes / General knowledge); Codex option; owner reversed "interviews out of scope" (DECISIONS); deploy builds the website. PR text and images ready.
+2. `own-keys`: every user's own AI (Settings > AI: Claude Code, Codex or Grok key); Worker app AI routes return 503 (old apps fall back to their own Claude Code); migration 0006 drops `usage`; Grok as the standard voice with Mac fallback. Not yet tried with a real xAI key. After merge: apply 0006, deploy, release minor.
 
 Throwaway, delete when done: `try-everything`. Kept for reference: `voice-finetune-spike`.
 
