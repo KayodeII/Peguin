@@ -5,6 +5,7 @@ This is the single source of truth for any coding agent (Claude Code, Codex, Cur
 Read next, in this order, when the task needs it:
 - `docs/ARCHITECTURE.md`: how the services fit together and why it scales
 - `docs/DECISIONS.md`: why things are the way they are (platform research, vendor choices). Check here before proposing a different approach.
+- `docs/features/`: one page per feature with its decisions and the files that implement and test it. Update the page when a change adds, moves or removes a feature's files.
 - `docs/STATUS.md`: what's built, what's tested, what's not, what's next
 
 ## Direction (2026-10-06)

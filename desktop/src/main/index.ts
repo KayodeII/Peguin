@@ -184,7 +184,7 @@ async function startCopilot(url: string) {
   if (!features.copilot) throw new Error("The private copilot comes with the Pro and Team plans. Upgrade at peguin.co/account.");
   const settings = loadSettings();
   if (!settings.displayName.trim()) throw new Error("Add your name in Settings first, so Peguin knows who it's helping.");
-  if (copilot) { copilot.stop(); copilot = null; }
+  if (copilot) { await copilot.stop(); copilot = null; }
   if (process.platform === "darwin") {
     await systemPreferences.askForMediaAccess("microphone");
     await systemPreferences.askForMediaAccess("camera");
@@ -419,7 +419,7 @@ ipcMain.handle("copilot:state", () => copilot?.state() ?? null);
 // Closing the window leaves the call: the meeting page goes with it.
 ipcMain.handle("copilot:collapse", (_e, collapsed: boolean) => copilot?.setCollapsed(!!collapsed));
 ipcMain.handle("copilot:pop-out", (_e, out: boolean) => copilot?.popOut(!!out));
-ipcMain.handle("copilot:stop", () => { copilot?.stop(); copilot = null; });
+ipcMain.handle("copilot:stop", async () => { const c = copilot; copilot = null; await c?.stop(); });
 ipcMain.handle("account:get", () => account);
 ipcMain.handle("meetings:list", () => listMeetings(loadSettings().recap.keepDays));
 ipcMain.handle("meetings:follow-up", (_e, id: string, index: number, done: boolean) => setFollowUpDone(String(id), Number(index), !!done));
@@ -535,6 +535,14 @@ app.on("second-instance", (_e, argv) => {
 });
 // Keep running in the menu bar when the window closes.
 app.on("window-all-closed", () => {});
+// Quitting mid-meeting hangs up the copilot first, so the others see the owner leave.
+app.on("before-quit", (e) => {
+  const c = copilot;
+  if (!c) return;
+  e.preventDefault();
+  copilot = null;
+  void c.stop().finally(() => app.quit());
+});
 app.on("will-quit", () => {
   // Quitting with a downloaded update installs it, without reopening.
   if (updateReady()) installOnExit(false);
