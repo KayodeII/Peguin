@@ -9,6 +9,7 @@ import { whisperPrompt } from "./hints.js";
 const RATE = 16000;
 const VOICE_RMS = 0.012;       // above this a chunk counts as speech
 const END_SILENCE_MS = 700;    // pause that ends an utterance (default; see endSilenceMs)
+const EARLY_MS = 400;          // pause after which transcribing starts; a question ending in "?" finishes then
 const MIN_SPEECH_MS = 300;     // shorter blips are ignored
 const MAX_UTTERANCE_MS = 15000;
 const PREROLL_CHUNKS = 3;      // keep ~250 ms before speech starts
@@ -95,17 +96,33 @@ export function createListener(opts: {
   let chunks: Buffer[] = [], preroll: Buffer[] = [];
   let speaking = false, speechMs = 0, silentMs = 0, totalMs = 0, sustained = false;
   let queue = Promise.resolve();
+  // A transcript started early in the pause; dropped if they speak again.
+  let early: { text: Promise<string>; started: number } | null = null;
 
+  const run = (pcm: Buffer) => {
+    const started = Date.now();
+    const text = transcribe(opts.whisperUrl, pcm, opts.names, opts.vocab?.() ?? []);
+    text.catch(() => {}); // reported once, through the queue
+    return { text, started };
+  };
   const finish = () => {
-    const pcm = Buffer.concat(chunks), ms = speechMs;
-    chunks = []; speaking = false; sustained = false; speechMs = silentMs = totalMs = 0;
+    const pcm = Buffer.concat(chunks), ms = speechMs, done = early;
+    chunks = []; speaking = false; sustained = false; speechMs = silentMs = totalMs = 0; early = null;
     if (ms < MIN_SPEECH_MS) return;
     const endedAt = Date.now();
+    // Utterances come out in the order they were spoken.
+    const job = done ?? run(pcm);
     queue = queue.then(async () => {
-      const started = Date.now();
-      const text = await transcribe(opts.whisperUrl, pcm, opts.names, opts.vocab?.() ?? []);
-      if (text) opts.onUtterance({ text, sttMs: Date.now() - started, endedAt });
+      const text = await job.text;
+      if (text) opts.onUtterance({ text, sttMs: Date.now() - job.started, endedAt });
     }).catch(opts.onError);
+  };
+  const endSilence = opts.endSilenceMs ?? END_SILENCE_MS;
+  const earlyMs = Math.min(EARLY_MS, endSilence);
+  const startEarly = () => {
+    const mine = early = run(Buffer.concat(chunks));
+    // Whisper ends a finished question with "?": no need to sit out the rest of the pause.
+    void mine.text.then((text) => { if (early === mine && /\?\s*$/.test(text)) finish(); }, () => {});
   };
 
   return (arrayBuffer) => {
@@ -125,8 +142,9 @@ export function createListener(opts: {
       chunks.push(chunk);
     }
     totalMs += ms;
-    if (voiced) { speechMs += ms; silentMs = 0; } else silentMs += ms;
+    if (voiced) { speechMs += ms; silentMs = 0; early = null; } else silentMs += ms;
     if (!sustained && opts.onSustainedSpeech && speechMs >= (opts.sustainedMs ?? Infinity)) { sustained = true; opts.onSustainedSpeech(); }
-    if (silentMs >= (opts.endSilenceMs ?? END_SILENCE_MS) || totalMs >= MAX_UTTERANCE_MS) finish();
+    if (silentMs >= endSilence || totalMs >= MAX_UTTERANCE_MS) finish();
+    else if (!early && silentMs >= earlyMs && speechMs >= MIN_SPEECH_MS) startEarly();
   };
 }

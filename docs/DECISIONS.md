@@ -2,6 +2,14 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-12: Speech recognition: transcribe early in the pause; prime with Peguin, not sentence starts
+
+The owner found Peguin slow to catch what was said, and inaccurate ("Pergun", "Calendly, I can't wait" from nothing).
+
+- **Slow:** the listener waited out the whole pause (0.7 s, 1.2 s in the copilot) before starting whisper (~0.4 s). Now it starts transcribing after 0.4 s of silence; if whisper's text ends in "?", the utterance is handed over then, and otherwise the same transcript is used when the pause ends (dropped if they speak again). End of speech to transcript, measured with real whisper: copilot questions ~1.6 s → ~0.8 s, the participant ~1.1 s → ~0.8 s. Statements without a "?" still wait the full pause, so "could you walk me… through it" still arrives whole.
+- **Inaccurate:** `vocabulary()` took every capitalised word, and in PR titles that's mostly sentence starts ("Desktop", "Leave", "Every", "Calendly"); whisper then hears those words where they weren't said. Words that only start a sentence, clause, quoted title or bracket are now skipped (mixed case, acronyms and digits still count), and "Peguin" is always in the prompt. On 48 synthetic call clips, the old prompt from the owner's real facts scored 8.0% word errors, the new one 7.7% with Peguin heard right every time. What remains is mostly the owner's name ("Muji") and tech words outside the facts (Redis, Postgres): those drop to ~2% when they're in the prompt.
+- Tried and not worth it: a proper low-pass resampler instead of averaging every 3 samples (same score) and beam search (slightly worse, slower).
+
 ## 2026-10-10: Copilot: the call is told in chat, then popped-out notes leave screen shares
 
 Earlier the same day, hiding the copilot from screen capture was declined: with Interview mode, it would hide AI help from an interviewer. The owner's answer: the other side should know AI is helping, just not see the notes. So the hiding is conditional on telling them.
