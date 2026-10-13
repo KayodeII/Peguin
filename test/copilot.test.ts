@@ -113,3 +113,37 @@ describe("copilot leave", () => {
     expect(ended).toBe(1);
   });
 });
+
+describe("Peguin's participant leaving", async () => {
+  const { MeetingRunner } = await import("../desktop/src/main/meeting/runner.js");
+  const runner = () => {
+    const r = new MeetingRunner("https://meet.google.com/abc-defg-hij", Settings.parse({ displayName: "Ada" }), { url: "", stop: () => {} },
+      { preload: "", inject: "" }, { draft: null, answer: null });
+    const order: string[] = [];
+    const frame = { send: (ch: string) => order.push(ch) };
+    const s = r as unknown as { win: unknown; status: string };
+    s.status = "in_call";
+    s.win = { isDestroyed: () => false, destroy: () => order.push("close window"), webContents: { isDestroyed: () => false, mainFrame: { framesInSubtree: [frame] } } };
+    return { r, order, left: () => (r as unknown as { leftReply?: () => void }).leftReply?.() };
+  };
+
+  it("clicks the meeting's own Leave before closing the window, once", async () => {
+    const { r, order, left } = runner();
+    const first = r.stop(), second = r.stop();
+    expect(order).toEqual(["mtg:leave"]);
+    left();
+    await Promise.all([first, second]);
+    expect(order).toEqual(["mtg:leave", "close window"]);
+  });
+
+  it("closes anyway when no Leave button answers", async () => {
+    vi.useFakeTimers();
+    try {
+      const { r, order } = runner();
+      const done = r.stop();
+      await vi.advanceTimersByTimeAsync(3000);
+      await done;
+      expect(order).toEqual(["mtg:leave", "close window"]);
+    } finally { vi.useRealTimers(); }
+  });
+});

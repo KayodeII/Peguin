@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld("__penguin", {
   onSpeak: (cb: (buf: Uint8Array) => void) => ipcRenderer.on("mtg:speak", (_e, buf: Uint8Array) => cb(buf)),
   onSpeakEnd: (cb: () => void) => ipcRenderer.on("mtg:speak-end", () => cb()),
   onStop: (cb: () => void) => ipcRenderer.on("mtg:stop", () => cb()),
+  /** The main process asks to hang up; tell it once the meeting's own Leave was clicked. */
+  onLeave: (fn: () => Promise<boolean>) => {
+    ipcRenderer.on("mtg:leave", () => { void fn().then((left) => { if (left) ipcRenderer.send("mtg:left"); }); });
+  },
 });
 
 void webFrame.executeJavaScript(ipcRenderer.sendSync("mtg:inject"));

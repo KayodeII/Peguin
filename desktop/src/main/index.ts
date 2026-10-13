@@ -149,7 +149,7 @@ async function join(url: string) {
   const settings = allowed(loadSettings(), features);
   if (!settings.displayName.trim()) throw new Error("Add your name in Settings first, so Peguin knows when it's called.");
   checkWeeklyLimit(features, settings.timezone, await currentPlan());
-  meeting?.stop();
+  await meeting?.stop();
   let draft = loadDraft();
   if (!isFresh(draft, settings.timezone)) {
     send({ kind: "log", text: "Preparing today's update before joining…" });
@@ -412,7 +412,7 @@ ipcMain.handle("calendar:remove-calendly-token", () => {
 });
 ipcMain.handle("calendar:upcoming", (_e, fresh?: boolean) => { if (fresh) refreshCalendars(); return upcoming(loadSettings()); });
 ipcMain.handle("meeting:join", (_e, url: string) => join(url));
-ipcMain.handle("meeting:leave", () => { meeting?.stop(); meeting = null; });
+ipcMain.handle("meeting:leave", async () => { const m = meeting; meeting = null; await m?.stop(); });
 ipcMain.handle("meeting:handover", () => handOver());
 ipcMain.handle("copilot:start", (_e, url: string) => startCopilot(String(url ?? "").trim()));
 ipcMain.handle("copilot:state", () => copilot?.state() ?? null);
@@ -506,7 +506,7 @@ app.whenReady().then(() => {
     { label: "Open Peguin", click: openWindow },
     { label: "Prepare today's update", click: () => void prepare().catch(() => {}) },
     { label: "Hand over to me", click: () => void handOver() },
-    { label: "Leave meeting", click: () => { meeting?.stop(); meeting = null; } },
+    { label: "Leave meeting", click: () => { const m = meeting; meeting = null; void m?.stop(); } },
     { type: "separator" },
     { label: "Quit Peguin", role: "quit" },
   ]));
@@ -535,17 +535,17 @@ app.on("second-instance", (_e, argv) => {
 });
 // Keep running in the menu bar when the window closes.
 app.on("window-all-closed", () => {});
-// Quitting mid-meeting hangs up the copilot first, so the others see the owner leave.
+// Quitting mid-meeting hangs up first (the copilot and Peguin's own participant), so the others see them leave.
 app.on("before-quit", (e) => {
-  const c = copilot;
-  if (!c) return;
+  const c = copilot, m = meeting;
+  if (!c && !m) return;
   e.preventDefault();
-  copilot = null;
-  void c.stop().finally(() => app.quit());
+  copilot = null; meeting = null;
+  void Promise.allSettled([c?.stop(), m?.stop()]).finally(() => app.quit());
 });
 app.on("will-quit", () => {
   // Quitting with a downloaded update installs it, without reopening.
   if (updateReady()) installOnExit(false);
-  meeting?.stop();
+  void meeting?.stop();
   void whisper?.then((w) => w.stop()).catch(() => {});
 });

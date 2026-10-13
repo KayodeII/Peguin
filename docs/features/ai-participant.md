@@ -1,6 +1,6 @@
 # Join as Peguin: the AI participant
 
-A hidden Chromium window joins the meeting's web client as a guest named "<owner> (AI)" (" - AI" on Teams). Peguin's voice and avatar replace the mic and camera, it listens to the other participants, waits until someone hands the floor to the owner by name, discloses that it's an AI, speaks the prepared update and answers short follow-ups from the prepared facts only. **Hand over to me** opens the meeting in the owner's browser while Peguin says so and leaves.
+A hidden Chromium window joins the meeting's web client as a guest named "<owner> (AI)" (" - AI" on Teams). Peguin's voice and avatar replace the mic and camera, it listens to the other participants, waits until someone hands the floor to the owner by name, discloses that it's an AI, speaks the prepared update and answers short follow-ups from the prepared facts only. **Hand over to me** opens the meeting in the owner's browser while Peguin says so and leaves. Leaving (Leave, Hand over, closing the window, quitting) clicks the meeting's own hang-up first, so the others see Peguin go; after 3 s with no hang-up button it closes anyway.
 
 ## Decisions
 
@@ -32,4 +32,4 @@ A hidden Chromium window joins the meeting's web client as a guest named "<owner
 
 ## Tests
 
-`test/turn.test.ts` (turn-taking, false positives), `test/desktop.test.ts` (bot name and links, plain Chrome user agent), `test/voice.test.ts` (talking over Peguin, disclosure).
+`test/turn.test.ts` (turn-taking, false positives), `test/desktop.test.ts` (bot name and links, plain Chrome user agent), `test/voice.test.ts` (talking over Peguin, disclosure), `test/copilot.test.ts` ("Peguin's participant leaving").
