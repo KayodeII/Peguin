@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("electron", () => ({ app: { getPath: () => "/tmp" }, safeStorage: {} }));
-const { chatModels, checkXaiKey, grokChat, responseText } = await import("../desktop/src/main/xai.js");
+const { chatModels, checkXaiKey, grokChat, grokChatStream, responseText } = await import("../desktop/src/main/xai.js");
 
 const reply = (status: number, body: unknown) => async () => new Response(typeof body === "string" ? body : JSON.stringify(body), { status });
 
@@ -25,5 +25,24 @@ describe("xAI with the owner's own key", () => {
     expect(responseText({ output_text: " Node 26. " })).toBe("Node 26.");
     expect(responseText({ output: [{ type: "web_search_call" }, { type: "message", content: [{ type: "output_text", text: "Node " }, { type: "output_text", text: "26." }] }] })).toBe("Node 26.");
     expect(responseText({})).toBe("");
+  });
+});
+
+describe("Grok streaming", () => {
+  const sse = (...events: string[]) => (async (_url: string, init: RequestInit) => {
+    expect(JSON.parse(String(init.body))).toMatchObject({ stream: true });
+    const enc = new TextEncoder();
+    // Split mid-line, as the network does.
+    const text = events.map((e) => `data: ${e}\n\n`).join("");
+    return new Response(new ReadableStream({ start(c) { c.enqueue(enc.encode(text.slice(0, 25))); c.enqueue(enc.encode(text.slice(25))); c.close(); } }));
+  }) as unknown as typeof fetch;
+  const all = async (it: AsyncIterable<string>) => { const out: string[] = []; for await (const p of it) out.push(p); return out; };
+
+  it("yields the reply in pieces as they arrive", async () => {
+    const piece = (t: string) => JSON.stringify({ choices: [{ delta: { content: t } }] });
+    expect(await all(grokChatStream("k", "grok-4", "hi", 1000, sse(piece("Shipped "), piece("the recaps."), "[DONE]")))).toEqual(["Shipped ", "the recaps."]);
+  });
+  it("says so when the reply is empty", async () => {
+    await expect(all(grokChatStream("k", "grok-4", "hi", 1000, sse("[DONE]")))).rejects.toThrow(/empty reply/);
   });
 });

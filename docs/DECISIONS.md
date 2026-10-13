@@ -10,6 +10,15 @@ The owner found Peguin slow to catch what was said, and inaccurate ("Pergun", "C
 - **Inaccurate:** `vocabulary()` took every capitalised word, and in PR titles that's mostly sentence starts ("Desktop", "Leave", "Every", "Calendly"); whisper then hears those words where they weren't said. Words that only start a sentence, clause, quoted title or bracket are now skipped (mixed case, acronyms and digits still count), and "Peguin" is always in the prompt. On 48 synthetic call clips, the old prompt from the owner's real facts scored 8.0% word errors, the new one 7.7% with Peguin heard right every time. What remains is mostly the owner's name ("Muji") and tech words outside the facts (Redis, Postgres): those drop to ~2% when they're in the prompt.
 - Tried and not worth it: a proper low-pass resampler instead of averaging every 3 samples (same score) and beam search (slightly worse, slower).
 
+## 2026-10-13: Live answers stream, from a Claude CLI started ahead of time
+
+Peguin waited for the whole answer before voicing any of it, and every answer started a fresh `claude -p`, which takes ~1.7 s before Claude even sees the prompt (the model makes no difference: Opus, Sonnet and Haiku all took 3.9–4.4 s end to end). Now:
+
+- **Streamed:** `claude -p --output-format stream-json --include-partial-messages` (and Grok's `stream: true`) feed `bySentence`, and the participant voices each sentence as soon as the next one starts, while Claude is still writing. Codex has no streaming, so it still comes in one piece.
+- **Warm:** while a meeting runs (Peguin's participant with follow-ups on, or the copilot) with Claude chosen, one CLI is kept started with `--input-format stream-json`, waiting. A question uses it once and a new spare starts behind it, so every answer still gets its own process and nothing carries over between answers. A plain `claude -p` can't be started early: it gives up after 3 s without stdin.
+- Measured on the owner's Mac, question to first sentence ready: ~4.2 s (whole answer, cold) → ~1.6–1.9 s (warm, streamed). Copilot suggestions use the warm process too, but still appear whole.
+- If the stream breaks after some sentences were spoken, Peguin stops there and the question counts as answered with what was said (the "Good question, I'll get <owner> to follow up" line would sound odd mid-answer). Nothing spoken yet: it defers as before.
+
 ## 2026-10-10: Copilot: the call is told in chat, then popped-out notes leave screen shares
 
 Earlier the same day, hiding the copilot from screen capture was declined: with Interview mode, it would hide AI help from an interviewer. The owner's answer: the other side should know AI is helping, just not see the notes. So the hiding is conditional on telling them.

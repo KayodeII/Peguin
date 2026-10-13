@@ -9,7 +9,8 @@ import path from "node:path";
 import { answerContext, answerSystem, copilotSystem, copilotWebSystem, plainSpoken, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
 import { gatherContext, type SourceReport } from "./context/index.js";
 import { wantsCues, type Settings } from "./settings.js";
-import { grokChat, grokSearch, loadXai } from "./xai.js";
+import { grokChat, grokChatStream, grokSearch, loadXai } from "./xai.js";
+import { claudeStream } from "./claude.js";
 
 export type Draft = {
   script: string;
@@ -66,17 +67,27 @@ function codex(prompt: string, timeoutMs: number, web = false): Promise<string> 
   });
 }
 
+const grok = (s: Settings) => {
+  const x = loadXai();
+  if (!x) throw new Error("Grok is chosen in Settings > AI but there's no xAI key. Add one there, or pick Claude or Codex.");
+  return { key: x.apiKey, model: s.grokModel && x.models.includes(s.grokModel) ? s.grokModel : x.models[0]! };
+};
+
 /** One prompt to the owner's chosen AI; `web` lets it search the web first (much slower). */
-function generate(s: Settings, prompt: string, timeoutMs: number, web = false): Promise<string> {
+async function generate(s: Settings, prompt: string, timeoutMs: number, web = false): Promise<string> {
   if (s.ai === "codex") return codex(prompt, timeoutMs, web);
-  if (s.ai === "grok") {
-    const x = loadXai();
-    if (!x) return Promise.reject(new Error("Grok is chosen in Settings > AI but there's no xAI key. Add one there, or pick Claude or Codex."));
-    const model = s.grokModel && x.models.includes(s.grokModel) ? s.grokModel : x.models[0]!;
-    return web ? grokSearch(x.apiKey, model, prompt, timeoutMs) : grokChat(x.apiKey, model, prompt, timeoutMs);
-  }
+  if (s.ai === "grok") { const g = grok(s); return web ? grokSearch(g.key, g.model, prompt, timeoutMs) : grokChat(g.key, g.model, prompt, timeoutMs); }
   return claude(prompt, timeoutMs, web);
 }
+
+/** The same, streamed as it's written: Claude and Grok stream; Codex comes in one piece. Uses the warm Claude CLI in meetings. */
+async function* generateStream(s: Settings, prompt: string, timeoutMs: number): AsyncGenerator<string> {
+  if (s.ai === "codex") { yield await codex(prompt, timeoutMs); return; }
+  if (s.ai === "grok") { const g = grok(s); yield* grokChatStream(g.key, g.model, prompt, timeoutMs); return; }
+  yield* claudeStream(prompt, timeoutMs);
+}
+
+const collect = async (pieces: AsyncIterable<string>) => { let out = ""; for await (const p of pieces) out += p; return out.trim(); };
 
 const draftFile = () => path.join(app.getPath("userData"), "draft.json");
 
@@ -102,15 +113,15 @@ export async function prepareDraft(s: Settings): Promise<Draft> {
   return draft;
 }
 
-/** A spoken answer from the facts only; the prompt makes Claude defer otherwise. */
-export async function answerQuestion(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
+/** A spoken answer from the facts only, streamed so Peguin can start on the first sentence; the prompt makes Claude defer otherwise. */
+export function answerQuestion(s: Settings, draft: Draft | null, question: string, recent: string[]): AsyncIterable<string> {
   const cues = wantsCues(s);
-  return generate(s, `${answerSystem(s.displayName, { cues })}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000);
+  return generateStream(s, `${answerSystem(s.displayName, { cues })}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 25000);
 }
 
 /** A private copilot suggestion for the owner to say themselves. */
 export async function suggestAnswer(s: Settings, draft: Draft | null, question: string, recent: string[]): Promise<string> {
-  return plainSpoken(await generate(s, `${copilotSystem(s.displayName, s.copilot.mode)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 45000));
+  return plainSpoken(await collect(generateStream(s, `${copilotSystem(s.displayName, s.copilot.mode)}\n\n${answerContext(draft?.facts ?? [], draft?.script, recent, question)}`, 45000)));
 }
 
 /** A general-knowledge suggestion checked on the web: the answer, and the site it came from. */

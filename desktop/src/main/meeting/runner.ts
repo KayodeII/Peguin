@@ -15,6 +15,7 @@ import { vocabulary } from "../speech/hints.js";
 import { outDir, resource } from "../paths.js";
 import { botName, detectPlatform, webClientUrl, type Platform } from "./platform.js";
 import { MeetingLog, type MeetingRecord } from "./record.js";
+import { bySentence } from "../claude.js";
 import { stripCues } from "../../../../src/core/brain/prompts.js";
 
 export type MeetingStatus = "joining" | "waiting" | "in_call" | "ended" | "failed";
@@ -67,7 +68,7 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
     private readonly settings: Settings,
     private readonly whisper: Whisper,
     private readonly paths: { preload: string; inject: string },
-    private readonly brain: { draft: Draft | null; answer: ((q: string, recent: string[]) => Promise<string>) | null },
+    private readonly brain: { draft: Draft | null; answer: ((q: string, recent: string[]) => AsyncIterable<string>) | null },
   ) {
     super();
     this.platform = detectPlatform(url);
@@ -145,19 +146,27 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
       const q = log.asked(question);
       const answer = self.brain.answer;
       if (!answer || !self.brain.draft?.facts.length) { q.deferred(say.defer); yield await audio.defer; return; }
-      let text: string;
+      // Each sentence is voiced as soon as Claude finishes writing it, while the rest is still coming.
+      const said: string[] = [];
       try {
-        text = await answer(question, recent);
+        for await (const sentence of bySentence(answer(question, recent))) {
+          said.push(sentence);
+          for (const part of sentences(sentence)) yield await synthesize(part, { ...voice(), check: undefined });
+        }
+        if (!said.length) throw new Error("the reply was empty");
       } catch (e) {
-        self.log(`Couldn't answer (${e instanceof Error ? e.message : e}); deferring to you.`);
+        const why = e instanceof Error ? e.message : e;
+        // Part of it already spoken: stop there ("Good question…" would sound odd mid-answer).
+        if (said.length) { self.log(`The answer was cut short (${why}).`); q.answered(said.join(" ")); remember(`Peguin: ${said.join(" ")}`); return; }
+        self.log(`Couldn't answer (${why}); deferring to you.`);
         q.deferred(say.defer);
         yield await audio.defer;
         return;
       }
+      const text = said.join(" ");
       remember(`Peguin: ${text}`);
       q.answered(text);
       self.log(`Answer: ${stripCues(text)}`);
-      for (const sentence of sentences(text)) yield await synthesize(sentence, { ...voice(), check: undefined });
     }
     const self = this;
     const frames = () => wc.mainFrame.framesInSubtree;

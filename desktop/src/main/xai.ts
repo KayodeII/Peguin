@@ -57,6 +57,34 @@ export async function grokChat(apiKey: string, model: string, prompt: string, ti
   return text;
 }
 
+/** One prompt in, the reply streamed out in pieces (server-sent events). */
+export async function* grokChatStream(apiKey: string, model: string, prompt: string, timeoutMs: number, fetcher: typeof fetch = fetch): AsyncGenerator<string> {
+  const res = await call(apiKey, "/chat/completions", {
+    method: "POST",
+    body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], stream: true }),
+    signal: AbortSignal.timeout(timeoutMs),
+  }, fetcher);
+  if (!res.body) throw new Error("Grok returned an empty reply.");
+  const decoder = new TextDecoder();
+  let buf = "", any = false;
+  for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+    buf += decoder.decode(chunk, { stream: true });
+    let nl: number;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") { if (!any) throw new Error("Grok returned an empty reply."); return; }
+      try {
+        const piece = (JSON.parse(data) as { choices?: { delta?: { content?: string } }[] }).choices?.[0]?.delta?.content;
+        if (piece) { any = true; yield piece; }
+      } catch { /* keep-alive or partial line */ }
+    }
+  }
+  if (!any) throw new Error("Grok returned an empty reply.");
+}
+
 /** One prompt in, one reply out, with xAI's web search tool (Responses API). */
 export async function grokSearch(apiKey: string, model: string, prompt: string, timeoutMs: number, fetcher: typeof fetch = fetch): Promise<string> {
   const res = await call(apiKey, "/responses", {
