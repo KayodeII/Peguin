@@ -152,6 +152,52 @@ describe("talking over Peguin", async () => {
     expect(l.fired()).toBe(1);
   });
 
+  describe("ending an utterance", () => {
+    // Whisper answers with these, in order; each call is counted.
+    const heard = (...texts: string[]) => {
+      const calls: number[] = [];
+      vi.stubGlobal("fetch", async () => { calls.push(Date.now()); return Response.json({ text: texts[calls.length - 1] ?? "" }); });
+      const out: string[] = [];
+      const feed = createListener({ whisperUrl: "http://whisper", names: [], endSilenceMs: 1200, onUtterance: (u) => out.push(u.text), onError: () => {} });
+      const say = (voicedMs: number, silentMs: number) => {
+        for (let i = 0; i < voicedMs / 100; i++) feed(chunk(true));
+        for (let i = 0; i < silentMs / 100; i++) feed(chunk(false));
+      };
+      return { say, out, calls };
+    };
+    const settle = () => new Promise((r) => setTimeout(r, 10));
+
+    it("hands over a question ending in '?' after 0.4 s, without sitting out the full pause", async () => {
+      const l = heard("Can you walk us through it?");
+      l.say(1000, 400);
+      await settle();
+      expect(l.out).toEqual(["Can you walk us through it?"]);
+      l.say(0, 1000); // the rest of the pause starts nothing new
+      await settle();
+      expect(l.calls).toHaveLength(1);
+    });
+
+    it("waits out the pause for anything else, then reuses the early transcript", async () => {
+      const l = heard("Could you walk me");
+      l.say(1000, 400);
+      await settle();
+      expect(l.out).toEqual([]);
+      l.say(0, 800);
+      await settle();
+      expect(l.out).toEqual(["Could you walk me"]);
+      expect(l.calls).toHaveLength(1);
+    });
+
+    it("drops the early transcript when they carry on, and hears the whole question", async () => {
+      const l = heard("Could you walk me", "Could you walk me through the migration?");
+      l.say(1000, 500);
+      l.say(800, 400);
+      await settle();
+      expect(l.out).toEqual(["Could you walk me through the migration?"]);
+      expect(l.calls).toHaveLength(2);
+    });
+  });
+
   it("ignores a cough or a short 'mm-hm'", () => {
     const l = listener();
     for (let i = 0; i < 3; i++) l.feed(chunk(true));
