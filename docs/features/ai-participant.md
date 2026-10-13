@@ -12,6 +12,7 @@ A hidden Chromium window joins the meeting's web client as a guest named "<owner
 - 2026-10-07: Product shape (turn-taking stays rule-based)
 - 2026-10-08: Speak in sentences, stop when talked over
 - 2026-10-09: Hand over by leaving, not by taking over Peguin's seat
+- 2026-10-13: Live answers stream, from a Claude CLI started ahead of time
 - Meet refused Electron's user agent; meeting windows present as plain Chrome (`chromeUserAgent`, PR #16)
 
 ## Files
@@ -24,7 +25,7 @@ A hidden Chromium window joins the meeting's web client as a guest named "<owner
 | `desktop/src/main/meeting/platform.ts` | Detects Meet/Zoom/Teams, web-client URLs, bot name, `chromeUserAgent` |
 | `src/realtime/turn.ts` | `TurnDetector`, `mentionsName`, `isHandoff`, `isQuestion` (pure, shared with the server stack) |
 | `src/core/brain/prompts.ts` | Disclosure, update and follow-up prompts (facts only) |
-| `desktop/src/main/brain.ts` | Drafts and live answers through the owner's AI |
+| `desktop/src/main/brain.ts` | Drafts and live answers through the owner's AI (answers streamed) |
 | `desktop/src/main/speech/tts.ts` | Synthesises the prepared lines and live answers |
 | `desktop/src/main/meeting/record.ts` | Structured log of the meeting, for the recap |
 | `desktop/src/main/index.ts` | Starting/stopping a meeting, hand-over, IPC |

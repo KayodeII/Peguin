@@ -5,6 +5,7 @@ import {
   CLOUD_URL, calendarProviders, checkForUpdate, completeCalendarConnect, completeSignIn, refreshAccount, signOut, startCalendarConnect, startSignIn,
   type Account, type CalendarProvider, type Update,
 } from "./account.js";
+import { warmUp } from "./claude.js";
 import { answerQuestion, checkOnline, isFresh, loadDraft, prepareDraft, suggestAnswer, summarizeMeeting, type Draft } from "./brain.js";
 import { CopilotSession } from "./copilot/session.js";
 import { deferredFollowUps, headline, mergeFollowUps, transcriptLines, worthKeeping, type MeetingRecord } from "./meeting/record.js";
@@ -164,15 +165,17 @@ async function join(url: string) {
     answer: features.followUps ? (q, recent) => answerQuestion(settings, draft, q, recent) : null,
   });
   meeting = runner;
+  // A started Claude CLI waits for questions while Peguin is in the call (saves ~1.7 s an answer).
+  const cool = settings.ai === "claude" && features.followUps ? warmUp() : () => {};
   runner.on("record", (r) => void recapMeeting(r));
   let counted = false;
   runner.on("event", (event) => {
     send({ kind: "meeting", event });
     // A standup counts toward the weekly limit once Peguin is actually in the call.
     if (event.kind === "status" && event.status === "in_call" && !counted) { counted = true; recordJoin(); }
-    if (event.kind === "status" && (event.status === "ended" || event.status === "failed") && meeting === runner) meeting = null;
+    if (event.kind === "status" && (event.status === "ended" || event.status === "failed")) { cool(); if (meeting === runner) meeting = null; }
   });
-  await runner.start();
+  await runner.start().catch((e) => { cool(); throw e; });
 }
 
 /**
@@ -194,6 +197,8 @@ async function startCopilot(url: string) {
   await speechModel();
   whisper ??= startWhisper();
   whisper.catch(() => { whisper = null; });
+  // Warm whichever AI is chosen at the start; switching mid-meeting just loses the head start.
+  const cool = settings.ai === "claude" ? warmUp() : () => {};
   const session = new CopilotSession(url, settings, await whisper,
     {
       get draft() { return draft; },
@@ -202,9 +207,9 @@ async function startCopilot(url: string) {
       online: () => (loadSettings().copilot.web ? (q, quick, recent) => checkOnline(loadSettings(), q, quick, recent) : null),
     },
     { url: rendererUrl, file: path.join(outDir, "renderer/index.html") },
-    () => { if (copilot === session) copilot = null; });
+    () => { cool(); if (copilot === session) copilot = null; });
   copilot = session;
-  await session.start();
+  await session.start().catch((e) => { cool(); throw e; });
 }
 
 /**
