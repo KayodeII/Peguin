@@ -25,6 +25,10 @@ export type MeetingEvent =
 
 /** How long someone must keep talking over Peguin before it stops (short enough to feel polite, long enough to skip coughs). */
 const INTERRUPT_AFTER_MS = 800;
+/** Longest wait for the meeting's own Leave button before closing anyway. */
+const LEAVE_TIMEOUT_MS = 3000;
+/** After clicking Leave, time for the page to tell the meeting before the window goes. */
+const LEAVE_SETTLE_MS = 800;
 
 const SIGN_IN_HOSTS = /^(login\.microsoftonline\.com|login\.live\.com|accounts\.google\.com)$/;
 
@@ -55,6 +59,8 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
   private meeting?: MeetingLog;
   /** Says the hand-over line and waits for it to finish; set once the meeting starts. */
   private handoff?: () => Promise<void>;
+  private leaving?: Promise<void>;
+  private leftReply?: () => void;
 
   constructor(
     readonly url: string,
@@ -225,9 +231,12 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
     on("mtg:pcm", (_e, buf: ArrayBuffer) => onPcm(buf));
     on("mtg:in-call", () => { log.joined(); this.setStatus("in_call", `Joined as "${name}". Muted until someone calls ${first || "you"}.`); });
     on("mtg:playback-ended", () => { turn.setSpeaking(false, Date.now()); playbackDone?.(); playbackDone = undefined; });
-    on("mtg:ended", () => { this.setStatus("ended", "The call ended or Peguin was removed."); this.stop(); });
+    on("mtg:ended", () => { this.setStatus("ended", "The call ended or Peguin was removed."); this.close(); });
+    on("mtg:left", () => this.leftReply?.());
     on("mtg:level", () => {});
 
+    // Closing the window hangs up first, like Leave.
+    win.on("close", (e) => { if (!this.leaving) { e.preventDefault(); void this.stop(); } });
     win.on("closed", () => { this.setStatus("ended"); this.cleanup(); });
     this.setStatus("joining", `Joining as "${name}"`);
     await win.loadURL(webClientUrl(this.url, this.platform));
@@ -239,10 +248,31 @@ export class MeetingRunner extends EventEmitter<{ event: [MeetingEvent]; record:
       this.log("Handing over to you.");
       await this.handoff().catch(() => {});
     }
-    this.stop();
+    await this.stop();
   }
 
-  stop() {
+  /** Hangs up in the meeting, so the others see Peguin leave, then closes the window. Once. */
+  stop(): Promise<void> {
+    this.leaving ??= this.hangUp().finally(() => this.close());
+    return this.leaving;
+  }
+
+  /** Asks every frame to click the meeting's own Leave; resolves shortly after one does, or after LEAVE_TIMEOUT_MS. */
+  private hangUp(): Promise<void> {
+    const wc = this.win && !this.win.isDestroyed() ? this.win.webContents : null;
+    const frames = wc && !wc.isDestroyed() && this.status !== "ended" ? wc.mainFrame.framesInSubtree : [];
+    if (!frames.length) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => { clearTimeout(timer); resolve(); };
+      const timer = setTimeout(done, LEAVE_TIMEOUT_MS);
+      this.leftReply = () => { this.leftReply = undefined; clearTimeout(timer); setTimeout(done, LEAVE_SETTLE_MS); };
+      for (const f of frames) { try { f.send("mtg:leave"); } catch { /* frame went away */ } }
+    });
+  }
+
+  /** Closes the window without hanging up: the call is already over. */
+  private close() {
+    this.leaving ??= Promise.resolve();
     if (this.win && !this.win.isDestroyed()) this.win.destroy();
     this.setStatus("ended");
     this.cleanup();

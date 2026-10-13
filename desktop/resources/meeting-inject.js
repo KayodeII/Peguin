@@ -329,4 +329,20 @@
       finish("stopped: someone started talking");
     });
   });
+  // Leave: click the meeting's own hang-up (and Zoom's "Leave meeting" confirmation),
+  // so the others see Peguin go rather than a frozen tile until the connection times out.
+  const HANG_UP = '[aria-label="Leave call" i], #hangup-button, [data-tid="hangup-main-btn"], .footer__leave-btn, button[aria-label^="Leave" i]';
+  const shown = (el) => el.getClientRects().length > 0;
+  bridge.onLeave(async () => {
+    const hangUp = [...document.querySelectorAll(HANG_UP)].find(shown);
+    if (!hangUp) return false;
+    hangUp.click();
+    log("left the call");
+    for (const end = Date.now() + 1000; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) {
+      const confirm = [...document.querySelectorAll("button, [role=button]")]
+        .find((b) => b !== hangUp && shown(b) && /^leave( meeting)?$/i.test((b.getAttribute("aria-label") || b.textContent || "").trim()));
+      if (confirm) { confirm.click(); break; }
+    }
+    return true;
+  });
 })();
