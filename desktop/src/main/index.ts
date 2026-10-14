@@ -6,6 +6,7 @@ import {
   type Account, type CalendarProvider, type Update,
 } from "./account.js";
 import { warmUp } from "./claude.js";
+import { onePerMeeting } from "./once.js";
 import { answerQuestion, checkOnline, isFresh, loadDraft, prepareDraft, suggestAnswer, summarizeMeeting, type Draft } from "./brain.js";
 import { CopilotSession } from "./copilot/session.js";
 import { deferredFollowUps, headline, mergeFollowUps, transcriptLines, worthKeeping, type MeetingRecord } from "./meeting/record.js";
@@ -145,7 +146,10 @@ function prepare(): Promise<Draft> {
   return preparing;
 }
 
-async function join(url: string) {
+// Clicking Send twice, or the schedule firing while Peguin is joining, sends one Peguin.
+const join = onePerMeeting((url) => joinNow(url), () => meeting?.url);
+
+async function joinNow(url: string) {
   const features = await currentFeatures();
   const settings = allowed(loadSettings(), features);
   if (!settings.displayName.trim()) throw new Error("Add your name in Settings first, so Peguin knows when it's called.");
@@ -182,7 +186,10 @@ async function join(url: string) {
  * The private copilot: the owner joins their own meeting in a Peguin window and
  * gets suggested answers only they can see. Pro and Team.
  */
-async function startCopilot(url: string) {
+// Same for Join as me.
+const startCopilot = onePerMeeting((url) => openCopilot(url), () => copilot?.url);
+
+async function openCopilot(url: string) {
   const features = await currentFeatures();
   if (!features.copilot) throw new Error("The private copilot comes with the Pro and Team plans. Upgrade at peguin.co/account.");
   const settings = loadSettings();

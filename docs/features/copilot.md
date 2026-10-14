@@ -33,6 +33,7 @@ The owner joins their own meeting as themselves in a Peguin window. Peguin liste
 | `desktop/src/main/index.ts` | `startCopilot`, IPC `copilot:start|state|collapse|pop-out|stop` |
 | `desktop/src/preload/app.ts` | `copilotStart`, `copilotState`, `copilotCollapse`, `copilotPopOut`, `copilotStop` |
 | `desktop/src/main/plan.ts` | The plan gate |
+| `desktop/src/main/once.ts` | `onePerMeeting`: Join as me clicked twice opens the meeting once |
 
 ## Tests
 
