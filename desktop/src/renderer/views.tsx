@@ -10,6 +10,8 @@ import { AiSettings, StandardVoice, useXai } from "./ai";
 import { stripCues } from "../../../src/core/brain/prompts";
 import { PLANS } from "../../../src/core/plans";
 import { CalendarSettings } from "./calendars";
+import { VoiceControlSettings } from "./voicecontrol";
+import { WorkLogSource } from "./worklog";
 
 const SOURCE_INFO = {
   git: { name: "Git commits", desc: "Commits in repos on this computer." },
@@ -160,6 +162,7 @@ export function SourcesView({ settings, draft, save, prepare }: { settings: Sett
             </div>
           );
         })}
+        <WorkLogSource settings={settings} save={save} report={draft?.reports.find((r) => r.id === "mac")} />
         <h3 className="section-label">Coming soon</h3>
         {[["calendar", "Calendar"], ["linear", "Linear"], ["jira", "Jira"]].map(([id, t]) => (
           <div key={id} className="row-card muted"><BrandIcon id={id!} /><div className="row-main"><strong>{t}</strong></div><span className="tag">Soon</span></div>
@@ -181,6 +184,8 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
   useEffect(() => { setS((prev) => ({ ...prev, appearance: settings.appearance })); }, [settings.appearance]);
   // The voice switch also saves instantly.
   useEffect(() => { setS((prev) => ({ ...prev, voice: { ...prev.voice, mode: settings.voice.mode } })); }, [settings.voice.mode]);
+  // The voice control switch also saves instantly.
+  useEffect(() => { setS((prev) => ({ ...prev, pointer: { ...prev.pointer, enabled: settings.pointer.enabled } })); }, [settings.pointer.enabled]);
   const setAppearance = (a: Partial<Settings["appearance"]>) => void save({ ...settings, appearance: { ...settings.appearance, ...a } });
   const next = {
     ...s,
@@ -248,6 +253,9 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
         <h3 className="section-label" id="voice">Voice</h3>
         <StandardVoice s={s} setS={setS} saved={settings} xai={xai} setXai={setXai} />
         <VoiceSettings settings={settings} draft={s} setDraft={setS} save={save} />
+
+        <h3 className="section-label" id="voice-control">Voice control</h3>
+        <VoiceControlSettings s={s} setS={setS} settings={settings} save={save} />
 
         <h3 className="section-label">AI</h3>
         <AiSettings s={s} setS={setS} xai={xai} setXai={setXai} />

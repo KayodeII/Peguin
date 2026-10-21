@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { Link } from "../ui";
 
-const UPDATED = "18 October 2026";
+const UPDATED = "20 October 2026";
 
 function LegalPage({ title, intro, children }: { title: string; intro: ReactNode; children: ReactNode }) {
   return (
@@ -46,6 +46,9 @@ export function Privacy() {
       <ul>
         <li>Your settings, prepared updates, and the meeting audio Peguin hears, which is transcribed on your Mac and not recorded.</li>
         <li>If you turn on <strong>Speak in your own voice</strong>: your voice sample, which you record yourself in the app, and the audio made from it. Both are encrypted and you can delete them in Settings.</li>
+        <li>If you turn on <strong>Learn my voice</strong> (it also needs Voice control and a recorded voice sample): up to the number of clips a day you choose (eight by default) of you talking to your microphone, 4 to 15 seconds each, with what was said. Never while Peguin is in a call. They're encrypted, listed in Settings, Voice, for you to play, and used only if you tick them, when they replace your voice sample. You can delete any or all of them. To show how much a clip sounds like you, Peguin compares it with your consent recording on your Mac.</li>
+        <li>If you turn on <strong>On this Mac</strong> in Sources: every few minutes (five by default), the name of the app in front and its window title, read through macOS Accessibility. No screenshots and nothing from inside windows. Apps you list (password managers and messaging apps to start with) and private browser windows are never noted, and nothing is noted while you're away from the keyboard. The log is encrypted, kept for the days you choose (seven by default) and can be deleted in Sources.</li>
+        <li>If you turn on <strong>Voice control</strong> (“Hey Peguin”): Peguin listens to your microphone while it's on and transcribes it on your Mac. Lines that don't start with “Hey Peguin” are dropped straight away and nothing is sent anywhere; the only exception is Learn my voice, below. To find the buttons you name, it reads their names from the app in front through macOS Accessibility, also only on your Mac.</li>
         <li>Meeting recaps and transcripts, encrypted, kept for the period you choose in Settings (30 days unless you change it), then deleted.</li>
         <li>Access to the calendars you connect (Google Calendar, Outlook, Calendly), calendar links, and, if you use them, your ElevenLabs and xAI API keys, all encrypted. Calendar events are read on your Mac to find standups and aren't sent to us.</li>
       </ul>
@@ -53,7 +56,7 @@ export function Privacy() {
 
       <h2>What is sent to other services, and why</h2>
       <ul>
-        <li><strong>Your AI: Anthropic (Claude), OpenAI (Codex) or xAI (Grok)</strong>, whichever you choose in Settings, AI (Claude is the default). To write your update, the titles, statuses and times of your recent work. To answer a follow-up question in a meeting or suggest a copilot answer, the facts from your update, the question and the last few lines of the conversation. For a recap summary (you can turn this off), the meeting transcript. This goes from your Mac to that provider under your own account and your agreement with them: your Claude Code sign-in, your Codex (ChatGPT) sign-in, or your xAI API key. Only the one you chose receives anything.</li>
+        <li><strong>Your AI: Anthropic (Claude), OpenAI (Codex) or xAI (Grok)</strong>, whichever you choose in Settings, AI (Claude is the default). To write your update, the titles, statuses and times of your recent work, and, if you turn on On this Mac, a short list of the apps and window titles you spent time in, with roughly how long. To answer a follow-up question in a meeting or suggest a copilot answer, the facts from your update, the question and the last few lines of the conversation. For a recap summary (you can turn this off), the meeting transcript. This goes from your Mac to that provider under your own account and your agreement with them: your Claude Code sign-in, your Codex (ChatGPT) sign-in, or your xAI API key. Only the one you chose receives anything.</li>
         <li><strong>xAI voice:</strong> only if you choose the Grok voice as Peguin's standard voice. Each line Peguin says is sent to xAI with your API key to be spoken. The default, the Mac voice, sends nothing.</li>
         <li><strong>Anthropic (help chat):</strong> questions you type into the help chat on peguin.co go to Claude through our server, and aren't stored unless you message the team.</li>
         <li><strong>Cloudflare:</strong> hosts peguin.co and our database.</li>

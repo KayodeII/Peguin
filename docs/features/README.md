@@ -7,6 +7,7 @@ One page per feature: what it does, the decisions behind it (entries in [`../DEC
 | Join as Peguin: the AI participant that speaks the update | [ai-participant.md](ai-participant.md) |
 | Join as me: the private copilot | [copilot.md](copilot.md) |
 | Peguin Copilot for Chrome: the copilot in your own Meet tab | [chrome-extension.md](chrome-extension.md) |
+| Voice control: “Hey Peguin”, a virtual mouse on the Mac | [voice-control.md](voice-control.md) |
 | Drafting the update from the owner's work | [update-drafting.md](update-drafting.md) |
 | Your AI: Claude, Codex or Grok | [your-ai.md](your-ai.md) |
 | Speech recognition (whisper.cpp on the Mac) | [speech-recognition.md](speech-recognition.md) |

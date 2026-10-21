@@ -50,6 +50,15 @@ const api = {
   deleteMeeting: (id: string) => ipcRenderer.invoke("meetings:delete", id),
   deleteAllMeetings: () => ipcRenderer.invoke("meetings:delete-all"),
   voiceSayWord: (word: string) => ipcRenderer.invoke("voice:say-word", word),
+  pointerStatus: () => ipcRenderer.invoke("pointer:status"),
+  pointerAccess: () => ipcRenderer.invoke("pointer:access"),
+  pointerTry: (text: string) => ipcRenderer.invoke("pointer:try", text),
+  workLogStatus: () => ipcRenderer.invoke("worklog:status"),
+  workLogClear: () => ipcRenderer.invoke("worklog:clear"),
+  voiceClips: () => ipcRenderer.invoke("voice:clips"),
+  voiceClipAudio: (id: string): Promise<Uint8Array | null> => ipcRenderer.invoke("voice:clip-audio", id),
+  voiceClipsDelete: (ids: string[] | "all") => ipcRenderer.invoke("voice:clips-delete", ids),
+  voiceClipsUse: (ids: string[]) => ipcRenderer.invoke("voice:clips-use", ids),
   onEvent: (cb: (e: unknown) => void) => {
     const h = (_e: unknown, ev: unknown) => cb(ev);
     ipcRenderer.on("app:event", h);

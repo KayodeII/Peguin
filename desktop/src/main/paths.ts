@@ -16,6 +16,9 @@ export const resource = (name: string) => app.isPackaged ? path.join(process.res
 /** EventKit helper that reads the Mac's calendars (built by scripts/build-calendar-helper.sh). */
 export const calendarHelperPath = () => app.isPackaged ? path.join(process.resourcesPath, "calendar", "calendar-helper") : path.join(sourceRoot, "build/calendar/calendar-helper");
 
+/** Swift helper that moves the mouse, types and reads button names for voice control (scripts/build-pointer-helper.sh). */
+export const pointerHelperPath = () => app.isPackaged ? path.join(process.resourcesPath, "pointer", "pointer-helper") : path.join(sourceRoot, "build/pointer/pointer-helper");
+
 export const WHISPER_MODEL = "large-v3-turbo-q5_0"; // ~550 MB; half the word errors of base.en on call audio
 export const MODEL_URL = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${WHISPER_MODEL}.bin`;
 

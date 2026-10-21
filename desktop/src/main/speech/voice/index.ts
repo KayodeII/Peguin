@@ -6,15 +6,18 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Settings } from "../../settings.js";
-import { decodeWav, encodeWav } from "./audio.js";
+import { decodeWav, encodeWav, SAMPLE_RATE } from "./audio.js";
 import { cloneVoice, deleteVoice, loadEleven, saveEleven, speakWav } from "./eleven.js";
 import { VoiceEngine, type Voice } from "./engine.js";
 import { voiceModelReady } from "./model.js";
-import { cacheDir, loadSample, sampleInfo } from "./store.js";
+import { cacheDir, loadConsentAudio, loadSample, sampleInfo } from "./store.js";
+import { addClip, clipSamples, listClips, setLikeness, type ClipInfo } from "./clips.js";
+import { audioQuality, clipVerdict, likeness, pcmToFloat } from "./clipRules.js";
 import { stripCues } from "../../../../../src/core/brain/prompts.js";
 import { respell, wordError } from "./text.js";
 
 export { CONSENT_SENTENCE, deleteSample, saveSample, sampleInfo } from "./store.js";
+export { clipWav, deleteClips, useClips, type ClipInfo } from "./clips.js";
 export { ensureVoiceModel, deleteVoiceModel, voiceModelReady, VOICE_MODEL_BYTES } from "./model.js";
 
 export type OwnVoiceStatus = {
@@ -130,3 +133,45 @@ async function speakWithEleven(
 
 /** Forget the encoded voice (after re-recording or deleting the sample). */
 export function forgetVoice() { encoded = null; }
+
+/**
+ * Learn my voice: an utterance from the owner's mic (16-bit at `rate`) that
+ * wasn't a command. Kept for review only when the owner turned learning on,
+ * has recorded their consent, and the clip is clean; otherwise dropped.
+ */
+export function learnFrom(pcm: Buffer, rate: number, text: string, s: Settings): string | null {
+  if (!s.voice.learn.enabled || !sampleInfo()) return "off";
+  const aligned = pcm.byteOffset % 2 ? Buffer.from(pcm) : pcm;
+  const samples = pcmToFloat(new Int16Array(aligned.buffer, aligned.byteOffset, Math.floor(aligned.length / 2)), rate, SAMPLE_RATE);
+  const list = listClips();
+  const today = new Date().toDateString();
+  const why = clipVerdict({ text, seconds: samples.length / SAMPLE_RATE, ...audioQuality(samples, SAMPLE_RATE) },
+    { today: list.filter((c) => new Date(c.at).toDateString() === today).length, perDay: s.voice.learn.perDay, pending: list.length });
+  if (why) return why;
+  addClip(samples, text);
+  return null;
+}
+
+let consentEmbedding: { id: string; v: Promise<Float32Array> } | null = null;
+
+/**
+ * The clips waiting for review, each with how much it sounds like the consent
+ * recording, worked out with the on-Mac voice model when it's downloaded.
+ */
+export async function reviewClips(): Promise<ClipInfo[]> {
+  const list = listClips();
+  const consent = list.some((c) => c.likeness === null) && voiceModelReady() ? loadConsentAudio() : null;
+  if (!consent) return list;
+  const e = await loaded();
+  const embed = async (x: Float32Array) => (await e.encodeVoice(x)).speakerEmbedding.data as Float32Array;
+  if (consentEmbedding?.id !== consent.id) consentEmbedding = { id: consent.id, v: embed(consent.samples) };
+  const ref = await consentEmbedding.v;
+  for (const c of list) {
+    if (c.likeness !== null) continue;
+    const x = clipSamples(c.id);
+    if (!x) continue;
+    c.likeness = Math.round(likeness(ref, await embed(x)) * 100) / 100;
+    setLikeness(c.id, c.likeness);
+  }
+  return list;
+}

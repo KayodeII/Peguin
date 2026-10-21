@@ -19,17 +19,20 @@ import { loadCalendarSecrets, maskLink, saveCalendarSecrets, upsertAccount } fro
 import { allowed, checkWeeklyLimit, currentFeatures, currentPlan, recordJoin } from "./plan.js";
 import { canSelfUpdate, installOnExit, prepareUpdate, updateReady, type UpdateState } from "./updater.js";
 import { loadSettings, saveSettings } from "./settings.js";
+import { clearLog, WorkLog } from "./watch/index.js";
 import { fixPath, outDir, resource } from "./paths.js";
 import { ensureModel } from "./speech/model.js";
 import { standardSample, synthesize } from "./speech/tts.js";
 import { checkXaiKey, clearXai, loadXai, saveXai } from "./xai.js";
 import {
   CONSENT_SENTENCE, deleteSample, deleteVoiceModel, ensureVoiceModel, forgetVoice, ownVoiceStatus, saveSample,
-  engineReady, speakInOwnVoice, usingOwnVoice, VOICE_MODEL_BYTES,
+  clipWav, deleteClips, learnFrom, reviewClips, useClips, engineReady, speakInOwnVoice, usingOwnVoice, VOICE_MODEL_BYTES,
 } from "./speech/voice/index.js";
 import { checkKey, clearEleven, deleteVoice, loadEleven, saveEleven } from "./speech/voice/eleven.js";
 import { sentences } from "./speech/voice/text.js";
 import { startWhisper, transcribeSamples, type Whisper } from "./speech/whisper.js";
+import { VoiceControl, type PointerStatus } from "./pointer/index.js";
+import { parse } from "./pointer/commands.js";
 
 const rendererUrl = process.env.PENGUIN_RENDERER_URL; // set by `npm run dev`
 
@@ -67,6 +70,19 @@ let preparing: Promise<Draft> | null = null;
 let update: Update | null = null;
 let updateState: UpdateState | null = null;
 
+/** "Hey Peguin, ..." voice control (Settings > Voice control). */
+const voice = new VoiceControl(
+  loadSettings,
+  () => { whisper ??= speechModel().then(startWhisper); whisper.catch(() => { whisper = null; }); return whisper; },
+  { url: rendererUrl, file: path.join(outDir, "renderer/index.html") },
+  () => copilot !== null || meeting !== null,
+  (status) => send({ kind: "pointer", status }),
+  (pcm, rate, text) => { learnFrom(pcm, rate, text, loadSettings()); },
+);
+
+/** Settings > Sources > On this Mac: app and window titles, every few minutes. */
+const workLog = new WorkLog(loadSettings);
+
 async function refreshUpdate() {
   update = await checkForUpdate();
   send({ kind: "update", update });
@@ -88,6 +104,7 @@ export type AppEvent =
   | { kind: "voice"; progress: number; error?: string }
   | { kind: "recaps" }
   | { kind: "calendar"; error?: string }
+  | { kind: "pointer"; status: PointerStatus }
   | { kind: "show"; view: string };
 
 function send(e: AppEvent) {
@@ -344,7 +361,11 @@ app.on("open-url", (e, url) => { e.preventDefault(); app.isReady() ? handleUrl(u
 
 ipcMain.handle("settings:get", () => loadSettings());
 ipcMain.handle("settings:save", async (_e, input: unknown) => {
+  const { pointer: before, watch: beforeWatch } = loadSettings();
   const s = saveSettings(input);
+  if (JSON.stringify(beforeWatch) !== JSON.stringify(s.watch)) workLog.apply();
+  try { await applyVoiceControl(before, s); }
+  catch (e) { saveSettings({ ...s, pointer: { ...s.pointer, enabled: false } }); throw e; }
   if (s.voice.mode === "mine" && !(await currentFeatures()).ownVoice) {
     useStandardVoice();
     throw new Error("Speaking in your own voice comes with the Pro and Team plans. You can still record and preview it.");
@@ -357,6 +378,26 @@ ipcMain.handle("settings:save", async (_e, input: unknown) => {
   }
   return s;
 });
+// Voice control follows its switch in Settings; a new shortcut applies at once.
+async function applyVoiceControl(before: ReturnType<typeof loadSettings>["pointer"] | null, s: ReturnType<typeof loadSettings>) {
+  if (!s.pointer.enabled) { if (before?.enabled) await voice.stop(); return; }
+  if (!before?.enabled) await voice.start();
+  else if (before.shortcut !== s.pointer.shortcut) voice.bindShortcut();
+}
+ipcMain.handle("pointer:status", () => voice.status());
+ipcMain.handle("worklog:status", () => workLog.status());
+ipcMain.handle("worklog:clear", () => { clearLog(); return workLog.status(); });
+ipcMain.handle("voice:clips", () => reviewClips());
+ipcMain.handle("voice:clip-audio", (_e, id: string) => clipWav(String(id)));
+ipcMain.handle("voice:clips-delete", (_e, ids: string[] | "all") => { deleteClips(ids === "all" ? "all" : (Array.isArray(ids) ? ids.map(String) : [])); return reviewClips(); });
+ipcMain.handle("voice:clips-use", async (_e, ids: string[]) => {
+  useClips(Array.isArray(ids) ? ids.map(String) : []);
+  forgetVoice();
+  return { status: await voiceStatus(), clips: await reviewClips() };
+});
+ipcMain.handle("pointer:access", () => voice.requestAccess());
+// Settings' "Try it": runs a typed command as if it had been said.
+ipcMain.handle("pointer:try", (_e, text: string) => voice.run(parse(String(text ?? "").slice(0, 300)), String(text ?? "")));
 ipcMain.handle("draft:get", () => ({ draft: loadDraft(), preparing: !!preparing }));
 ipcMain.handle("draft:prepare", () => prepare());
 // The sidebar's "Next standup": from the calendars when they're on, else the fixed time.
@@ -529,6 +570,11 @@ app.whenReady().then(() => {
     log: (text) => send({ kind: "log", text }),
   });
   app.on("activate", openWindow);
+  workLog.apply();
+  if (loadSettings().pointer.enabled) void applyVoiceControl(null, loadSettings()).catch((e) => send({ kind: "log", text: `Voice control is off: ${message(e)}` }));
+  // Development: PENGUIN_POINTER_TRY="show numbers;draw a circle" runs voice commands 2.5 s apart once voice control is on.
+  const tries = !app.isPackaged ? process.env.PENGUIN_POINTER_TRY?.split(";").map((c) => c.trim()).filter(Boolean) : undefined;
+  if (tries?.length) setTimeout(() => void tries.reduce((p, c) => p.then(() => voice.run(parse(c), c)).then(() => new Promise((r) => setTimeout(r, 2500))), Promise.resolve()), 4000);
   // Development: PENGUIN_COPILOT_URL opens the copilot on that meeting straight away.
   if (!app.isPackaged && process.env.PENGUIN_COPILOT_URL) void startCopilot(process.env.PENGUIN_COPILOT_URL).catch((e) => console.error("copilot:", message(e)));
 });
@@ -553,4 +599,6 @@ app.on("will-quit", () => {
   if (updateReady()) installOnExit(false);
   void meeting?.stop();
   void whisper?.then((w) => w.stop()).catch(() => {});
+  void voice.stop();
+  workLog.stop();
 });

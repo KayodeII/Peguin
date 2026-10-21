@@ -32,7 +32,19 @@ const Voice = z.object({
   expressiveness: z.number().min(0.3).max(0.9).default(0.6),
   /** How many times a prepared line is made again when a word comes back wrong (1 = no checking). */
   attempts: z.number().int().min(1).max(5).default(3),
+  /**
+   * Learn my voice: while voice control is listening, keep a few clean clips of
+   * the owner talking for them to review; ticked clips become a fuller sample.
+   * Off until the owner turns it on.
+   */
+  learn: z.object({
+    enabled: z.boolean().default(false),
+    perDay: z.number().int().min(1).max(30).default(8),
+  }).default(() => ({ enabled: false, perDay: 8 })),
 });
+
+/** Private by nature, so left out of the work log until the owner says otherwise. */
+const SKIP_APPS = ["1Password", "Bitwarden", "Keychain Access", "Passwords", "Messages", "WhatsApp", "Signal", "Telegram", "Mail", "FaceTime", "Photos"];
 
 /** Delivery cues only when the owner's voice is made by ElevenLabs and they've left cues on (pure). */
 export const wantsCues = (s: { voice: { mode: string; engine: string; eleven: { cues: boolean } } }) =>
@@ -105,6 +117,32 @@ export const Settings = z.preprocess(migrate, z.object({
     /** After the quick answer, look it up on the web (about 15 s more) and replace it. */
     web: z.boolean().default(false),
   }).default(() => ({ mode: "work" as const, web: false })),
+  /**
+   * Voice control: "Hey Peguin, ..." from the owner's own mic moves the mouse,
+   * clicks, types and draws on screen. Off until the owner turns it on; words are
+   * heard on this Mac and nothing is sent anywhere.
+   */
+  pointer: z.object({
+    enabled: z.boolean().default(false),
+    /** What the owner calls Peguin after "Hey". */
+    wakeWords: z.array(z.string().trim().min(2).max(30)).min(1).max(5).default(["Peguin"]),
+    /** Press to give one command without the wake phrase (Electron accelerator). Empty: none. */
+    shortcut: z.string().trim().max(60).default("Control+Alt+Space"),
+    /** Where "search for ..." goes; %s is replaced by the words. */
+    searchUrl: z.string().trim().url().default("https://www.google.com/search?q=%s"),
+  }).default(() => ({ enabled: false, wakeWords: ["Peguin"], shortcut: "Control+Alt+Space", searchUrl: "https://www.google.com/search?q=%s" })),
+  /**
+   * The work log: every few minutes, the app in front and its window title, so
+   * the draft knows what the owner spent time on. Off until the owner turns it on;
+   * encrypted on this Mac. Every value is the owner's preference.
+   */
+  watch: z.object({
+    enabled: z.boolean().default(false),
+    everyMinutes: z.number().int().min(1).max(30).default(5),
+    keepDays: z.number().int().min(1).max(30).default(7),
+    /** Apps (name or bundle id) and title words never noted. A starting list the owner edits. */
+    skipApps: z.array(z.string().trim().min(1).max(60)).max(50).default([...SKIP_APPS]),
+  }).default(() => ({ enabled: false, everyMinutes: 5, keepDays: 7, skipApps: [...SKIP_APPS] })),
   /** The Grok chat model, from the ones the owner's key can use. */
   grokModel: z.string().trim().max(80).optional(),
   /** Download new versions in the background and offer "Restart to update" (installs on quit too). */

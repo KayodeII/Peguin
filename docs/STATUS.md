@@ -20,6 +20,9 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 - **Plans** gated offline from the signed licence; Discord-style UI with Notion themes; sign-in via `peguin://`.
 - **Self-update** from GitHub Releases: download, SHA-256 check, unpack, "Restart to update".
 
+- **Voice control ("Hey Peguin", not released):** the owner's own mic, heard by whisper on the Mac; clicks buttons by name or number, opens the browser, sites and apps, scrolls, types, presses keys and draws on a see-through overlay, with Peguin's cursor gliding to each target. No AI. Off by default. See `docs/features/voice-control.md`.
+- **Work log and Learn my voice (not released, both off by default):** Sources > On this Mac notes the front app and window title every few minutes (encrypted, owner's skip list and retention) for the draft, as time spent, never facts. Settings > Voice > Learn my voice keeps clean clips of the owner from the voice-control mic for them to play and tick; ticked clips replace the voice sample. See `docs/features/update-drafting.md`, `docs/features/voice.md`.
+
 **Chrome extension (`extension/`, branch `chrome-extension`, not released)**
 - **Peguin Copilot for Chrome:** the private copilot in the owner's own Google Meet tab, in Chrome's side panel. Posts the AI notice in chat before listening; hears with Meet's captions and the tab's audio (whisper in the browser) and merges the two; streamed suggestions from the owner's own Claude, OpenAI or Grok key. See `docs/features/chrome-extension.md`.
 
@@ -42,6 +45,9 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 
 - **Chrome extension in a real Meet call:** the caption reading, the chat notice and tab audio after the toolbar click were tested only against a fake Meet page in Chrome for Testing; whisper only on a synthetic clip.
 
+- **Learn my voice end to end** (real clips from the owner's mic, a sample made from them, how it sounds against the recorded one) and the **work log over a real workday** (what the draft says from it). The pieces are unit tested; the likeness score was measured on the owner's spike recordings.
+- **Voice control with the owner's own voice on a real mic**, clicks inside Chrome and Safari pages, a second display, freehand drawing, and the echo wait during a real copilot call. Tested with spoken clips through the real listener and on screen with typed commands.
+
 - **v0.8.0 doesn't contain #20 or #21**: it was tagged before they were merged. Release 0.9.0 to ship them.
 - Self-update installing on the owner's Mac from a release to the next (0.7.0 to 0.9.0 is the next chance).
 - Screen sharing from the copilot window (macOS picker) and Pop out in a real call.
@@ -58,7 +64,8 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 5. Owner setup: OAuth apps (`docs/OAUTH_SETUP.md`), `ADMIN_TOKEN`, tier prices (`cloud/scripts/paystack-setup.mjs`), Google's review for the calendar scope.
 6. Before charging strangers: legal entity and contact email in /privacy and /terms, Paystack live keys, Resend DNS, Apple Developer ID (notarised app), watermarking cloned audio.
 7. Chrome extension: a real Meet call, then decide plan gating (the desktop copilot is Pro/Team; the extension has no sign-in yet), then the Chrome Web Store listing.
-8. Later: Team seats, Slack recaps, Linear and Jira on the desktop, Teams via ACS, Windows.
+8. Voice control: the owner tries it for a day (Settings > Voice control), then decide plan gating and whether an opt-in AI mode ("research this") is wanted.
+9. Later: Team seats, Slack recaps, Linear and Jira on the desktop, Teams via ACS, Windows.
 
 ## Handoff (2026-10-10)
 

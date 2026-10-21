@@ -26,6 +26,7 @@ Rules:
 - Write for the ear: short sentences of about 15 words or fewer, plain words, numbers as words. Don't stack technical nouns: say "added retries for payment webhooks", not "merged the payment webhook retries". Spell out anything with symbols.
 - Only state things supported by the activity or notes. If something is unclear, leave it out.
 - Items from AI coding sessions (source "claude_code") are what ${first(name)} asked an AI assistant to work on. Treat them as in progress unless a commit, PR or ticket shows the work is done. Describe the work, not the prompts.
+- Items from source "mac" are window titles ${first(name)} had in front, with roughly how long. They show where time went, not what got done: mention one only as something ${first(name)} spent time on or is working on, never claim it's finished, merged or decided because of a window title, and never put one in facts unless other activity supports it. Skip anything that looks personal.
 - Mention a blocker only if the activity or notes show one; otherwise just say "no blockers". Never talk about the activity data or notes themselves.
 - If there's no activity, say so plainly and mention the standing notes.
 - No greeting and no sign-off; those are added separately.

@@ -99,8 +99,11 @@ describe("own voice: settings and disclosure", () => {
   it("starts with no built-in pronunciations and default tuning the owner can change", () => {
     expect(Settings.parse({}).voice).toEqual({
       mode: "standard", standard: "mac", grokVoice: "eve", engine: "mac", eleven: { model: "eleven_v4", liveModel: "eleven_v4_turbo", cues: true },
-      pronunciations: [], pause: 0.32, expressiveness: 0.6, attempts: 3,
+      pronunciations: [], pause: 0.32, expressiveness: 0.6, attempts: 3, learn: { enabled: false, perDay: 8 },
     });
+    // Nothing about the owner's Mac or voice is collected until they turn it on.
+    expect(Settings.parse({}).watch).toMatchObject({ enabled: false, everyMinutes: 5, keepDays: 7 });
+    expect(Settings.parse({}).watch.skipApps).toContain("1Password");
     // The standard voice stays the Mac's, and the AI the owner's Claude Code, until they choose otherwise.
     expect(Settings.parse({}).ai).toBe("claude");
     expect(Settings.parse({}).copilot).toEqual({ mode: "work", web: false });

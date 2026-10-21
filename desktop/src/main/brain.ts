@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { answerContext, answerSystem, copilotSystem, copilotWebSystem, plainSpoken, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
 import { gatherContext, type SourceReport } from "./context/index.js";
+import { workLogActivity } from "./watch/index.js";
 import { wantsCues, type Settings } from "./settings.js";
 import { grokChat, grokChatStream, grokSearch, loadXai } from "./xai.js";
 import { claudeStream } from "./claude.js";
@@ -97,7 +98,7 @@ export function loadDraft(): Draft | null {
 
 /** Gather today's work, have Claude write the spoken update + facts, and keep it. */
 export async function prepareDraft(s: Settings): Promise<Draft> {
-  const ctx = await gatherContext(s.sources, s.timezone);
+  const ctx = await gatherContext({ ...s.sources, mac: s.watch.enabled }, s.timezone, new Date(), { mac: (since) => workLogActivity(since, s) });
   // Only titles, statuses and times leave the machine; never code.
   const activity = ctx.activity.map(({ source, kind, title, status, at }) => ({ source, kind, title, status, at }));
   const cues = wantsCues(s);

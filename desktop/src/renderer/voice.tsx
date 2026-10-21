@@ -109,6 +109,8 @@ export function VoiceSettings({ settings, draft, setDraft, save }: {
         <button className="btn ghost" disabled={!!busy} onClick={() => setRecording(true)}>{status.sample ? "Record again" : "Record"}</button>
       </div>
 
+      <LearnVoice settings={settings} save={save} hasSample={!!status.sample} onUsed={refresh} />
+
       {eleven ? (
         <div className="row-card column">
           <div className="row-head">
@@ -387,6 +389,88 @@ function Recorder({ consent, onClose, onSaved }: { consent: string; script: stri
         <button className="btn link wide" onClick={onClose}>Cancel</button>
         <p className="hint center">Both recordings are saved encrypted on this Mac. Delete them any time in Settings.</p>
       </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- learn my voice */
+
+type Clip = { id: string; at: string; seconds: number; text: string; likeness: number | null };
+
+/**
+ * How much a clip sounds like the consent recording, from the on-Mac voice
+ * model's speaker embedding. A hint, not a check: in a test the owner's clips of
+ * 4 s or more scored 0.60 to 0.86, five other voices 0.33 to 0.58, one 0.72.
+ */
+const band = (l: number) => (l >= 0.7 ? "sounds like you" : l >= 0.55 ? "not sure it's you" : "may not be you");
+
+function LearnVoice({ settings, save, hasSample, onUsed }: { settings: Settings; save: (s: Settings) => Promise<Settings>; hasSample: boolean; onUsed: () => void }) {
+  const learn = settings.voice.learn;
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [ticked, setTicked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const load = useCallback(() => { void window.penguin.voiceClips().then((c: Clip[]) => {
+    setClips(c);
+    // Nothing is ticked for the owner: only they can tell their own voice for sure.
+    setTicked((t) => new Set([...t].filter((id) => c.some((x) => x.id === id))));
+  }); }, []);
+  useEffect(load, [load]);
+
+  const run = (label: string, fn: () => Promise<unknown>) => {
+    setBusy(label); setError("");
+    fn().catch((e) => setError(message(e))).finally(() => setBusy(""));
+  };
+  const set = (patch: Partial<Settings["voice"]["learn"]>) => run("learn", () => save({ ...settings, voice: { ...settings.voice, learn: { ...learn, ...patch } } }));
+  const seconds = clips.filter((c) => ticked.has(c.id)).reduce((a, c) => a + c.seconds, 0);
+  const flip = (id: string) => setTicked((t) => { const n = new Set(t); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  return (
+    <div className="row-card column">
+      <div className="row-head">
+        <div className="row-main">
+          <strong>Learn my voice</strong>
+          <p>{!hasSample
+            ? "Record your voice sample first. After that, Peguin can collect more of your voice to make it sound more like you."
+            : settings.pointer.enabled
+              ? `While voice control is on, Peguin keeps up to ${learn.perDay} clean clips a day of you talking, encrypted on this Mac. Never during a call. Play each one and tick the ones that are you; nothing is used until you do.`
+              : "Peguin collects clips while voice control is listening. Turn voice control on in Settings for this to start."}</p>
+        </div>
+        <Toggle on={learn.enabled} onChange={(v) => !busy && (hasSample || !v) && set({ enabled: v })} label="Learn my voice" />
+      </div>
+      {learn.enabled && (
+        <label>Clips a day
+          <select value={learn.perDay} onChange={(e) => set({ perDay: Number(e.target.value) })}>
+            {[3, 8, 15, 30].map((n) => <option key={n} value={n}>Up to {n}</option>)}
+          </select>
+        </label>
+      )}
+      {clips.length > 0 && (
+        <>
+          <ul className="clip-list">
+            {clips.map((c) => (
+              <li key={c.id} className={c.likeness !== null && c.likeness < 0.55 ? "unlike" : ""}>
+                <input type="checkbox" checked={ticked.has(c.id)} onChange={() => flip(c.id)} aria-label="Use this clip" />
+                <div className="clip-main">
+                  <span className="clip-text">“{c.text}”</span>
+                  <span className="clip-meta">{c.seconds.toFixed(0)} s · {new Date(c.at).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}
+                    {c.likeness !== null && ` · ${band(c.likeness)} (${Math.round(c.likeness * 100)}%)`}</span>
+                </div>
+                <button className="btn link" disabled={!!busy} onClick={() => run(`play:${c.id}`, async () => { const w = await window.penguin.voiceClipAudio(c.id); if (w) await playWav(w); })}>Play</button>
+                <button className="btn link" disabled={!!busy} onClick={() => run("delete", async () => setClips(await window.penguin.voiceClipsDelete([c.id])))}>Delete</button>
+              </li>
+            ))}
+          </ul>
+          <div className="voice-actions">
+            <button className="btn ghost" disabled={!!busy || seconds < 12} onClick={() => run("use", async () => { const r = await window.penguin.voiceClipsUse([...ticked]); setClips(r.clips); setTicked(new Set()); onUsed(); })}>
+              {busy === "use" ? "Making your voice" : `Make my voice from ${ticked.size} ${ticked.size === 1 ? "clip" : "clips"}`}
+            </button>
+            <button className="btn link" disabled={!!busy} onClick={() => run("delete", async () => { setClips(await window.penguin.voiceClipsDelete("all")); setTicked(new Set()); })}>Delete all</button>
+            <span className="hint">{seconds < 12 ? `Tick at least 12 seconds (${seconds.toFixed(0)} so far).` : `${Math.min(30, Math.round(seconds))} seconds replace your sample. Your consent recording stays.`}</span>
+          </div>
+        </>
+      )}
+      {error && <div className="notice error">{error}</div>}
     </div>
   );
 }

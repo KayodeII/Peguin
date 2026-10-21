@@ -1,6 +1,7 @@
 import type { PromptActivity } from "../../../../src/core/brain/prompts.js";
 
-export type SourceId = "git" | "github" | "claude_code";
+/** "mac" is the work log (app and window titles), added by the app when the owner turns it on. */
+export type SourceId = "git" | "github" | "claude_code" | "mac";
 export type Activity = PromptActivity & { source: SourceId; project?: string };
 
 /** What a source found, for the Sources screen. */

@@ -23,7 +23,7 @@ export function Icon({ name, size = 20 }: { name: keyof typeof paths | string; s
 
 const BRANDS: Record<string, SimpleIcon> = {
   git: siGit, github: siGithub, claude_code: siClaude, calendar: siGooglecalendar, google_calendar: siGooglecalendar,
-  apple_calendar: siApple, calendly: siCalendly,
+  apple_calendar: siApple, mac: siApple, calendly: siCalendly,
   linear: siLinear, jira: siJira, google_meet: siGooglemeet, zoom: siZoom,
 };
 

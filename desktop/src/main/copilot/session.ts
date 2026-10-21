@@ -15,6 +15,7 @@ import { detectPlatform, webClientUrl } from "../meeting/platform.js";
 import { outDir, resource } from "../paths.js";
 import type { Settings } from "../settings.js";
 import { createListener, type Whisper } from "../speech/whisper.js";
+import { echo } from "../pointer/index.js";
 import { vocabulary } from "../speech/hints.js";
 import { COPILOT_LABELS } from "../../../../src/core/brain/prompts.js";
 
@@ -239,6 +240,7 @@ export class CopilotSession {
 
   private heard(text: string) {
     const at = Date.now();
+    echo.said(text, at); // a "Hey Peguin" from the meeting through the speakers isn't the owner's
     this.recent.push(`Someone: ${text}`);
     if (this.recent.length > CONTEXT_LINES) this.recent.shift();
     this.send({ type: "heard", text, at });
