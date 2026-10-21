@@ -9,7 +9,7 @@
 import { app, BrowserWindow, ipcMain, WebContentsView, type IpcMainEvent } from "electron";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { isQuestion } from "../../../../src/core/brain/prompts.js";
+import { AI_NOTICE, isQuestion } from "../../../../src/core/brain/prompts.js";
 import type { Draft } from "../brain.js";
 import { detectPlatform, webClientUrl } from "../meeting/platform.js";
 import { outDir, resource } from "../paths.js";
@@ -38,7 +38,7 @@ const DISCLOSE_TIMEOUT_MS = 20_000;
  * people in the call learn that AI is helping; they just don't see the notes.
  * Fixed text, not a setting: it's the condition for hiding the notes.
  */
-export const AI_NOTICE = "Heads-up: I'm using Peguin, an AI assistant, in this call. It hears the conversation and privately suggests answers to me.";
+export { AI_NOTICE };
 
 export type CopilotCard = {
   id: number; question: string; at: number; answer?: string; error?: string;

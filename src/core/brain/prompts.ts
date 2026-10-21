@@ -60,6 +60,9 @@ export function isQuestion(text: string): boolean {
   return /\?\s*$/.test(t) || /^(what|why|how|when|where|who|which|can|could|would|will|do|does|did|is|are|was|were|have|has|should|any)\b/.test(lead) || REQUEST.test(lead);
 }
 
+/** Posted in the meeting chat from the owner's account before the private copilot hides from shares (desktop pop-out, Chrome side panel). */
+export const AI_NOTICE = "Heads-up: I'm using Peguin, an AI assistant, in this call. It hears the conversation and privately suggests answers to me.";
+
 /** How a copilot suggestion starts, so the panel (and the owner) can tell where it came from. */
 export const COPILOT_LABELS = { notes: "From your notes:", general: "General knowledge:", unknown: "Not in your notes." } as const;
 

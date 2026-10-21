@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { Link } from "../ui";
 
-const UPDATED = "10 October 2026";
+const UPDATED = "18 October 2026";
 
 function LegalPage({ title, intro, children }: { title: string; intro: ReactNode; children: ReactNode }) {
   return (
@@ -74,6 +74,14 @@ export function Privacy() {
       <p>Peguin always introduces itself as your AI assistant, and its name ends in "(AI)". It transcribes what others say on your Mac so it knows when you're called on and can answer; the parts described above go to your AI. It does not identify who said what.</p>
       <p>With the <strong>private copilot</strong>, you're in your own meeting as yourself and Peguin doesn't join or speak. It transcribes what others say on your Mac, and when someone asks you something, the question, the recent conversation and your prepared facts go to your AI for a suggested answer that only you see. Questions about your own work are answered only from your prepared facts; general questions get a general answer, marked as such. If you turn on <strong>Check online</strong>, your AI also searches the web for general questions, using its own search under your account. Your own microphone isn't transcribed. When you pop out the notes, or join in Interview mode, Peguin posts a message in the meeting chat from your account saying you're using an AI assistant; only after that are the popped-out notes left out of a full-screen share.</p>
       <p>You're responsible for using Peguin only in meetings where that's allowed, and for telling the people you meet with that you use it.</p>
+
+      <h2>The Chrome extension</h2>
+      <p><strong>Peguin Copilot for Chrome</strong> is the private copilot inside your own Google Meet tab. It doesn't use our server or need a Peguin account.</p>
+      <ul>
+        <li><strong>What it hears:</strong> only after you press Start, and only after its notice that you're using an AI assistant has appeared in the meeting chat (posted from your account). It reads Meet's live captions in your tab and, if you allow it, the tab's audio, which is what you hear: the other participants, not your microphone. The audio is transcribed in your browser by a speech model downloaded once from Hugging Face; it isn't recorded or uploaded. Nothing is heard after you press Stop or the call ends.</li>
+        <li><strong>What it sends, and to whom:</strong> when someone asks you a question (or you type one), the question, the last few lines of the conversation and the notes you wrote in the extension go from your browser straight to the AI you chose (Anthropic, OpenAI or xAI), billed to and governed by your own API key and your agreement with that provider. With Check online (Claude only), Claude also searches the web for general questions.</li>
+        <li><strong>What it keeps:</strong> your settings, notes and API key, in your Chrome profile. The key is encrypted with a key that never leaves that profile. The transcript and answers live only in the open panel and are gone when you close it. Removing the extension deletes all of it.</li>
+      </ul>
 
       <h2>How long we keep things</h2>
       <ul>

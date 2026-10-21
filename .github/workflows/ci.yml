@@ -21,6 +21,7 @@ jobs:
             cloud/package-lock.json
             web/package-lock.json
             desktop/package-lock.json
+            extension/package-lock.json
       - run: npm ci
       - run: npm ci
         working-directory: cloud
@@ -28,14 +29,20 @@ jobs:
         working-directory: web
       - run: npm ci
         working-directory: desktop
+      - run: npm ci
+        working-directory: extension
       - name: Typecheck
         run: |
           npm run typecheck
           (cd cloud && npx tsc --noEmit -p .)
           (cd web && npx tsc --noEmit -p .)
           (cd desktop && npx tsc --noEmit -p .)
+          (cd extension && npx tsc --noEmit -p .)
       - name: Test
         run: npm test
       - name: Build website
         run: npm run build
         working-directory: web
+      - name: Build Chrome extension
+        run: npm run build
+        working-directory: extension
