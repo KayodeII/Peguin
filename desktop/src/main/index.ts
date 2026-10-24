@@ -6,7 +6,7 @@ import {
   type Account, type CalendarProvider, type Update,
 } from "./account.js";
 import { warmUp } from "./claude.js";
-import { answerQuestion, checkOnline, isFresh, loadDraft, prepareDraft, suggestAnswer, summarizeMeeting, type Draft } from "./brain.js";
+import { answerQuestion, checkOnline, interpretCommand, isFresh, think, loadDraft, prepareDraft, suggestAnswer, summarizeMeeting, type Draft } from "./brain.js";
 import { CopilotSession } from "./copilot/session.js";
 import { deferredFollowUps, headline, mergeFollowUps, transcriptLines, worthKeeping, type MeetingRecord } from "./meeting/record.js";
 import { deleteAllMeetings, deleteMeeting, listMeetings, saveMeeting, setFollowUpDone } from "./meetings.js";
@@ -20,6 +20,7 @@ import { allowed, checkWeeklyLimit, currentFeatures, currentPlan, recordJoin } f
 import { canSelfUpdate, installOnExit, prepareUpdate, updateReady, type UpdateState } from "./updater.js";
 import { loadSettings, saveSettings } from "./settings.js";
 import { clearLog, WorkLog } from "./watch/index.js";
+import { contextBank } from "./contextBank.js";
 import { fixPath, outDir, resource } from "./paths.js";
 import { ensureModel } from "./speech/model.js";
 import { standardSample, synthesize } from "./speech/tts.js";
@@ -78,10 +79,12 @@ const voice = new VoiceControl(
   () => copilot !== null || meeting !== null,
   (status) => send({ kind: "pointer", status }),
   (pcm, rate, text) => { learnFrom(pcm, rate, text, loadSettings()); },
+  (heard) => interpretCommand(loadSettings(), heard),
+  (prompt) => think(loadSettings(), prompt),
 );
 
 /** Settings > Sources > On this Mac: app and window titles, every few minutes. */
-const workLog = new WorkLog(loadSettings);
+const workLog = new WorkLog(loadSettings, (win, app) => voice.peek(win, app));
 
 async function refreshUpdate() {
   update = await checkForUpdate();
@@ -379,13 +382,24 @@ ipcMain.handle("settings:save", async (_e, input: unknown) => {
   return s;
 });
 // Voice control follows its switch in Settings; a new shortcut applies at once.
+/** While voice control is on and may ask Claude, a Claude CLI waits ready, so a misheard command is fixed in about a second. */
+let coolVoiceAi: (() => void) | null = null;
+function warmVoiceAi(s: ReturnType<typeof loadSettings>) {
+  const want = s.pointer.enabled && s.pointer.askAi && s.ai === "claude";
+  if (want && !coolVoiceAi) coolVoiceAi = warmUp();
+  if (!want && coolVoiceAi) { coolVoiceAi(); coolVoiceAi = null; }
+}
+
 async function applyVoiceControl(before: ReturnType<typeof loadSettings>["pointer"] | null, s: ReturnType<typeof loadSettings>) {
+  warmVoiceAi(s);
   if (!s.pointer.enabled) { if (before?.enabled) await voice.stop(); return; }
   if (!before?.enabled) await voice.start();
   else if (before.shortcut !== s.pointer.shortcut) voice.bindShortcut();
+  if (before?.enabled && (JSON.stringify(before.cursor) !== JSON.stringify(s.pointer.cursor) || before.island !== s.pointer.island)) voice.restyle();
 }
 ipcMain.handle("pointer:status", () => voice.status());
 ipcMain.handle("worklog:status", () => workLog.status());
+ipcMain.handle("context:bank", () => contextBank(loadSettings()));
 ipcMain.handle("worklog:clear", () => { clearLog(); return workLog.status(); });
 ipcMain.handle("voice:clips", () => reviewClips());
 ipcMain.handle("voice:clip-audio", (_e, id: string) => clipWav(String(id)));
@@ -397,7 +411,7 @@ ipcMain.handle("voice:clips-use", async (_e, ids: string[]) => {
 });
 ipcMain.handle("pointer:access", () => voice.requestAccess());
 // Settings' "Try it": runs a typed command as if it had been said.
-ipcMain.handle("pointer:try", (_e, text: string) => voice.run(parse(String(text ?? "").slice(0, 300)), String(text ?? "")));
+ipcMain.handle("pointer:try", (_e, text: string) => voice.command(String(text ?? "").slice(0, 300)));
 ipcMain.handle("draft:get", () => ({ draft: loadDraft(), preparing: !!preparing }));
 ipcMain.handle("draft:prepare", () => prepare());
 // The sidebar's "Next standup": from the calendars when they're on, else the fixed time.
@@ -574,7 +588,7 @@ app.whenReady().then(() => {
   if (loadSettings().pointer.enabled) void applyVoiceControl(null, loadSettings()).catch((e) => send({ kind: "log", text: `Voice control is off: ${message(e)}` }));
   // Development: PENGUIN_POINTER_TRY="show numbers;draw a circle" runs voice commands 2.5 s apart once voice control is on.
   const tries = !app.isPackaged ? process.env.PENGUIN_POINTER_TRY?.split(";").map((c) => c.trim()).filter(Boolean) : undefined;
-  if (tries?.length) setTimeout(() => void tries.reduce((p, c) => p.then(() => voice.run(parse(c), c)).then(() => new Promise((r) => setTimeout(r, 2500))), Promise.resolve()), 4000);
+  if (tries?.length) setTimeout(() => void tries.reduce((p, c) => p.then(() => voice.command(c)).then(() => new Promise((r) => setTimeout(r, 2500))), Promise.resolve()), 4000);
   // Development: PENGUIN_COPILOT_URL opens the copilot on that meeting straight away.
   if (!app.isPackaged && process.env.PENGUIN_COPILOT_URL) void startCopilot(process.env.PENGUIN_COPILOT_URL).catch((e) => console.error("copilot:", message(e)));
 });

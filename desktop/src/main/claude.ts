@@ -7,7 +7,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { tmpdir } from "node:os";
 import { createInterface } from "node:readline";
 
-const ARGS = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--max-turns", "1"];
+const ARGS = ["-p", "--no-session-persistence", "--input-format", "stream-json", "--output-format", "stream-json", "--include-partial-messages", "--verbose", "--max-turns", "1"];
 
 export type CliEvent = { text: string } | { done: true; error?: string } | null;
 

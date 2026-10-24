@@ -55,6 +55,7 @@ const api = {
   pointerTry: (text: string) => ipcRenderer.invoke("pointer:try", text),
   workLogStatus: () => ipcRenderer.invoke("worklog:status"),
   workLogClear: () => ipcRenderer.invoke("worklog:clear"),
+  contextBank: () => ipcRenderer.invoke("context:bank"),
   voiceClips: () => ipcRenderer.invoke("voice:clips"),
   voiceClipAudio: (id: string): Promise<Uint8Array | null> => ipcRenderer.invoke("voice:clip-audio", id),
   voiceClipsDelete: (ids: string[] | "all") => ipcRenderer.invoke("voice:clips-delete", ids),

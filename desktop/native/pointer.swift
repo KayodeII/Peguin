@@ -7,13 +7,13 @@
 //   request                      -> asks macOS for Accessibility, then {"trusted": bool}
 //   cursor                       -> {"x", "y"}
 //   move  {x, y, ms}             -> glides the mouse there
-//   click {x?, y?, button, count, ms}
-//   scroll {dx, dy}              -> lines
+//   click {x?, y?, button, count, ms, restore}  restore: click there and put the owner's mouse back
+//   scroll {dx, dy, x?, y?}      -> lines; at x, y (then the mouse goes back)
 //   type  {text}
 //   key   {combo}                -> "cmd+shift+t", "return"
-//   targets                      -> {"app", "elements": [{label, role, x, y, w, h}]} in the front app
+//   targets {dock?}              -> {"app", "elements": [{label, role, x, y, w, h, area}]}: the front app's window and menu bar (and the Dock)
 //   browser                      -> brings the default browser forward, {"name"}
-//   front                        -> {"app", "bundle", "title", "idle"}: the app in front, its window title, seconds since the last input
+//   front                        -> {"app", "bundle", "title", "idle", "frame"?}: the app in front, its window title, seconds since the last input
 import AppKit
 import ApplicationServices
 import Foundation
@@ -44,6 +44,8 @@ func glide(to p: CGPoint, ms: Double) {
 func click(at p: CGPoint, right: Bool, count: Int) {
   let (down, up): (CGEventType, CGEventType) = right ? (.rightMouseDown, .rightMouseUp) : (.leftMouseDown, .leftMouseUp)
   let button: CGMouseButton = right ? .right : .left
+  // Menus (and hover-styled buttons) only take a click on an item the mouse has moved onto.
+  post(CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left)); usleep(50000)
   for n in 1...max(1, count) {
     let d = CGEvent(mouseEventSource: nil, mouseType: down, mouseCursorPosition: p, mouseButton: button)
     let u = CGEvent(mouseEventSource: nil, mouseType: up, mouseCursorPosition: p, mouseButton: button)
@@ -117,7 +119,7 @@ func text(_ v: AnyObject?) -> String {
 }
 
 let CLICKABLE: Set<String> = ["AXButton", "AXLink", "AXMenuItem", "AXMenuBarItem", "AXTab", "AXRadioButton", "AXCheckBox", "AXPopUpButton",
-  "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField", "AXDisclosureTriangle", "AXCell", "AXRow", "AXMenuButton", "AXSwitch", "AXToggle", "AXImage"]
+  "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField", "AXDisclosureTriangle", "AXCell", "AXRow", "AXMenuButton", "AXSwitch", "AXToggle", "AXImage", "AXDockItem"]
 
 func label(_ el: AXUIElement, role: String) -> String {
   for name in [kAXTitleAttribute, kAXDescriptionAttribute] { let t = text(attr(el, name)); if !t.isEmpty { return t } }
@@ -148,33 +150,43 @@ func onScreen(_ r: CGRect) -> Bool {
   }
 }
 
-func targets() -> [String: Any] {
-  guard let front = NSWorkspace.shared.frontmostApplication else { return ["app": "", "elements": []] }
+/** `dock`: also the Dock's apps (for "open Music" done the way a person would). Each element says where it is: window, menu or dock. */
+func targets(dock: Bool = false) -> [String: Any] {
+  guard let front = frontApp() else { return ["app": "", "elements": []] }
   let app = AXUIElementCreateApplication(front.processIdentifier)
   // Chrome and Electron apps only build their web accessibility tree when asked.
   AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
   AXUIElementSetMessagingTimeout(app, 0.5)
-  var roots: [AXUIElement] = []
-  if let w = attr(app, kAXFocusedWindowAttribute) { roots.append(w as! AXUIElement) }
-  if let bar = attr(app, kAXMenuBarAttribute) { roots.append(bar as! AXUIElement) }
+  var roots: [(AXUIElement, String)] = []
+  // The Dock first: it's small, and a big window must never crowd it out of the limits below.
+  if dock, let d = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first {
+    let el = AXUIElementCreateApplication(d.processIdentifier)
+    AXUIElementSetMessagingTimeout(el, 0.5)
+    roots.append((el, "dock"))
+  }
+  // The menu bar before the window: it's small too, and an open menu's items must make the cut.
+  if let bar = attr(app, kAXMenuBarAttribute) { roots.append((bar as! AXUIElement, "menu")) }
+  if let w = attr(app, kAXFocusedWindowAttribute) { roots.append((w as! AXUIElement, "window")) }
   var out: [[String: Any]] = []
-  var queue: [(AXUIElement, Int)] = roots.map { ($0, 0) }
+  var queue: [(AXUIElement, Int, String)] = roots.map { ($0.0, 0, $0.1) }
   var seen = 0
   let started = Date()
   while !queue.isEmpty, seen < 6000, out.count < 400, Date().timeIntervalSince(started) < 1.5 {
-    let (el, depth) = queue.removeFirst()
+    let (el, depth, area) = queue.removeFirst()
     seen += 1
     let role = text(attr(el, kAXRoleAttribute))
-    // Menus that aren't open have no place on screen; skip below the bar's own items.
-    if role == "AXMenu" { continue }
+    // Menus that aren't open have no place on screen; skip them. An open one (its title is selected) is read
+    // like a window, so its items can be clicked.
+    if role == "AXMenu", frame(el).map({ $0.width >= 4 && $0.height >= 4 && onScreen($0) }) != true { continue }
     if CLICKABLE.contains(role), let f = frame(el), f.width >= 4, f.height >= 4, onScreen(f) {
       let l = label(el, role: role)
       if !l.isEmpty || role != "AXImage" {
-        out.append(["label": String(l.prefix(120)), "role": role, "x": f.minX, "y": f.minY, "w": f.width, "h": f.height])
+        out.append(["label": String(l.prefix(120)), "role": role, "x": f.minX, "y": f.minY, "w": f.width, "h": f.height, "area": area])
       }
     }
-    if depth < 60, role != "AXMenuBarItem", let kids = attr(el, kAXChildrenAttribute) as? [AXUIElement] {
-      for k in kids { queue.append((k, depth + 1)) }
+    let open = role == "AXMenuBarItem" && (attr(el, kAXSelectedAttribute) as? Bool ?? false)
+    if depth < 60, role != "AXMenuBarItem" || open, let kids = attr(el, kAXChildrenAttribute) as? [AXUIElement] {
+      for k in kids { queue.append((k, depth + 1, area)) }
     }
   }
   return ["app": front.localizedName ?? "", "elements": out]
@@ -193,17 +205,46 @@ func browser() -> [String: Any] {
 /** For the work log: names only, never window contents. The title needs Accessibility; without it it's "". */
 func front() -> [String: Any] {
   let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
-  guard let app = NSWorkspace.shared.frontmostApplication else { return ["app": "", "bundle": "", "title": "", "idle": idle] }
+  guard let app = frontApp() else { return ["app": "", "bundle": "", "title": "", "idle": idle] }
   var title = ""
+  var box: [String: CGFloat]? = nil
   if AXIsProcessTrusted() {
     let el = AXUIElementCreateApplication(app.processIdentifier)
     AXUIElementSetMessagingTimeout(el, 0.5)
-    if let w = attr(el, kAXFocusedWindowAttribute) { title = text(attr(w as! AXUIElement, kAXTitleAttribute)) }
+    if let w = attr(el, kAXFocusedWindowAttribute) {
+      title = text(attr(w as! AXUIElement, kAXTitleAttribute))
+      if let f = frame(w as! AXUIElement) { box = ["x": f.minX, "y": f.minY, "w": f.width, "h": f.height] }
+    }
   }
-  return ["app": app.localizedName ?? "", "bundle": app.bundleIdentifier ?? "", "title": String(title.prefix(200)), "idle": idle]
+  var out: [String: Any] = ["app": app.localizedName ?? "", "bundle": app.bundleIdentifier ?? "", "title": String(title.prefix(200)), "idle": idle]
+  if let b = box { out["frame"] = b }
+  return out
+}
+
+/**
+ * The app in front right now. NSWorkspace's frontmostApplication only updates
+ * through notifications on a run loop, which this line-reading helper doesn't
+ * run, so it goes stale; the accessibility system-wide element is always current.
+ */
+func frontApp() -> NSRunningApplication? {
+  let sys = AXUIElementCreateSystemWide()
+  if let focused = attr(sys, kAXFocusedApplicationAttribute) {
+    var pid: pid_t = 0
+    if AXUIElementGetPid(focused as! AXUIElement, &pid) == .success, let app = NSRunningApplication(processIdentifier: pid) { return app }
+  }
+  return NSWorkspace.shared.frontmostApplication
 }
 
 func num(_ v: Any?) -> Double? { (v as? NSNumber)?.doubleValue }
+
+/** The camera notch on the built-in display, in points from that screen's left edge: the gap between the menu bar's two usable areas. */
+func notch() -> [String: Any] {
+  for s in NSScreen.screens where s.safeAreaInsets.top > 0 {
+    guard let l = s.auxiliaryTopLeftArea, let r = s.auxiliaryTopRightArea else { continue }
+    return ["x": l.maxX - s.frame.minX, "w": r.minX - l.maxX, "h": s.safeAreaInsets.top, "screenW": s.frame.width]
+  }
+  return [:]
+}
 
 func handle(_ m: [String: Any]) throws -> [String: Any] {
   switch m["cmd"] as? String ?? "" {
@@ -216,19 +257,36 @@ func handle(_ m: [String: Any]) throws -> [String: Any] {
     glide(to: CGPoint(x: num(m["x"]) ?? 0, y: num(m["y"]) ?? 0), ms: num(m["ms"]) ?? 250)
     return [:]
   case "click":
-    var p = cursor()
-    if let x = num(m["x"]), let y = num(m["y"]) { p = CGPoint(x: x, y: y); glide(to: p, ms: num(m["ms"]) ?? 250) }
+    let back = cursor()
+    var p = back
+    let restore = (m["restore"] as? Bool) ?? false
+    if let x = num(m["x"]), let y = num(m["y"]) {
+      p = CGPoint(x: x, y: y)
+      if restore { CGWarpMouseCursorPosition(p) } else { glide(to: p, ms: num(m["ms"]) ?? 250) }
+    }
     click(at: p, right: (m["button"] as? String) == "right", count: Int(num(m["count"]) ?? 1))
+    // restore: the owner's mouse goes back where it was, so only Peguin's own cursor seems to move.
+    if restore { CGWarpMouseCursorPosition(back); CGAssociateMouseAndMouseCursorPosition(1) }
     return [:]
   case "scroll":
+    // With x, y: scroll there (where Peguin's cursor is), then put the owner's mouse back.
+    let back = cursor()
+    let at = num(m["x"]).flatMap { x in num(m["y"]).map { CGPoint(x: x, y: $0) } }
+    if let p = at { CGWarpMouseCursorPosition(p); usleep(20000) }
     let e = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: Int32(num(m["dy"]) ?? 0), wheel2: Int32(num(m["dx"]) ?? 0), wheel3: 0)
     post(e)
+    if at != nil { usleep(30000); CGWarpMouseCursorPosition(back); CGAssociateMouseAndMouseCursorPosition(1) }
     return [:]
   case "type": type(m["text"] as? String ?? ""); return [:]
   case "key": try key(m["combo"] as? String ?? ""); return [:]
-  case "targets": return targets()
+  case "targets": return targets(dock: (m["dock"] as? Bool) ?? false)
   case "browser": return browser()
   case "front": return front()
+  case "notch": return notch()
+  case "apps":
+    // Let NSWorkspace catch up first: this process has no run loop, so its list goes stale otherwise.
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+    return ["names": NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }.compactMap { $0.localizedName }]
   default: throw NSError(domain: "pointer", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown command"])
   }
 }

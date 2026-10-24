@@ -20,6 +20,7 @@ export type Action =
   | { kind: "open-url"; url: string }
   | { kind: "search"; query: string }
   | { kind: "open-app"; name: string }
+  | { kind: "quit-app"; name: string }
   | { kind: "browser" }
   | { kind: "numbers"; on: boolean }
   | { kind: "draw"; shape: Shape | "pen"; target: Target }
@@ -29,9 +30,9 @@ export type Action =
 
 export type Heard =
   /** Said the wake phrase and a command. */
-  | { command: string; called: boolean }
+  | { command: string; called: boolean; bare?: boolean }
   /** Said only the wake phrase: the next line is the command. */
-  | { armed: true }
+  | { armed: true; bare?: boolean }
   | null;
 
 const norm = (s: string) => s.toLowerCase().replace(/[’']/g, "'").replace(/[^a-z0-9'.\s-]/g, " ").replace(/\s+/g, " ").trim();
@@ -48,13 +49,28 @@ const SEP = "[\\s,.!?:;-]+";
  * penguins doesn't act. `names` are the owner's wake words (Settings). The
  * command keeps the owner's capitals and punctuation, for typing.
  */
-export function wake(text: string, names: string[] = ["Peguin"]): Heard {
+export function wake(text: string, names: string[] = ["Peguin"], hey = false): Heard {
+  const named = wakeNamed(text, names);
+  if (named || !hey) return named;
+  // "Hey" on its own (the owner's choice in Settings): "Hey, open Music", or "Hey." and the request next.
+  // `bare` marks it: a greeting to a person ("Hey John, ...") also looks like this, so it's treated with care.
+  const m = text.match(new RegExp(`^[\\s,.!?"'“”]*hey(?:${SEP}|$)([\\s\\S]*)$`, "i"));
+  if (!m) return null;
+  const rest = (m[1] ?? "").replace(/^(please|can you|could you|would you)[\s,]+/i, "").trim();
+  if (!/[a-z0-9]/i.test(rest)) return { armed: true, bare: true };
+  return { command: rest, called: true, bare: true };
+}
+
+function wakeNamed(text: string, names: string[]): Heard {
   const all = [...new Set([...names.map(norm), ...SOUNDS_LIKE])].filter(Boolean).sort((a, b) => b.length - a.length)
     .map((n) => n.split(" ").map(escape).join(SEP));
   const m = text.match(new RegExp(`^[\\s,.!?"'“”]*(?:(hey|hi|okay|ok|yo|hello)${SEP})?(?:${all.join("|")})(?:${SEP}|$)([\\s\\S]*)$`, "i"));
   if (!m) return null;
   const rest = (m[2] ?? "").replace(/^(please|can you|could you|would you)[\s,]+/i, "").trim();
   if (!/[a-z0-9]/i.test(rest)) return m[1] ? { armed: true } : null;
+  // "Hey Peguin. Hey Peguin, open Music": the name said twice; what follows the second one is the command.
+  const again = wakeNamed(rest, names);
+  if (again) return "armed" in again ? (m[1] ? again : null) : { command: again.command, called: again.called || !!m[1] };
   return { command: rest, called: !!m[1] };
 }
 
@@ -67,9 +83,21 @@ export function wake(text: string, names: string[] = ["Peguin"]): Heard {
  */
 export const commandPrompt = (name: string) => `Hey ${name}, hello there.`;
 
+/**
+ * A scrap rather than a request (pure): trailing off ("I'm...") or a single word
+ * that isn't a command. Used only when the line didn't start with "Hey Peguin".
+ */
+export function fragment(text: string): boolean {
+  const t = text.trim();
+  if (/(\.\.\.|…|-)$/.test(t)) return true;
+  return t.split(/\s+/).filter((w) => /[a-z0-9]/i.test(w)).length < 2;
+}
+
 /** What whisper writes for silence and noise; never a command, even right after "Hey Peguin". */
 export function isFiller(text: string, name = "Peguin"): boolean {
   const t = norm(text).replace(/[.,!?]/g, "").trim();
+  // Whisper's loop on noise: one short word over and over ("Oh, oh, oh, oh", "hey hey hey hey").
+  if (/^(\S{1,6})( \1){2,}$/.test(t)) return true;
   return !t || /^(thank you|thanks|okay|ok|bye|you|you're welcome|hello|no|yes|um|uh|hmm)$/.test(t) || t === norm(commandPrompt(name)).replace(/[.,!?]/g, "");
 }
 
@@ -153,7 +181,86 @@ const SHAPES: Record<string, Shape> = {
 };
 
 /** What a command asks for. `unknown` when it isn't one Peguin knows. */
+/** Spoken padding around a command: "can you ...", "please ...", "I need you to ...", "... for me". */
+export function unpad(text: string): string {
+  let t = text.trim(), prev = "";
+  while (t !== prev) {
+    prev = t;
+    t = t.replace(/^(so|um+|uh+|and|then|also|now|okay|ok|alright)[,\s]+/i, "")
+      .replace(/^(can|could|would|will) you( please)?[,\s]+/i, "")
+      .replace(/^(please|kindly|just|go ahead and|help me|quickly)[,\s]+/i, "")
+      .replace(/^(i need|i want|i'd like|i would like) (you )?to[,\s]+/i, "");
+    // Typed text is the owner's own words: its ending stays.
+    if (!/^(type|write|enter|input)\b/i.test(t)) t = t.replace(/[,\s]+(for me|please|now|right now|thanks|thank you|quickly)([.?!]*)$/i, "$2").replace(/\?+$/, "");
+  }
+  return t.trim();
+}
+
+/** Each sentence or clause of what was said, the whole line first ("type Hello, World!" stays whole). */
+function clauses(text: string): string[] {
+  const parts = text.split(/(?<=[.?!])\s+|,\s*(?:and\s+)?(?:then\s+)?|\s+and then\s+/).map((x) => x.trim()).filter(Boolean);
+  return [...new Set([text.trim(), ...parts])];
+}
+
+/**
+ * What the owner asked for. Polite padding is dropped, and when they said a few
+ * things in one breath ("I need you to open the Chrome tab, open the Chrome browser"),
+ * the first clause that's a command wins.
+ */
 export function parse(command: string): Action {
+  let first: Action | null = null;
+  for (const c of clauses(command)) {
+    const a = parseOne(unpad(c));
+    if (a.kind !== "unknown") return a;
+    first ??= a;
+  }
+  return first ?? { kind: "unknown", text: command.trim() };
+}
+
+/** An app name as said: "the Chrome browser" is Chrome. */
+const appName = (s: string) => {
+  let t = s.trim(), prev = "";
+  while (t !== prev) { prev = t; t = t.replace(/^(the|my|a|an)\s+/i, "").replace(/\s+(app|application|browser|tab|window|program)$/i, "").trim(); }
+  return t;
+};
+
+/** An app's name as the Dock shows it, which can differ from the installed one ("iTerm2" for iTerm). */
+export function dockLabel(name: string, labels: string[]): string | undefined {
+  const n = name.toLowerCase();
+  return labels.find((l) => l.toLowerCase() === n) ?? matchApp(name, labels) ?? labels.find((l) => l.toLowerCase().startsWith(n));
+}
+
+/**
+ * The installed app a spoken name means (pure): exact name first, then an app
+ * whose name contains the word ("Chrome" is Google Chrome), then a close spelling.
+ */
+export function matchApp(spoken: string, installed: string[]): string | null {
+  const s = norm(appName(spoken));
+  if (!s) return null;
+  const by = (f: (n: string) => boolean) => installed.filter((n) => f(norm(n)));
+  const exact = by((n) => n === s);
+  if (exact.length) return exact[0]!;
+  const word = by((n) => new RegExp(`(^|\\s)${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`).test(n)).sort((a, b) => a.length - b.length);
+  if (word.length) return word[0]!;
+  const close = installed.map((n) => ({ n, sc: labelScore(s, n) })).filter((x) => x.sc >= 0.8).sort((a, b) => b.sc - a.sc);
+  if (close[0]) return close[0].n;
+  // Heard slightly wrong ("notez"): one letter off for short names, two for longer ones.
+  const near = installed.map((n) => ({ n, d: edits(s, norm(n)) })).filter((x) => x.d <= (s.length >= 8 ? 2 : 1) && s.length >= 4).sort((a, b) => a.d - b.d);
+  return near[0]?.n ?? null;
+}
+
+/** Levenshtein distance. */
+function edits(a: string, b: string): number {
+  let row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i];
+    for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j]! + 1, next[j - 1]! + 1, row[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+    row = next;
+  }
+  return row[b.length]!;
+}
+
+function parseOne(command: string): Action {
   const said = command.trim();
   const raw = said.replace(/[.!?]+$/, "");
   const t = norm(raw).replace(/[.,]+$/, "").replace(/,/g, "").replace(/\s+(please|now|for me)$/, "").trim();
@@ -194,14 +301,21 @@ export function parse(command: string): Action {
 
   // Typed text keeps the owner's own capitals and punctuation.
   // Whisper ends every line with a full stop; a "!" or "?" was probably meant.
+  // "close Music", "quit Spotify", "close the music up": the app (checked against the installed ones when it runs).
+  if ((m = t.match(/^(?:close|quit|exit|shut(?: down)?|kill)\s+(?:the\s+)?(.+?)(?:\s+(?:app|application))?(?:\s+(?:up|down))?$/))) {
+    const name = appName(m[1]!);
+    if (name && name.split(/\s+/).length <= 4 && !/^(it|this|that|everything|all)$/.test(name.toLowerCase())) return { kind: "quit-app", name };
+  }
   if ((m = said.match(/^(?:type|write|enter|input)[\s,:]+(?:in\s+)?(.+?)\.?$/i))) return { kind: "type", text: m[1]!.trim() };
   if (/^((go|switch|take me) to|open|show( me)?|bring up)( (my|the))? (web )?browser$|^browser$/.test(t)) return { kind: "browser" };
   if ((m = raw.match(/^(?:search(?: the web| google| online)?(?: for)?|google|look up|research|find out(?: about)?)\s+(.+)$/i))) return { kind: "search", query: m[1]!.trim() };
   if ((m = raw.match(/^(?:find|look for) (?:on (?:the|this) page )?(.+?)(?: on (?:the|this) page)?$/i))) return { kind: "find", text: m[1]!.trim() };
-  if ((m = t.match(/^((go|navigate|take me|head) to|open|visit|load)\s+(.+)$/))) {
+  if ((m = t.match(/^((go|navigate|take me|head|switch) to|open|visit|load|launch|start)\s+(.+)$/))) {
     const url = spokenUrl(m[3]!);
     if (url) return { kind: "open-url", url };
-    if (m[1] === "open") return { kind: "open-app", name: raw.replace(/^open\s+/i, "").replace(/^(the|my)\s+/i, "").replace(/\s+app$/i, "").trim() };
+    // "open Slack", "go to Chrome", "switch to Notes": an app (checked against the installed ones when it runs).
+    const name = appName(raw.replace(/^\S+(\s+to)?\s+/i, ""));
+    if (name && name.split(/\s+/).length <= 4) return { kind: "open-app", name };
     return { kind: "unknown", text: raw };
   }
 
@@ -275,6 +389,7 @@ export function describe(a: Action): string {
     case "open-url": return `Opening ${a.url.replace(/^https:\/\//, "")}`;
     case "search": return `Searching for “${a.query}”`;
     case "open-app": return `Opening ${a.name}`;
+    case "quit-app": return `Quitting ${a.name}`;
     case "browser": return "Opening your browser";
     case "numbers": return a.on ? "Say “click” and a number" : "Numbers hidden";
     case "draw": return a.shape === "pen" ? "Draw with your mouse. Say “Hey Peguin, done” when you're finished" : `Drawing a ${a.shape}`;

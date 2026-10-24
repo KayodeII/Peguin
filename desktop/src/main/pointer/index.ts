@@ -4,37 +4,124 @@
 // Peguin's cursor travelling to what it clicks, a caption, numbered badges and
 // drawings. No AI and no screenshots: buttons are found by name through the
 // Mac's accessibility tree, like macOS Voice Control.
-import { BrowserWindow, globalShortcut, ipcMain, screen, shell, systemPreferences, type IpcMainEvent } from "electron";
+import { app, BrowserWindow, globalShortcut, ipcMain, screen, shell, systemPreferences, type IpcMainEvent } from "electron";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import path from "node:path";
 import { outDir, pointerHelperPath } from "../paths.js";
 import type { Settings } from "../settings.js";
 import { createListener, type Whisper } from "../speech/whisper.js";
-import { centre, commandPrompt, describe, Echo, isFiller, matchTarget, parse, searchUrl, wake, type Action, type Element, type Shape, type Target } from "./commands.js";
+import { glanceTarget, nextDrift, roamTarget } from "./roam.js";
+import { canType, drivePrompt, finishes, listTabs, stuck, MAX_STEPS, observe, readStep, screenKey, stepLine, type Seen, type Step } from "./drive.js";
+import { BROWSERS, closeScript, listScript, readTabs, switchScript, type Tab } from "./tabs.js";
+import { centre, commandPrompt, dockLabel, fragment, matchApp, describe, Echo, isFiller, matchTarget, parse, searchUrl, wake, type Action, type Element, type Shape, type Target } from "./commands.js";
 
 /** What the copilot hears from the meeting; a matching "Hey Peguin" from the mic came out of the speakers. */
 export const echo = new Echo();
 
+/**
+ * Done on the spot even in Smart drive: instant, and nothing to work out. Everything
+ * else (and opening or quitting an app whose name doesn't match one on this Mac)
+ * goes to the owner's AI, which sees the screen, the tabs and the running apps.
+ */
+const INSTANT = new Set<Action["kind"]>(["scroll", "key", "type", "draw", "clear", "numbers", "stop"]);
+/** Told to the AI when the words may not have been for Peguin: after a bare "Hey", or as a follow-up to the last request. */
+const UNSURE = {
+  greeting: "This may not have been said to Peguin: \"Hey\" is also how the owner greets a person (\"Hey John, …\"). Unless it's clearly a request to do something on this computer, reply {\"action\":\"stop\",\"say\":\"not a request\"}.",
+  followUp: (last: string) => `Said without Peguin's name, seconds after the owner's last request (${last}), so it's most likely a follow-up to it: "it" and "that" mean what that request was about. Do it if it makes sense as a follow-up; if it's clearly someone talking about something else, reply {"action":"stop","say":"not a request"}.`,
+};
+
+/** How long Peguin waits for the owner's answer after it asks a question. */
+const ASK_MS = 15_000;
+/** Longest answer taken as the owner's (longer is most likely the room: a video, a call, the TV). */
+const ANSWER_WORDS = 15;
+/** The owner's recent requests, for "close it" and "do that again". */
+const RECENT_MS = 10 * 60_000;
+
+/** Runs AppleScript; resolves with what it returned. */
+const osa = (script: string, timeout = 5000) => new Promise<string>((resolve, reject) =>
+  execFile("osascript", ["-e", script], { timeout }, (e, out) => (e ? reject(e) : resolve(out.trim()))));
+
+/**
+ * Each browser's tab read, still running or finished. A read is never killed: the
+ * first one can sit behind macOS's "allow Peguin to control Chrome?" prompt, and
+ * killing it would dismiss the prompt.
+ */
+const tabReads = new Map<string, { at: number; tabs: Tab[] | null; pending: Promise<Tab[]> | null }>();
+
+/** Tabs in the running browsers (titles and addresses only), waiting at most 2.5 s; `unread` are browsers still not answering. */
+async function browserTabs(running: string[]): Promise<{ tabs: Tab[]; unread: string[] }> {
+  const on = BROWSERS.filter((b) => running.includes(b));
+  const got = await Promise.all(on.map(async (b) => {
+    const r = tabReads.get(b) ?? { at: 0, tabs: null, pending: null };
+    tabReads.set(b, r);
+    if (!r.pending) {
+      r.pending = osa(listScript(b), 120_000).then((out) => readTabs(b, out), () => r.tabs ?? []);
+      void r.pending.then((t) => { r.tabs = t; r.at = Date.now(); r.pending = null; });
+    }
+    const t = await Promise.race([r.pending, sleep(2500).then(() => null)]);
+    return { b, tabs: t ?? r.tabs };
+  }));
+  return { tabs: got.flatMap((g) => g.tabs ?? []), unread: got.filter((g) => !g.tabs).map((g) => g.b) };
+}
+/** Pause after each step so the screen settles before Peguin looks again. */
+const SETTLE_MS = 700;
+
+
+/** Names of the apps installed on this Mac, for "open Chrome" (re-read at most once a minute). */
+let apps: { at: number; names: string[] } | null = null;
+function installedApps(): string[] {
+  if (apps && Date.now() - apps.at < 60_000) return apps.names;
+  const dirs = ["/Applications", "/Applications/Utilities", "/System/Applications", "/System/Applications/Utilities", path.join(app.getPath("home"), "Applications")];
+  const names = dirs.flatMap((d) => { try { return readdirSync(d).filter((f) => f.endsWith(".app")).map((f) => f.slice(0, -4)); } catch { return []; } });
+  // Finder lives with the system's own services, not in Applications.
+  if (existsSync("/System/Library/CoreServices/Finder.app")) names.push("Finder");
+  apps = { at: Date.now(), names: [...new Set(names)] };
+  return apps.names;
+}
+
 /** While the copilot is in a meeting, wait this long for its transcript before acting, so the echo check can see it. */
 const ECHO_WAIT_MS = 1800;
-/** After "Hey Peguin" alone (or the shortcut), the next line is the command. */
-const ARMED_MS = 6000;
-const GLIDE_MS = 260;
+/** The camera notch's width in points, from the helper (macOS reports it); null on a Mac without one. */
+let cameraNotch: number | null = null;
+/** Width of each side of the island beside the camera, where the dot and the waveform show (matches the overlay's CSS). */
+const EAR = 46;
+
+/** The primary display's menu bar height and, when it has a camera notch, the notch's width. */
+function topOf(d: Electron.Display) {
+  const bar = d.workArea.y - d.bounds.y;
+  return { bar, notchW: bar >= 32 ? cameraNotch ?? 185 : 0 };
+}
+
+/** The fin's resting place: on the right side of the island, like a flipper on Peguin's body. */
+function homePoint() {
+  const d = screen.getPrimaryDisplay();
+  const { bar, notchW } = topOf(d);
+  return { x: d.bounds.x + d.bounds.width / 2 + (notchW ? notchW / 2 + EAR + 4 : 84), y: d.bounds.y + (notchW ? bar : 50) - 6 };
+}
+
 /** The overlay records at 24 kHz: whisper gets it at 16 kHz, Learn my voice keeps the full quality. */
 const MIC_RATE = 24000;
 
 type Rect = { x: number; y: number; w: number; h: number };
 export type OverlayEvent =
-  | { kind: "origin"; x: number; y: number; mic: boolean }
-  | { kind: "glide"; from: { x: number; y: number }; x: number; y: number; ring: Rect | null }
-  | { kind: "caption"; text: string; tone: "info" | "warn"; x: number; y: number }
-  | { kind: "listening"; on: boolean; x: number; y: number }
+  /** `island`: this display shows the Dynamic Island (the primary one); `notch`: the menu bar has a camera notch, so the island hugs it. */
+  | { kind: "origin"; x: number; y: number; mic: boolean; island: boolean; notch: boolean; bar: number; notchW: number }
+  /** Peguin's own cursor, in global points; every display draws it when it's on that display. */
+  | { kind: "agent"; x: number; y: number; ring: Rect | null; animate: boolean; docked: boolean; ms?: number }
+  /** How Peguin's cursor looks and moves, and whether the island shows (from Settings). */
+  | { kind: "style"; cursor: Settings["pointer"]["cursor"]; island: boolean }
+  /** The owner's mouse (global points), for the penguin's eye to follow while it rests. */
+  | { kind: "look"; x: number; y: number }
+  /** What the island and Peguin's cursor show: idle, hearing (its name was heard: a waveform), working or warn (with what it's doing). */
+  | { kind: "mode"; mode: Mode; text?: string }
   | { kind: "numbers"; items: (Rect & { n: number })[] }
   | { kind: "shape"; shape: Shape; rect: Rect }
   | { kind: "pen"; on: boolean }
   | { kind: "clear" };
+
+export type Mode = "idle" | "hearing" | "working" | "warn";
 
 export type PointerStatus = {
   on: boolean;
@@ -42,6 +129,8 @@ export type PointerStatus = {
   trusted: boolean;
   mic: "granted" | "denied" | "not-determined" | "restricted" | "unknown";
   helper: boolean;
+  /** The app to switch on under Accessibility: "Peguin", or "Electron" when running from source. */
+  appName: string;
   last?: { heard: string; did: string; at: number };
   error?: string;
 };
@@ -87,6 +176,12 @@ export class Helper {
   stop() { this.proc?.kill(); this.proc = null; }
 }
 
+/** Development only: what voice control hears, in userData/pointer-debug.log, to find where it stops. Never in a release. */
+function debug(line: string) {
+  if (app.isPackaged) return;
+  try { appendFileSync(path.join(app.getPath("userData"), "pointer-debug.log"), `${new Date().toISOString()} ${line}\n`); } catch { /* best effort */ }
+}
+
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const rectOf = (e: Element): Rect => ({ x: e.x, y: e.y, w: e.w, h: e.h });
@@ -103,7 +198,26 @@ export class VoiceControl {
   private running = false;
   private queue = Promise.resolve();
   private detach: (() => void)[] = [];
-  private lastStatus: PointerStatus = { on: false, trusted: false, mic: "unknown", helper: false };
+  private lastStatus: PointerStatus = { on: false, trusted: false, mic: "unknown", helper: false, appName: app.isPackaged ? "Peguin" : "Electron" };
+  /** Where Peguin's own cursor is (global points). It stays where it last worked; the owner's mouse is theirs. */
+  private agent = { x: 0, y: 0 };
+  private modeAt = 0;
+  private docked = true;
+  private homeTimer: NodeJS.Timeout | null = null;
+  private eyes: NodeJS.Timeout | null = null;
+  private roamTimer: NodeJS.Timeout | null = null;
+  private chunks = 0;
+  /** The armed window is a follow-up after a command (not "Hey Peguin" on its own). */
+  private followUp = false;
+  /** Woken by a bare "Hey" (not the name): the request must be a clear one. */
+  private armedBare = false;
+  private armCheck: ReturnType<typeof setTimeout> | undefined;
+  /** A question Peguin asked mid-task; the owner's next words answer it. */
+  private asked: { goal: string; question: string; until: number } | null = null;
+  /** The owner's recent requests and how they went, newest last. */
+  private recent: { at: number; line: string }[] = [];
+  /** The Smart drive in progress; `stop` ends it after the current step. */
+  private driving: { stop: boolean } | null = null;
 
   constructor(
     private settings: () => Settings,
@@ -113,6 +227,10 @@ export class VoiceControl {
     private report: (s: PointerStatus) => void,
     /** The owner talking, not to Peguin (for Learn my voice, which decides whether to keep it). */
     private talk?: (pcm: Buffer, rate: number, text: string) => void,
+    /** The owner's AI, for a line addressed to Peguin that it couldn't understand. */
+    private interpret?: (heard: string) => Promise<string | null>,
+    /** The owner's AI, for Smart drive: one prompt in, the reply out. */
+    private think?: (prompt: string) => Promise<string>,
   ) {}
 
   async status(): Promise<PointerStatus> {
@@ -147,12 +265,13 @@ export class VoiceControl {
       whisperUrl: w.url,
       names: [s.displayName || "the owner"],
       prompt: () => commandPrompt(this.settings().pointer.wakeWords[0] ?? "Peguin"),
-      endSilenceMs: 600, // commands are short; answer quickly
+      endSilenceMs: 900, // long enough for a pause mid-sentence ("close my Gmail on the… other window")
       rate: MIC_RATE,
       onUtterance: ({ text, pcm }) => this.heard(text, pcm),
-      onError: (e) => this.update({ error: `Speech recognition error: ${message(e)}` }),
+      onError: (e) => { debug(`stt error: ${message(e)}`); this.update({ error: `Speech recognition error: ${message(e)}` }); },
     });
     this.running = true;
+    cameraNotch = await this.helper.call<{ w?: number }>("notch").then((r) => r.w || null, () => null);
     this.openOverlays();
     const rebuild = () => { if (this.running) { this.closeOverlays(); this.openOverlays(); } };
     screen.on("display-added", rebuild);
@@ -160,13 +279,27 @@ export class VoiceControl {
     screen.on("display-metrics-changed", rebuild);
     this.detach.push(() => { screen.removeListener("display-added", rebuild); screen.removeListener("display-removed", rebuild); screen.removeListener("display-metrics-changed", rebuild); });
     this.bindShortcut();
+    // The penguin's eye follows the owner's mouse (only when it moved; ~8 times a second).
+    let last = "";
+    this.eyes = setInterval(() => {
+      const p = screen.getCursorScreenPoint(), k = `${p.x},${p.y}`;
+      if (k !== last) { last = k; this.all({ kind: "look", x: p.x, y: p.y }); }
+    }, 120);
+    debug(`started: whisper ${w.url}`);
+    this.roam();
+    const rate = setInterval(() => { debug(`mic chunks in the last 10 s: ${this.chunks}`); this.chunks = 0; }, 10000);
+    this.detach.push(() => clearInterval(rate));
     const st = await this.status();
-    this.update({ ...st, error: st.trusted ? undefined : "Allow Peguin under Accessibility so it can click and type." });
+    this.update({ ...st, error: st.trusted ? undefined : `Switch on ${st.appName} under Accessibility so Peguin can click and type.` });
     return this.lastStatus;
   }
 
   async stop() {
     this.running = false;
+    if (this.homeTimer) clearTimeout(this.homeTimer);
+    if (this.roamTimer) clearTimeout(this.roamTimer);
+    if (this.eyes) clearInterval(this.eyes);
+    this.eyes = null;
     this.listen = null;
     if (this.shortcut) globalShortcut.unregister(this.shortcut);
     this.shortcut = "";
@@ -190,17 +323,45 @@ export class VoiceControl {
     }
   }
 
-  private async arm() {
-    this.armedUntil = Date.now() + ARMED_MS;
-    const p = await this.cursor();
-    this.send(p, { kind: "listening", on: true, ...p });
-    setTimeout(() => { if (Date.now() >= this.armedUntil) void this.cursor().then((q) => this.send(q, { kind: "listening", on: false, ...q })); }, ARMED_MS + 50);
+  /** Woken ("Hey Peguin", "Hey", the shortcut): the next line is the request, for the owner's few seconds (Settings). */
+  private async arm(bare = false) {
+    this.armedUntil = Date.now() + this.settings().pointer.listenS * 1000;
+    this.armedBare = bare;
+    this.followUp = false;
+    this.mode("hearing");
+    this.armTimer();
+  }
+
+  /** Goes back to idle when the listening time is up; checks again if talking stretched it. */
+  private armTimer() {
+    if (this.armCheck) clearTimeout(this.armCheck);
+    this.armCheck = setTimeout(() => {
+      if (!this.armedUntil || this.followUp) return;
+      if (Date.now() < this.armedUntil) { this.armTimer(); return; }
+      this.armedUntil = 0;
+      this.mode("idle");
+    }, Math.max(50, this.armedUntil - Date.now() + 50));
+  }
+
+  /** After a request, follow-ups for the owner's few seconds without the wake word. */
+  private listenOn() {
+    const s = this.settings().pointer.followS;
+    if (!s) return;
+    this.armedUntil = Date.now() + s * 1000;
+    this.followUp = true;
+    this.armedBare = false;
   }
 
   // MARK: overlay windows
 
   private openOverlays() {
     const primary = screen.getPrimaryDisplay().id;
+    // Peguin's cursor starts at home: the island, or the middle of the screen when it roams.
+    if (this.docked) {
+      const home = this.settings().pointer.cursor.home;
+      if (home === "island") this.agent = homePoint();
+      else { const w = screen.getPrimaryDisplay().workArea; this.agent = { x: w.x + w.width / 2, y: w.y + w.height / 2 }; this.docked = false; }
+    }
     for (const d of screen.getAllDisplays()) {
       const b = d.bounds;
       const win = new BrowserWindow({
@@ -216,7 +377,11 @@ export class VoiceControl {
       else void win.loadFile(this.page.file!, { hash: "pointer" });
       // Only the primary display's window listens to the mic.
       win.webContents.once("did-finish-load", () => {
-        win.webContents.send("pointer:event", { kind: "origin", x: b.x, y: b.y, mic: d.id === primary } satisfies OverlayEvent);
+        const { bar, notchW } = topOf(d);
+        win.webContents.send("pointer:event", { kind: "origin", x: b.x, y: b.y, mic: d.id === primary, island: d.id === primary, notch: notchW > 0, bar, notchW } satisfies OverlayEvent);
+        const p = this.settings().pointer;
+        win.webContents.send("pointer:event", { kind: "style", cursor: p.cursor, island: p.island } satisfies OverlayEvent);
+        win.webContents.send("pointer:event", { kind: "agent", ...this.agent, ring: null, animate: false, docked: this.docked } satisfies OverlayEvent);
         win.showInactive();
       });
       this.overlays.set(d.id, win);
@@ -226,8 +391,8 @@ export class VoiceControl {
       ipcMain.on(channel, h);
       this.detach.push(() => ipcMain.removeListener(channel, h));
     };
-    on("pointer:pcm", (_e, buf: ArrayBuffer) => this.listen?.(buf));
-    on("pointer:mic-error", (_e, why: string) => this.update({ error: `Can't hear your microphone (${String(why)}).` }));
+    on("pointer:pcm", (_e, buf: ArrayBuffer) => { this.chunks++; this.listen?.(buf); });
+    on("pointer:mic-error", (_e, why: string) => { debug(`mic error: ${why}`); this.update({ error: `Can't hear your microphone (${String(why)}).` }); });
     on("pointer:pen-done", () => this.penOff());
   }
 
@@ -255,40 +420,109 @@ export class VoiceControl {
     return this.helper.call<{ x: number; y: number }>("cursor").catch(() => screen.getCursorScreenPoint());
   }
 
-  private async caption(text: string, tone: "info" | "warn" = "info", at?: { x: number; y: number }) {
-    const p = at ?? await this.cursor();
-    this.send(p, { kind: "caption", text, tone, ...p });
+  /** The island and Peguin's cursor; working and warn go back to idle by themselves. */
+  private mode(mode: Mode, text?: string) {
+    if (mode !== "idle") this.modeAt = Date.now();
+    this.all({ kind: "mode", mode, text });
+    if (process.env.PENGUIN_OVERLAY_SNAP && !app.isPackaged) setTimeout(() => void this.snapTop(mode), 700);
+  }
+
+  /** Development only: the top of the primary overlay as Peguin drew it (its own window, so no Screen Recording needed). */
+  private async snapTop(label: string) {
+    const win = this.overlays.get(screen.getPrimaryDisplay().id);
+    if (!win || win.isDestroyed()) return;
+    const img = await win.webContents.capturePage({ x: Math.round(win.getBounds().width / 2) - 300, y: 0, width: 600, height: 110 });
+    writeFileSync(path.join(app.getPath("userData"), `overlay-${label}.png`), img.toPNG());
+    debug(`overlay ${label}: bounds ${JSON.stringify(win.getBounds())}`);
+  }
+
+  private async caption(text: string, tone: "info" | "warn" = "info") {
+    this.mode(tone === "warn" ? "warn" : "working", text);
   }
 
   // MARK: hearing
 
   private heard(text: string, pcm?: Buffer) {
+    const p = this.settings().pointer;
+    // "Hey" alone wakes Peguin only when the owner chose it, and never in a meeting, where "Hey" is for people.
+    const hey = p.wake === "hey" && !this.copilotLive();
+    debug(`heard: ${JSON.stringify(text)} (wake: ${JSON.stringify(wake(text, p.wakeWords, hey))})`);
     if (!this.running) return;
     const now = Date.now();
     const armed = now < this.armedUntil;
-    const names = this.settings().pointer.wakeWords;
+    const names = p.wakeWords;
     if (isFiller(text, names[0])) return;
-    const h = wake(text, names);
-    if (h && "armed" in h) { void this.arm(); return; }
+    const h = wake(text, names, hey);
+    // The answer to a question Peguin just asked: back to the same task, with the answer.
+    // Only a short answer counts: a TV or a video in the room talks in long sentences.
+    const asked = this.asked && now < this.asked.until && !h && text.trim().split(/\s+/).length <= ANSWER_WORDS ? this.asked : null;
+    if (asked) {
+      this.asked = null;
+      this.armedUntil = 0;
+      const goal = `${asked.goal}\n(You asked “${asked.question}” and heard: “${text.trim()}”. If that doesn't make sense as the owner's reply, it was probably someone else talking or a TV: stop and say you didn't catch the answer.)`;
+      debug(`answer: ${JSON.stringify(text)}`);
+      this.mode("hearing");
+      this.queue = this.queue.then(async () => { if (await this.drive(goal)) this.listenOn(); }).catch((e) => { debug(`failed: ${message(e)}`); void this.caption(message(e), "warn"); });
+      return;
+    }
+    if (h && "armed" in h) { void this.arm(!!h.bare); return; }
     const command = h ? h.command : armed ? text : null;
+    const followUp = !h && armed && this.followUp;
+    // Not sure it's for Peguin: a bare "Hey …", the line after a bare "Hey", or a follow-up. The AI decides,
+    // and if it isn't a request for the computer Peguin drops it without a word.
+    const unsure = !!h?.bare || (!h && armed && (this.armedBare || followUp));
     if (!command) {
       // Not for Peguin: dropped, unless Learn my voice keeps it as a clip for the owner to review.
       // Never during a call, when the mic can pick up the meeting from the speakers.
       if (pcm && !this.copilotLive()) this.talk?.(pcm, MIC_RATE, text);
       return;
     }
-    const action = parse(command);
+    let action = parse(command);
+    // "Stop" while Peguin is driving ends it now, not after the queue.
+    if (action.kind === "stop" && this.driving) { this.driving.stop = true; this.mode("warn", "Stopped"); return; }
     // A bare "Peguin ..." only counts when it's a known command.
     if (action.kind === "unknown" && h && !h.called && !armed) return;
+    // A cut-off scrap ("Hey Peguin, I'm...", "So") isn't the request yet: keep listening for it (talking stretches the wait).
+    if (action.kind === "unknown" && fragment(command)) {
+      debug(`fragment: ${JSON.stringify(command)}`);
+      if (h) void this.arm(!!h.bare);
+      else if (armed && !followUp) { this.armedUntil = Math.max(this.armedUntil, now + p.listenS * 1000); this.armTimer(); }
+      return;
+    }
+    // Unsure lines Peguin can't make sense of on its own need the owner's AI (Smart); without it they're the room.
+    if (action.kind === "unknown" && unsure && !this.smart()) return;
+    // A new request replaces one still being worked through: the owner changed their mind.
+    if (this.driving) this.driving.stop = true;
+    debug(`run: ${JSON.stringify(action)}`);
     this.armedUntil = 0;
-    void this.cursor().then((p) => this.send(p, { kind: "listening", on: false, ...p }));
+    if (!unsure || action.kind !== "unknown") this.mode("hearing"); // its name was heard: the cursor becomes a waveform until it acts
     this.queue = this.queue.then(async () => {
       if (this.copilotLive()) {
         await sleep(ECHO_WAIT_MS);
-        if (echo.heard(text, Date.now())) { this.update({ last: { heard: text, did: "Ignored: it came from the meeting", at: Date.now() } }); return; }
+        if (echo.heard(text, Date.now())) { this.update({ last: { heard: text, did: "Ignored: it came from the meeting", at: Date.now() } }); this.mode("idle"); return; }
       }
+      // Smart drive: opening, finding, clicking and searching are worked out by the owner's AI, step by step, on screen.
+      if (this.smart() && !this.local(action) && (action.kind !== "unknown" || h?.called || armed)) {
+        const quiet = !unsure || action.kind !== "unknown" ? undefined : h?.bare || this.armedBare && !followUp ? "greeting" as const : "followUp" as const;
+        const acted = await this.drive(command, { quiet });
+        if (acted) this.listenOn();
+        return;
+      }
+      // Addressed to Peguin but not understood: ask the owner's AI what they meant (the words only).
+      if (action.kind === "unknown" && (h?.called || (armed && !followUp)) && this.interpret && this.settings().pointer.askAi) {
+        this.mode("working", "Working out what you meant…");
+        const guess = await this.interpret(command).catch((e) => { debug(`ai failed: ${message(e)}`); return null; });
+        debug(`ai: ${JSON.stringify(command)} -> ${JSON.stringify(guess)}`);
+        const better = guess ? parse(guess) : null;
+        if (better && better.kind !== "unknown") action = better;
+      }
+      const started = Date.now();
       await this.run(action, text);
-    }).catch((e) => void this.caption(message(e), "warn"));
+      this.remember(`“${command}”: ${describe(action)}`);
+      if (this.modeAt <= started) this.mode("idle"); // nothing to say about it (clear, hide numbers)
+      // A follow-up ("now scroll down") doesn't need the wake phrase again.
+      if (action.kind !== "unknown" && action.kind !== "stop") this.listenOn();
+    }).catch((e) => { debug(`failed: ${message(e)}`); void this.caption(message(e), "warn"); });
   }
 
   // MARK: doing
@@ -297,7 +531,7 @@ export class VoiceControl {
   async run(a: Action, heard = "") {
     const did = describe(a);
     this.update({ last: { heard, did, at: Date.now() }, error: undefined });
-    const needsHands = !["open-url", "search", "open-app", "clear", "stop", "unknown", "draw"].includes(a.kind) || (a.kind === "draw" && a.target.by !== "cursor");
+    const needsHands = !["open-url", "search", "clear", "stop", "unknown", "draw"].includes(a.kind) || (a.kind === "draw" && a.target.by !== "cursor");
     if (needsHands && !(await this.status()).trusted) {
       await this.caption("Peguin needs Accessibility to do that. Turn it on in Settings > Voice control.", "warn");
       return;
@@ -307,13 +541,14 @@ export class VoiceControl {
         const p = await this.locate(a.target, a.kind);
         if (!p) return;
         await this.glide(p.point, p.rect, did);
-        await this.helper.call("click", { ...p.point, button: a.button, count: a.count, ms: 0 });
+        // The click happens where Peguin's cursor is; the owner's mouse goes straight back to where it was.
+        await this.helper.call("click", { ...p.point, button: a.button, count: a.count, restore: true });
         this.numbersOff();
         return;
       }
       case "point": {
         const p = await this.locate(a.target, a.kind);
-        if (p) { await this.glide(p.point, p.rect, did); await this.helper.call("move", { ...p.point, ms: 0 }); }
+        if (p) await this.glide(p.point, p.rect, did);
         return;
       }
       case "scroll": {
@@ -332,10 +567,9 @@ export class VoiceControl {
         return;
       case "open-url": await this.caption(did); await shell.openExternal(a.url); return;
       case "search": await this.caption(did); await shell.openExternal(searchUrl(this.settings().pointer.searchUrl, a.query)); return;
-      case "open-app":
-        await this.caption(did);
-        await new Promise<void>((resolve, reject) => execFile("open", ["-a", a.name], (e) => (e ? reject(new Error(`I couldn't find an app called “${a.name}”.`)) : resolve())));
-        return;
+      // Visibly, like a person: Peguin clicks it in the Dock (no AI needed for this one).
+      case "open-app": await this.openApp(a.name, ""); return;
+      case "quit-app": await this.quitApp(a.name, ""); return;
       case "browser": {
         const r = await this.helper.call<{ name: string }>("browser");
         await this.caption(r.name ? `Opening ${r.name}` : did);
@@ -363,6 +597,213 @@ export class VoiceControl {
     }
   }
 
+  /** A typed command (Settings' "Try it", development): the same routing as a spoken one, without the wake phrase. */
+  async command(text: string) {
+    const a = parse(text);
+    if (this.smart() && !this.local(a)) return this.drive(text);
+    return this.run(a, text);
+  }
+
+  private smart() { return this.settings().pointer.drive === "smart" && !!this.think; }
+
+  /** Done here without the AI: instant actions, and apps named exactly as installed. */
+  private local(a: Action) {
+    if (INSTANT.has(a.kind)) return true;
+    if (a.kind === "open-app" || a.kind === "quit-app") return !!matchApp(a.name, installedApps());
+    return false;
+  }
+
+  private remember(line: string) {
+    const now = Date.now();
+    this.recent = [...this.recent.filter((r) => now - r.at < RECENT_MS), { at: now, line: line.slice(0, 200) }].slice(-5);
+  }
+
+  /**
+   * Smart drive: look at the screen, ask the owner's AI for one step, do it with
+   * Peguin's cursor where the owner can see, and again, until it's done (or stopped,
+   * or 12 steps). Esc or "Hey Peguin, stop" ends it.
+   */
+  /**
+   * `quiet`: Peguin isn't sure the words were for it (a bare "Hey …", a follow-up). Nothing shows until the
+   * AI picks a real step; if it says this isn't a request, Peguin goes back to idle without a word.
+   * Resolves false when nothing was done.
+   */
+  async drive(goal: string, o: { quiet?: "greeting" | "followUp" } = {}): Promise<boolean> {
+    if (this.driving) this.driving.stop = true;
+    const run = { stop: false };
+    this.driving = run;
+    const esc = () => { run.stop = true; this.mode("warn", "Stopped"); };
+    const escBound = globalShortcut.register("Escape", esc);
+    const history: string[] = [];
+    const earlier = this.recent.filter((r) => Date.now() - r.at < RECENT_MS).map((r) => r.line);
+    let prev: Step | undefined, prevTarget: Seen | undefined, lastKey = "";
+    let outcome = "didn't finish";
+    let acted = false;
+    try {
+      if (!(await this.status()).trusted) { await this.caption("Peguin needs Accessibility to do that. Turn it on in Settings > Voice control.", "warn"); return acted; }
+      for (let i = 0; i < MAX_STEPS; i++) {
+        if (run.stop) return acted;
+        // First, what Peguin heard, so the owner can tell a mishearing straight away.
+        if (!(o.quiet && i === 0)) this.mode("working", i ? "Looking at the screen…" : `“${goal.split("\n")[0]!.slice(0, 60)}”`);
+        const [seen, apps] = await Promise.all([
+          this.helper.call<{ app: string; elements: Seen[] }>("targets", { dock: true }),
+          this.helper.call<{ names: string[] }>("apps").then((r) => r.names, () => [] as string[]),
+        ]);
+        const { tabs, unread } = await browserTabs(apps);
+        const { list, byId } = observe(seen.elements);
+        const tabIds = listTabs(tabs).byId;
+        if (unread.length && i === 0) await this.caption(`Allow Peguin to see ${unread.join(" and ")} tabs if macOS asks.`);
+        const key = screenKey(seen.app, seen.elements), changed = key !== lastKey;
+        lastKey = key;
+        debug(`drive ${i + 1} sees ${seen.app}: ${seen.elements.length} elements (${["dock", "window", "menu"].map((k) => `${k} ${seen.elements.filter((e) => (e.area ?? "window") === k).length}`).join(", ")})`);
+        debug(`drive ${i + 1}: ${tabs.length} tabs${unread.length ? ` (not answering: ${unread.join(", ")})` : ""}`);
+        const note = o.quiet === "greeting" ? UNSURE.greeting : o.quiet === "followUp" ? UNSURE.followUp(earlier.at(-1) ?? "none") : "";
+        const asked = note && !acted ? `${goal}\n(${note})` : goal;
+        const reply = await this.think!(drivePrompt(asked, seen.app, list, history, { tabs, apps, earlier, unread }));
+        if (run.stop) return acted;
+        const step = readStep(reply, byId, tabIds);
+        debug(`drive ${i + 1}: ${JSON.stringify(step)} from ${JSON.stringify(reply.slice(0, 200))}`);
+        if (!step) { history.push("(that reply wasn't one usable JSON step with an id from the list)"); continue; }
+        if (step.action === "done") { outcome = step.say || "done"; if (o.quiet && !acted) { this.mode("idle"); return acted; } this.mode("working", step.say || "Done"); return true; }
+        // Unsure it was for Peguin and the AI agrees it isn't a request: drop it without a word.
+        if (o.quiet && !acted && (step.action === "stop" || step.action === "ask")) { outcome = "not a request"; this.mode("idle"); return acted; }
+        if (step.action === "stop") { outcome = `stopped: ${step.say}`; await this.caption(step.say, "warn"); return acted; }
+        if (step.action === "ask") {
+          // Wait for the answer without "Hey Peguin"; it comes back to this same task.
+          outcome = `asked “${step.question}”`;
+          this.asked = { goal, question: step.question, until: Date.now() + ASK_MS };
+          this.armedUntil = Date.now() + ASK_MS; this.followUp = false;
+          await this.caption(step.question);
+          return true;
+        }
+        if (stuck(step, prev, changed)) {
+          await this.caption(`That didn't work: ${stepLine(step, byId)} changed nothing. Try asking another way.`, "warn");
+          return acted;
+        }
+        if (step.action === "type" && !canType(prev, prevTarget, changed)) {
+          debug(`drive ${i + 1}: typing refused (nothing chosen to type into)`);
+          history.push("(typing refused: click a text field you can see in the list first; keys would go to whatever app is in front)");
+          continue;
+        }
+        await this.doStep(step, byId, tabIds, seen.elements);
+        acted = true;
+        prev = step;
+        prevTarget = "id" in step && step.id ? byId.get(step.id) : undefined;
+        history.push(stepLine(step, byId, tabIds));
+        outcome = `last step: ${stepLine(step, byId, tabIds)}`;
+        this.update({ last: { heard: goal, did: `Step ${i + 1}: ${stepLine(step, byId, tabIds)}`, at: Date.now() } });
+        if (finishes(step, goal)) {
+          const said = stepLine(step, byId, tabIds);
+          outcome = said;
+          this.mode("working", said.charAt(0).toUpperCase() + said.slice(1));
+          return acted;
+        }
+        await sleep(step.action === "wait" ? 1500 : SETTLE_MS);
+      }
+      await this.caption(`I stopped after ${MAX_STEPS} steps without finishing. Try asking in smaller parts.`, "warn");
+      return acted;
+    } finally {
+      this.remember(`“${goal.split("\n")[0]}”: ${outcome}`);
+      if (escBound) globalShortcut.unregister("Escape");
+      if (this.driving === run) this.driving = null;
+      this.goHomeLater();
+    }
+  }
+
+  /** One planned step, done visibly: Peguin's cursor goes there first. */
+  private async doStep(s: Exclude<Step, { action: "done" | "stop" | "ask" }>, byId: Map<number, Seen>, tabs: Map<string, Tab>, seen: Seen[]) {
+    const say = s.why || stepLine(s, byId, tabs);
+    switch (s.action) {
+      case "click": case "double_click": case "right_click": {
+        const e = byId.get(s.id)!;
+        const p = centre(e);
+        await this.glide(p, rectOf(e), say);
+        await this.helper.call("click", { ...p, button: s.action === "right_click" ? "right" : "left", count: s.action === "double_click" ? 2 : 1, restore: true });
+        return;
+      }
+      case "type": await this.caption(say); await this.helper.call("type", { text: s.text }); return;
+      case "key": await this.caption(say); await this.helper.call("key", { combo: s.combo }); return;
+      case "scroll": {
+        const e = s.id ? byId.get(s.id) : undefined;
+        const p = e ? centre(e) : this.agent;
+        if (e) await this.glide(p, rectOf(e), say); else await this.caption(say);
+        await this.helper.call("scroll", { dy: s.dir === "up" ? 8 : -8, dx: 0, x: p.x, y: p.y });
+        return;
+      }
+      case "open_url": await this.caption(say); await shell.openExternal(s.url); return;
+      case "wait": await this.caption(say); return;
+      case "open_app": return this.openApp(s.name, say);
+      case "quit_app": return this.quitApp(s.name, say);
+      case "close_tab": case "switch_tab": {
+        const x = tabs.get(s.tab)!;
+        // Peguin's cursor goes to the tab when it's on screen, then the browser is told which one.
+        const el = seen.find((e) => e.area === "window" && e.label && x.title && (e.label === x.title || e.label.startsWith(x.title.slice(0, 30))));
+        if (el) await this.glide(centre(el), rectOf(el), say); else await this.caption(say);
+        await osa(s.action === "close_tab" ? closeScript(x) : switchScript(x)).catch(() => { throw new Error(`${x.browser} didn't let Peguin ${s.action === "close_tab" ? "close" : "switch to"} that tab. Allow Peguin under System Settings > Privacy & Security > Automation.`); });
+        return;
+      }
+    }
+  }
+
+  /**
+   * Opens an app the way a person would: Peguin's cursor goes to it in the Dock and
+   * clicks. When the Dock is hidden (a full-screen app) or the app isn't in it, the
+   * cursor heads to where the Dock is and Peguin opens it directly.
+   */
+  private async openApp(spoken: string, say: string) {
+    const name = matchApp(spoken, installedApps());
+    if (!name) throw new Error(`I couldn't find an app called “${spoken}”.`);
+    const { elements } = await this.helper.call<{ elements: Seen[] }>("targets", { dock: true });
+    const item = this.dockItem(name, elements);
+    if (item) {
+      const p = centre(item);
+      await this.glide(p, rectOf(item), say || `Clicking ${name} in the Dock`);
+      await this.helper.call("click", { ...p, button: "left", count: 1, restore: true });
+      return;
+    }
+    const d = screen.getDisplayNearestPoint(this.agent).bounds;
+    await this.glide({ x: d.x + d.width / 2, y: d.y + d.height - 40 }, null, `Opening ${name}`);
+    await new Promise<void>((resolve, reject) => execFile("open", ["-a", name], (e) => (e ? reject(new Error(`${name} didn't open.`)) : resolve())));
+  }
+
+  /** The app's icon in the Dock: matched loosely, since the Dock's name can differ from the installed one ("iTerm2" for iTerm). */
+  private dockItem(name: string, elements: Seen[]): Seen | undefined {
+    const dock = elements.filter((e) => e.area === "dock" && e.role === "AXDockItem");
+    const label = dockLabel(name, dock.map((e) => e.label));
+    return dock.find((e) => e.label === label);
+  }
+
+  /**
+   * Quits an app the way a person would: Peguin's cursor goes to its Dock icon,
+   * right-clicks, and clicks Quit in the menu. Without a Dock icon (a hidden Dock),
+   * the app is asked to quit directly. Either way it can still ask about unsaved work.
+   */
+  private async quitApp(spoken: string, say: string) {
+    const name = matchApp(spoken, installedApps());
+    if (!name) throw new Error(`I couldn't find an app called “${spoken}”.`);
+    const app = JSON.stringify(name);
+    if ((await osa(`application ${app} is running`).catch(() => "false")) !== "true") { await this.caption(`${name} isn't open.`, "warn"); return; }
+    const { elements } = await this.helper.call<{ elements: Seen[] }>("targets", { dock: true });
+    const item = this.dockItem(name, elements);
+    if (item) {
+      const p = centre(item);
+      await this.glide(p, rectOf(item), say || `Quitting ${name}`);
+      await this.helper.call("click", { ...p, button: "right", count: 1, restore: true });
+      await sleep(500);
+      const menu = (await this.helper.call<{ elements: Seen[] }>("targets", { dock: true })).elements.filter((e) => e.area === "dock" && e.role === "AXMenuItem");
+      const quit = menu.find((e) => /^quit\b/i.test(e.label));
+      if (quit) {
+        const q = centre(quit);
+        await this.glide(q, rectOf(quit), `Clicking ${quit.label}`);
+        await this.helper.call("click", { ...q, button: "left", count: 1, restore: true });
+        return;
+      }
+      debug(`quit: no Quit in ${name}'s Dock menu (${menu.map((e) => e.label).join(", ")})`);
+      await this.helper.call("key", { combo: "escape" }).catch(() => {});
+    } else await this.caption(say || `Quitting ${name}`);
+    await osa(`tell application ${app} to quit`).catch(() => { throw new Error(`${name} didn't quit. It may be asking you something.`); });
+  }
+
   /** Where a target is on screen; says why when it can't be found. */
   private async locate(t: Target, verb: string): Promise<{ point: { x: number; y: number }; rect: Rect | null } | null> {
     if (t.by === "cursor") return { point: await this.cursor(), rect: null };
@@ -383,11 +824,67 @@ export class VoiceControl {
   }
 
   private async glide(to: { x: number; y: number }, ring: Rect | null, caption: string) {
-    const from = await this.cursor();
-    this.send(from, { kind: "glide", from, x: to.x, y: to.y, ring });
-    if (this.windowAt(from) !== this.windowAt(to)) this.send(to, { kind: "glide", from, x: to.x, y: to.y, ring });
-    this.send(to, { kind: "caption", text: caption, tone: "info", ...to });
-    await this.helper.call("move", { ...to, ms: GLIDE_MS });
+    this.mode("working", caption);
+    this.moveAgent(to, ring, false);
+    await sleep(this.settings().pointer.cursor.glideMs);
+    this.goHomeLater();
+  }
+
+  private moveAgent(to: { x: number; y: number }, ring: Rect | null, docked: boolean, ms?: number) {
+    if (this.homeTimer) clearTimeout(this.homeTimer);
+    this.agent = { x: to.x, y: to.y };
+    this.docked = docked;
+    this.all({ kind: "agent", ...this.agent, ring, animate: true, docked, ms });
+  }
+
+  /** Peguin is free to wander: roaming is on, nothing is happening and the owner isn't drawing. */
+  private idle() {
+    return this.running && this.settings().pointer.cursor.home === "roam" && Date.now() - this.modeAt > 8000 && !this.penWindow && !this.numbered.length && Date.now() >= this.armedUntil;
+  }
+
+  /** Every 7 to 14 s, a slow drift around the middle of the screen the owner is on, away from their mouse. */
+  private roam() {
+    if (this.roamTimer) clearTimeout(this.roamTimer);
+    if (!this.running) return;
+    this.roamTimer = setTimeout(() => {
+      if (this.idle()) {
+        const mouse = screen.getCursorScreenPoint();
+        const a = screen.getDisplayNearestPoint(mouse).workArea;
+        this.moveAgent(roamTarget({ x: a.x, y: a.y, w: a.width, h: a.height }, mouse, this.agent), null, false, 2400);
+      }
+      this.roam();
+    }, nextDrift() * 1000);
+  }
+
+  /**
+   * The work log just noted the window the owner is in: Peguin goes and looks at it
+   * (when it's roaming and free), so the owner can see it gathering context.
+   */
+  peek(win: Rect | undefined, appName: string) {
+    if (!this.idle()) return;
+    const p = glanceTarget(win, screen.getCursorScreenPoint());
+    if (!p) return;
+    this.moveAgent(p, null, false, 1800);
+    this.mode("working", `Noting what you're on: ${appName}`);
+    this.modeAt = 0; // a glance doesn't count as work; it can drift again soon
+  }
+
+  /** With home set to the island, it swims back after the owner's few seconds. */
+  private goHomeLater() {
+    const c = this.settings().pointer.cursor;
+    if (this.homeTimer) clearTimeout(this.homeTimer);
+    if (c.home !== "island") return;
+    this.homeTimer = setTimeout(() => { if (this.running) this.moveAgent(homePoint(), null, true); }, c.returnAfterS * 1000);
+  }
+
+  /** Settings changed: new look for the cursor and island, and home if that's where it should be. */
+  restyle() {
+    if (!this.running) return;
+    const p = this.settings().pointer;
+    this.all({ kind: "style", cursor: p.cursor, island: p.island });
+    if (p.cursor.home === "island") this.moveAgent(homePoint(), null, true);
+    else if (this.docked) { const w = screen.getPrimaryDisplay().workArea; this.moveAgent({ x: w.x + w.width / 2, y: w.y + w.height / 2 }, null, false); }
+    else if (this.homeTimer) clearTimeout(this.homeTimer);
   }
 
   private async numbersOn() {

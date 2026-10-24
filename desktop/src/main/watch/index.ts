@@ -33,7 +33,8 @@ export class WorkLog {
   private timer: NodeJS.Timeout | null = null;
   private error: string | undefined;
 
-  constructor(private settings: () => Settings) {}
+  /** `onGlance`: the window just noted, so Peguin's cursor can go and look at it. */
+  constructor(private settings: () => Settings, private onGlance?: (win: { x: number; y: number; w: number; h: number } | undefined, app: string) => void) {}
 
   /** Starts or stops to match Settings. */
   apply() {
@@ -55,11 +56,12 @@ export class WorkLog {
     const w = this.settings().watch;
     if (!existsSync(pointerHelperPath())) { this.error = "The helper that reads window titles is missing. Reinstall Peguin, or run `npm run setup:pointer` in desktop/."; return; }
     try {
-      const f = await this.helper.call<{ app: string; bundle: string; title: string; idle: number }>("front");
+      const f = await this.helper.call<{ app: string; bundle: string; title: string; idle: number; frame?: { x: number; y: number; w: number; h: number } }>("front");
       this.error = undefined;
       if (f.idle >= IDLE_S || skipped(f, w.skipApps)) return;
       const now = new Date();
       writeLog([...prune(readLog(), w.keepDays, now), { at: now.toISOString(), app: f.app, title: f.title }]);
+      this.onGlance?.(f.frame, f.app);
     } catch (e) {
       this.error = e instanceof Error ? e.message : String(e);
     }

@@ -2,6 +2,20 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-21: Silero VAD in front of whisper
+
+Voice control's mic is always on, and a fixed loudness gate passed room noise to whisper, which invents text for it ("Thank you.", "Okay."): over half of 1,336 transcribed lines in a day's testing were noise, only 36 were addressed to Peguin, and scraps of real speech ran as commands. whisper.cpp's built-in Silero VAD (`--vad`, a 0.9 MB model shipped in `desktop/resources/`) keeps only voiced parts: noise clips came back empty, commands word for word, and the owner's room went silent in the log. Whisper's confidence scores were checked first and can't tell invented filler from speech. VAD can't tell the owner from a TV: that needs a speaker-verification model (the voice-cloning encoder's likeness overlaps, 0.60-0.86 for the owner and 0.33-0.72 for other voices), left for later.
+
+## 2026-10-21: Smart drive with the owner's AI, and Peguin's own cursor
+
+The owner wants Peguin to do things like a person ("open Music" should move to it and click, not just pop it open), "backed by the user's integrated AI; we'll build our own LLM later". So:
+
+- **The owner's AI plans, Peguin acts visibly.** Each step the AI gets the goal, the steps so far and what's on screen as text (names, kinds and centres from the accessibility tree: the Dock, the front window, the menu bar), never screenshots, and answers with one JSON step. Text keeps it working with every AI the owner can choose (Claude Code sign-in, Codex, Grok), none of which takes images through our integration, and keeps what's sent small.
+- **Safety over cleverness:** ids must come from the list, typing only into something chosen visibly (an unseen Spotlight once swallowed "Music" + Return into the editor in front), a step that changes nothing ends the run, 12 steps at most, Esc/"stop", and no sending, deleting, buying or posting unless asked.
+- **Instant things stay local** (scroll, keys, typing, drawing, stop, "open <app>" via the Dock): an AI step costs about 9 s.
+- **Peguin's own cursor:** a black penguin head (the brand), beak as the hotspot, an eye that looks where it's going and follows the owner's mouse; it wanders mid-screen away from the mouse and looks at the window the work log notes. Clicks warp the real mouse there and straight back, so only Peguin's cursor seems to move.
+- **Peguin's own calls to Claude are no longer saved as Claude Code sessions** (`--no-session-persistence`), and sessions in temp folders are skipped: they were showing up as the owner's work.
+
 ## 2026-10-20: Work log and Learn my voice (opt-in, reviewed by the owner)
 
 After voice control, the owner asked that Peguin "regularly get context from the laptop on work" and "from time to time get my voice, which the app will use to train itself to join meetings". They chose: app and window title only (not the text on screen, not screenshots), clips kept for them to approve (not automatic), both off by default.

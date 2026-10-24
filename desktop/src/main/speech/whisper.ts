@@ -3,7 +3,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer } from "node:net";
-import { whisperPaths } from "../paths.js";
+import { vadModelPath, whisperPaths } from "../paths.js";
 import { whisperPrompt } from "./hints.js";
 
 const RATE = 16000;
@@ -30,7 +30,15 @@ export async function startWhisper(): Promise<Whisper> {
   if (!existsSync(bin)) throw new Error("Speech recognition is missing from this install. Reinstall Peguin, or run `npm run setup:whisper` in desktop/.");
   if (!existsSync(model)) throw new Error("The speech model hasn't finished downloading yet.");
   const port = await freePort();
-  const proc = spawn(bin, ["-m", model, "--host", "127.0.0.1", "--port", String(port), "-l", "en"], { stdio: "ignore" });
+  // Silero VAD keeps only the parts that are a voice. Measured on 2026-10-21: without it, more than half
+  // of what the owner's mic sent (hiss, hum, music, typing) came back as "Thank you." or "Okay.";
+  // with it, noise comes back empty and speech word for word (docs/features/voice-control.md).
+  const vad = existsSync(vadModelPath()) ? ["--vad", "-vm", vadModelPath()] : [];
+  const proc = spawn(bin, ["-m", model, "--host", "127.0.0.1", "--port", String(port), "-l", "en", ...vad], { stdio: "ignore" });
+  // However Peguin ends (even killed or force-quit in development), the server goes with it.
+  const kill = () => { try { proc.kill(); } catch { /* gone */ } };
+  process.once("exit", kill);
+  proc.once("exit", () => process.removeListener("exit", kill));
   const url = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 80; i++) {
     if (proc.exitCode !== null) throw new Error(`whisper-server exited with code ${proc.exitCode}`);

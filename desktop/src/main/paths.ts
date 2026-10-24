@@ -22,6 +22,9 @@ export const pointerHelperPath = () => app.isPackaged ? path.join(process.resour
 export const WHISPER_MODEL = "large-v3-turbo-q5_0"; // ~550 MB; half the word errors of base.en on call audio
 export const MODEL_URL = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${WHISPER_MODEL}.bin`;
 
+/** Silero voice activity model (ggml-org/whisper-vad, under 1 MB), shipped with the app. */
+export const vadModelPath = () => resource("ggml-silero-v6.2.0.bin");
+
 export function whisperPaths() {
   const bin = app.isPackaged ? path.join(process.resourcesPath, "whisper", "whisper-server") : path.join(sourceRoot, "vendor/whisper.cpp/build/bin/whisper-server");
   const downloaded = path.join(app.getPath("userData"), "models", `ggml-${WHISPER_MODEL}.bin`);

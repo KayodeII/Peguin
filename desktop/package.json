@@ -77,6 +77,10 @@
         "to": "whisper/whisper-server"
       },
       {
+        "from": "resources/ggml-silero-v6.2.0.bin",
+        "to": "ggml-silero-v6.2.0.bin"
+      },
+      {
         "from": "build/calendar/calendar-helper",
         "to": "calendar/calendar-helper"
       },

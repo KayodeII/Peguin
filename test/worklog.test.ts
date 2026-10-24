@@ -85,3 +85,15 @@ describe("learn my voice", () => {
     expect(likeness([0, 0], [1, 1])).toBe(0);
   });
 });
+
+import { scratch } from "../desktop/src/main/context/claudeCode.js";
+
+describe("Claude Code sessions that aren't the owner's work", () => {
+  it("skips temporary folders (Peguin's own calls, one-off runs)", () => {
+    expect(scratch("-private-tmp")).toBe(true);
+    expect(scratch("-private-var-folders-rm-t8wxg-l90mj24x7h4r3ygp6h0000gn-T")).toBe(true);
+    expect(scratch("-tmp-x")).toBe(true);
+    expect(scratch("-Users-adebowalemujeeb-Desktop-penguin")).toBe(false);
+    expect(scratch("-Users-me-tmpl-project")).toBe(false);
+  });
+});

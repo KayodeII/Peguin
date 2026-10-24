@@ -380,3 +380,50 @@ details.advanced[open] > summary::after { transform: rotate(90deg); }
 .clip-text { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .clip-meta { font-size: 12px; color: var(--muted); }
 .clip-list li.unlike .clip-meta { color: var(--warn, #c77700); }
+
+/* Settings: a category list on the left, one page at a time (like System Settings). */
+.settings-layout { flex: 1; min-height: 0; display: flex; }
+.settings-nav { flex: none; width: 196px; padding: 20px 10px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.settings-nav button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; color: var(--muted); font-size: 14px; text-align: left; }
+.settings-nav button:hover { background: var(--hover); color: var(--ink); }
+.settings-nav button.on { background: var(--active); color: var(--ink-strong); font-weight: 600; }
+.settings-page { margin: 0; }
+.settings-title { margin: 0 0 6px; font-size: 22px; color: var(--ink-strong); }
+@media (max-width: 760px) {
+  .settings-layout { flex-direction: column; }
+  .settings-nav { width: auto; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; padding: 8px; }
+}
+
+/* Settings > Voice control > Peguin's cursor: a live preview */
+.cursor-card { align-items: center; }
+.cursor-preview { flex: none; width: 128px; height: 74px; border-radius: 10px; background: linear-gradient(160deg, #3a3f4b, #20232b); position: relative; overflow: hidden; }
+.cursor-preview .mini-island { position: absolute; left: 50%; top: 0; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; background: #000; color: #fff;
+  font: 600 9.5px/1 -apple-system, sans-serif; padding: 6px 10px; border-radius: 0 0 10px 10px; }
+.cursor-preview .mini-island i { width: 5px; height: 5px; border-radius: 50%; background: #ff5a36; box-shadow: 0 0 5px #ff5a36; }
+.cursor-preview svg { position: absolute; left: 82px; top: 30px; overflow: visible; transform-origin: 3px 2px; transition: transform .3s cubic-bezier(.3, 1.4, .5, 1); filter: drop-shadow(0 0 6px rgba(255, 90, 54, .55)); }
+
+/* #context-bank */
+.bank-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 4px 0 8px; }
+.bank-stat { display: flex; flex-direction: column; gap: 2px; padding: 14px; border-radius: 10px; background: var(--raised); border: 1px solid var(--line); text-align: left; }
+.bank-stat strong { font-size: 24px; color: var(--ink-strong); }
+.bank-stat span { font-size: 13px; color: var(--ink); }
+.bank-stat small { font-size: 12px; color: var(--muted); }
+.bank-stat.link:hover { border-color: var(--accent); }
+.bank-bars { display: flex; flex-direction: column; gap: 8px; }
+.bank-bar { display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr auto; align-items: center; gap: 12px; font-size: 13px; }
+.bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.bar-label strong { color: var(--ink); }
+.bar-track { height: 8px; border-radius: 4px; background: var(--hover); overflow: hidden; }
+.bar-track i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.bar-value { color: var(--muted); font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chip { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.chip.on { background: var(--active); color: var(--ink-strong); border-color: transparent; }
+.bank-day h4 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.bank-day ul, .bank-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.bank-day li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; font-size: 13.5px; }
+.bank-day li:hover { background: var(--hover); }
+.bank-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.bank-day time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.bank-facts li { padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--raised); border-radius: 4px; font-size: 13.5px; }
+.bank-note { margin-top: 18px; }
