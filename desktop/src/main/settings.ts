@@ -119,7 +119,9 @@ export const Settings = z.preprocess(migrate, z.object({
     /** Ask Claude for a short summary and extra follow-ups (the transcript is sent, like answers are). */
     summarize: z.boolean().default(true),
     keepDays: z.number().int().min(1).max(365).default(30),
-  }).default(() => ({ summarize: true, keepDays: 30 })),
+    /** Also recap meetings the owner joins themselves with the copilot (what others said, the questions and suggestions). */
+    copilot: z.boolean().default(true),
+  }).default(() => ({ summarize: true, keepDays: 30, copilot: true })),
   /** Stop speaking when someone talks over Peguin, and listen to them. */
   stopWhenInterrupted: z.boolean().default(true),
   runHidden: z.boolean().default(true),

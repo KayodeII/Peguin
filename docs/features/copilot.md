@@ -8,6 +8,7 @@ The owner joins their own meeting as themselves in a Peguin window. Peguin liste
 - **Hide** collapses the panel to a strip. **Pop out** moves it into its own always-on-top window; **Dock** puts it back. Sharing the meeting window alone leaves the popped-out notes out of that share.
 - **AI notice**: on Pop out, and on joining in Interview mode, Peguin posts in the meeting chat that the owner is using an AI assistant. Only once it shows up in the chat are the popped-out notes left out of full-screen shares too (`setContentProtection`). If it can't be posted, the notes stay visible in shares and the panel says why.
 - Screen sharing from the meeting uses macOS's own picker (macOS 15+).
+- **Recap** afterwards in `#recaps` (Settings > Recaps, on by default): what the others said, each question with the suggestion the owner saw, and the questions the notes didn't cover as follow-ups. See `recaps.md`.
 
 ## Decisions
 

@@ -236,7 +236,11 @@ async function openCopilot(url: string) {
       online: () => (loadSettings().copilot.web ? (q, quick, recent) => checkOnline(loadSettings(), q, quick, recent) : null),
     },
     { url: rendererUrl, file: path.join(outDir, "renderer/index.html") },
-    () => { cool(); if (copilot === session) copilot = null; });
+    (record) => {
+      cool();
+      if (copilot === session) copilot = null;
+      if (loadSettings().recap.copilot) void recapMeeting(record);
+    });
   copilot = session;
   await session.start().catch((e) => { cool(); throw e; });
 }
@@ -287,6 +291,8 @@ async function warmOwnVoice(draft: Draft) {
  * After a meeting: keep the record (encrypted), list every deferred question as a
  * follow-up straight away, then, if the owner allows it, add Claude's summary
  * and any extra follow-ups from the transcript. A notification says how it went.
+ * Copilot meetings too (Settings > Recaps), where follow-ups are the questions
+ * the notes didn't cover.
  */
 async function recapMeeting(r: MeetingRecord) {
   if (!worthKeeping(r)) return;
@@ -298,7 +304,7 @@ async function recapMeeting(r: MeetingRecord) {
   const lines = transcriptLines(r);
   if (s.recap.summarize && lines.length && (await currentFeatures()).recaps) {
     try {
-      const { summary, followUps } = await summarizeMeeting(s, lines);
+      const { summary, followUps } = await summarizeMeeting(s, lines, r.kind === "copilot");
       r.recap = { summary: summary || undefined, followUps: mergeFollowUps(deferred, followUps).map((text) => ({ text, done: false })), createdAt: Date.now() };
       saveMeeting(r);
       send({ kind: "recaps" });
@@ -307,7 +313,7 @@ async function recapMeeting(r: MeetingRecord) {
     }
   }
   if (Notification.isSupported()) {
-    const n = new Notification({ title: "Standup covered", body: headline(r) });
+    const n = new Notification({ title: r.kind === "copilot" ? "Meeting recap ready" : "Standup covered", body: headline(r) });
     n.on("click", () => { openWindow(); send({ kind: "show", view: "recaps" }); });
     n.show();
   }

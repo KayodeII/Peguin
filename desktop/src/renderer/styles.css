@@ -261,6 +261,7 @@ input[type="range"]:focus { outline: none; }
 .said-line { margin: 0 0 12px; }
 .said-line time { margin-left: 8px; color: var(--faint); font-size: 12px; }
 .said-line p { margin: 4px 0 0; }
+.said-line .said-question { color: var(--muted); font-style: italic; }
 .transcript { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
 .transcript summary { cursor: pointer; color: var(--muted); font-weight: 600; }
 .transcript p { margin: 6px 0; font-size: 13.5px; }

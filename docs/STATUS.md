@@ -16,7 +16,7 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 - **Voice:** the Mac's voice or a Grok voice (falls back to the Mac's); opt-in own voice on the Mac (Chatterbox Turbo) or ElevenLabs, from a live-recorded, consented, encrypted sample; prepared lines checked by ear.
 - **Update writing** from git, GitHub (via `gh`) and Claude Code sessions, 15 minutes before the standup.
 - **Calendars:** Mac Calendar (EventKit), Google Calendar and Outlook (one click, OAuth through the Worker), Calendly, iCal links; joins calendar standups automatically.
-- **Recaps** in `#recaps`: follow-ups (every deferred question), optional summary, transcript; encrypted, kept 30 days by default.
+- **Recaps** in `#recaps`: follow-ups (every deferred question), optional summary, transcript; encrypted, kept 30 days by default. Copilot meetings too (questions, suggestions, what the notes didn't cover as follow-ups; branch `copilot-recaps`, not released).
 - **Plans** gated offline from the signed licence; Discord-style UI with Notion themes; sign-in via `peguin://`.
 - **Self-update** from GitHub Releases: download, SHA-256 check, unpack, "Restart to update".
 
@@ -64,7 +64,7 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 1. Release 0.9.0 from `main` (Work/Interview, Check online, Hide, Pop out, screen sharing), then confirm the installed app updates itself.
 2. Owner's real-call test: Join as me (Work and Interview, Check online, Pop out with a window share, Present), Join as Peguin end to end, a recap.
 3. Try a new xAI key in Settings (Grok chat, Grok voice "Hear it"). Revoke the key pasted in chat earlier.
-4. Copilot ideas the owner may want: notes window opening on a second display, a compact newest-answer view, recaps for copilot meetings.
+4. Copilot ideas the owner may want: notes window opening on a second display, a compact newest-answer view. (Recaps for copilot meetings: built on `copilot-recaps`; try one real call.)
 5. Owner setup: OAuth apps (`docs/OAUTH_SETUP.md`), `ADMIN_TOKEN`, tier prices (`cloud/scripts/paystack-setup.mjs`), Google's review for the calendar scope.
 6. Before charging strangers: legal entity and contact email in /privacy and /terms, Paystack live keys, Resend DNS, Apple Developer ID (notarised app), watermarking cloned audio.
 7. Chrome extension: a real Meet call, then decide plan gating (the desktop copilot is Pro/Team; the extension has no sign-in yet), then the Chrome Web Store listing.

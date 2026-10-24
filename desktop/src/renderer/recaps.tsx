@@ -1,12 +1,25 @@
-// #recaps: what happened in each meeting Peguin attended. Follow-ups first
-// (every question it deferred, plus anything Claude found), then the summary,
-// what Peguin said, and the transcript. Kept encrypted on this Mac.
+// #recaps: what happened in each meeting Peguin attended, or the owner joined with
+// the copilot. Follow-ups first (every question it deferred or the notes didn't
+// cover, plus anything Claude found), then the summary, what Peguin said or
+// suggested, and the transcript. Kept encrypted on this Mac.
 import { useEffect, useState } from "react";
-import type { MeetingRecord } from "../main/meeting/record";
+import type { MeetingRecord, Question } from "../main/meeting/record";
 import { headline } from "../main/meeting/record";
+import { COPILOT_LABELS } from "../../../src/core/brain/prompts";
 import { BrandIcon, dayTime, Icon, message, time } from "./ui";
 
 const KIND: Record<string, string> = { update: "Gave the update", answer: "Answered", defer: "Deferred to you", ack: "Acknowledged" };
+
+/** A copilot suggestion's label as a tag, and the suggestion without it. */
+function suggestion(q: Question): { tag: string; text: string } {
+  if (!q.answer) return { tag: "No suggestion", text: "" };
+  for (const [key, label] of Object.entries(COPILOT_LABELS)) {
+    if (q.answer.startsWith(label)) {
+      return { tag: { notes: "From your notes", general: "General knowledge", unknown: "Not in your notes" }[key as keyof typeof COPILOT_LABELS], text: q.answer.slice(label.length).trim() };
+    }
+  }
+  return { tag: "Suggested", text: q.answer };
+}
 
 const duration = (r: MeetingRecord) => {
   const mins = r.endedAt && r.joinedAt ? Math.max(1, Math.round((r.endedAt - r.joinedAt) / 60000)) : 0;
@@ -29,7 +42,7 @@ export function RecapsView({ meetings, reload, keepDays }: { meetings: MeetingRe
       </header>
       <div className="recaps">
         <nav className="recap-list" aria-label="Meetings">
-          {meetings.length === 0 && <p className="empty-note">After Peguin attends a meeting, its recap shows up here.</p>}
+          {meetings.length === 0 && <p className="empty-note">After Peguin attends a meeting, or you join one with the copilot, its recap shows up here.</p>}
           {meetings.map((m) => {
             const openCount = m.recap?.followUps.filter((f) => !f.done).length ?? 0;
             return (
@@ -50,7 +63,7 @@ export function RecapsView({ meetings, reload, keepDays }: { meetings: MeetingRe
             <>
               <div className="recap-head">
                 <h2>{dayTime(new Date(open.startedAt).toISOString())}</h2>
-                <p>{[duration(open), `joined as ${open.joinedAs}`].filter(Boolean).join(" · ")}</p>
+                <p>{[duration(open), open.kind === "copilot" ? "you joined, with the copilot" : `joined as ${open.joinedAs}`].filter(Boolean).join(" · ")}</p>
               </div>
 
               <h3 className="section-label">To follow up</h3>
@@ -74,14 +87,33 @@ export function RecapsView({ meetings, reload, keepDays }: { meetings: MeetingRe
                 </>
               )}
 
-              <h3 className="section-label">What Peguin said</h3>
-              {open.entries.filter((e) => e.who === "peguin").length === 0 && <p className="muted-line">It wasn't called on.</p>}
-              {open.entries.map((e, i) => e.who === "peguin" && (
-                <div key={i} className="said-line">
-                  <span className="tag">{KIND[e.kind]}</span><time>{time(new Date(e.at).toISOString())}</time>
-                  <p>{e.text}</p>
-                </div>
-              ))}
+              {open.kind === "copilot" ? (
+                <>
+                  <h3 className="section-label">What Peguin suggested</h3>
+                  {open.questions.length === 0 && <p className="muted-line">No questions came up.</p>}
+                  {open.questions.map((q, i) => {
+                    const s = suggestion(q);
+                    return (
+                      <div key={i} className="said-line">
+                        <span className="tag">{s.tag}</span><time>{time(new Date(q.at).toISOString())}</time>
+                        <p className="said-question">{q.text}</p>
+                        {s.text && <p>{s.text}</p>}
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <>
+                  <h3 className="section-label">What Peguin said</h3>
+                  {open.entries.filter((e) => e.who === "peguin").length === 0 && <p className="muted-line">It wasn't called on.</p>}
+                  {open.entries.map((e, i) => e.who === "peguin" && (
+                    <div key={i} className="said-line">
+                      <span className="tag">{KIND[e.kind]}</span><time>{time(new Date(e.at).toISOString())}</time>
+                      <p>{e.text}</p>
+                    </div>
+                  ))}
+                </>
+              )}
 
               <details className="transcript">
                 <summary>Full transcript</summary>
@@ -99,7 +131,7 @@ export function RecapsView({ meetings, reload, keepDays }: { meetings: MeetingRe
                 <button className="btn link" onClick={() => act(() => window.penguin.deleteMeeting(open.id))}>Delete this recap</button>
               </div>
             </>
-          ) : <div className="empty"><h2>No recaps yet</h2><p>Peguin writes one after each meeting it attends.</p></div>}
+          ) : <div className="empty"><h2>No recaps yet</h2><p>Peguin writes one after each meeting it attends or you join with the copilot.</p></div>}
         </div>
       </div>
     </>

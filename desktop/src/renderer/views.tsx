@@ -291,6 +291,10 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
           <div className="row-main"><strong>Summarize with your AI</strong><p>Sends the meeting transcript to your AI (Settings, AI) for a short summary and extra follow-ups. Off: you still get every question Peguin deferred.</p></div>
           <Toggle on={s.recap.summarize} onChange={(v) => setS({ ...s, recap: { ...s.recap, summarize: v } })} label="Summarize with your AI" />
         </div>
+        <div className="row-card">
+          <div className="row-main"><strong>Recap meetings you join yourself</strong><p>When you join with the copilot, keep what the others said, the questions and Peguin's suggestions. Questions your notes didn't cover become follow-ups. Your own voice is never recorded.</p></div>
+          <Toggle on={s.recap.copilot} onChange={(v) => setS({ ...s, recap: { ...s.recap, copilot: v } })} label="Recap meetings you join yourself" />
+        </div>
         <div className="field-grid">
           <label>Keep recaps for
             <select value={s.recap.keepDays} onChange={(e) => setS({ ...s, recap: { ...s.recap, keepDays: Number(e.target.value) } })}>

@@ -51,6 +51,33 @@ describe("copilot suggestions", () => {
   });
 });
 
+describe("copilot recap", () => {
+  it("hands the meeting's record to the app when it ends: questions, suggestions and what the others said", async () => {
+    const records: import("../desktop/src/main/meeting/record.js").MeetingRecord[] = [];
+    const session = new CopilotSession("https://meet.google.com/abc-defg-hij", Settings.parse({ displayName: "Ada" }), { url: "", stop: () => {} },
+      {
+        draft: null,
+        suggest: async (q: string) => (q.includes("billing") ? "Not in your notes. I'll check and come back to you." : "From your notes: It shipped on Monday."),
+        online: () => null,
+      },
+      { file: "" }, (r) => records.push(r));
+    const s = session as unknown as { heard: (t: string) => void; end: () => void; log: { joined: () => void } };
+    s.log.joined();
+    s.heard("Morning everyone.");
+    s.heard("Did the auth change ship?");
+    await vi.waitFor(() => expect((session.state().cards as Card[])[0]?.answer).toBeTruthy());
+    s.heard("When does the billing export ship?");
+    await vi.waitFor(() => expect((session.state().cards as Card[])[1]?.answer).toBeTruthy());
+    s.end();
+    expect(records).toHaveLength(1);
+    const r = records[0]!;
+    expect(r.kind).toBe("copilot");
+    expect(r.platform).toBe("google_meet");
+    expect(r.entries.filter((e) => e.who === "them").map((e) => e.text)).toEqual(["Morning everyone.", "Did the auth change ship?", "When does the billing export ship?"]);
+    expect(r.questions.map((q) => q.outcome)).toEqual(["answered", "deferred"]);
+  });
+});
+
 describe("copilot AI notice", () => {
   const make = (post: (text: string) => Promise<void>) => {
     const session = new CopilotSession("https://meet.google.com/abc-defg-hij", Settings.parse({ displayName: "Ada" }), { url: "", stop: () => {} },
