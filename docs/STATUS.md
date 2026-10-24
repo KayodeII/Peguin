@@ -20,6 +20,12 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 - **Plans** gated offline from the signed licence; Discord-style UI with Notion themes; sign-in via `peguin://`.
 - **Self-update** from GitHub Releases: download, SHA-256 check, unpack, "Restart to update".
 
+- **Voice control ("Hey Peguin", not released):** the owner's own mic, heard by whisper on the Mac; clicks buttons by name or number, opens the browser, sites and apps, scrolls, types, presses keys and draws on a see-through overlay, with Peguin's cursor gliding to each target. No AI. Off by default. See `docs/features/voice-control.md`.
+- **Work log and Learn my voice (not released, both off by default):** Sources > On this Mac notes the front app and window title every few minutes (encrypted, owner's skip list and retention) for the draft, as time spent, never facts. Settings > Voice > Learn my voice keeps clean clips of the owner from the voice-control mic for them to play and tick; ticked clips replace the voice sample. See `docs/features/update-drafting.md`, `docs/features/voice.md`.
+
+**Chrome extension (`extension/`, branch `chrome-extension`, not released)**
+- **Peguin Copilot for Chrome:** the private copilot in the owner's own Google Meet tab, in Chrome's side panel. Posts the AI notice in chat before listening; hears with Meet's captions and the tab's audio (whisper in the browser) and merges the two; streamed suggestions from the owner's own Claude, OpenAI or Grok key. See `docs/features/chrome-extension.md`.
+
 **Cloud (`cloud/`, Cloudflare Worker + D1) at www.peguin.co**
 - Email-link and Google sign-in (waitlist switch), 14-day Pro trial, Paystack subscriptions (test mode), Ed25519 licences, calendar OAuth hand-off, `/api/release` with a last-good fallback.
 - Old app AI routes (`/api/draft|answer|suggest|recap`) answer 503 so pre-0.7 apps use their own Claude Code. Peguin's Anthropic key only serves the help chat (falls back to the FAQ without it).
@@ -37,6 +43,13 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 
 ## Not verified yet
 
+- **The hardened build launching normally from /Applications** (fuses, integrity check, the IPC sender check in every window: copilot panel, notes, overlays). A packaged build stayed up, a tampered one was refused, and the minified app booted from source; a full click-through of an installed copy hasn't been done.
+
+- **Chrome extension in a real Meet call:** the caption reading, the chat notice and tab audio after the toolbar click were tested only against a fake Meet page in Chrome for Testing; whisper only on a synthetic clip.
+
+- **Learn my voice end to end** (real clips from the owner's mic, a sample made from them, how it sounds against the recorded one) and the **work log over a real workday** (what the draft says from it). The pieces are unit tested; the likeness score was measured on the owner's spike recordings.
+- **Voice control with the owner's own voice on a real mic**, clicks inside Chrome and Safari pages, a second display, freehand drawing, and the echo wait during a real copilot call. Tested with spoken clips through the real listener and on screen with typed commands.
+
 - **v0.8.0 doesn't contain #20 or #21**: it was tagged before they were merged. Release 0.9.0 to ship them.
 - Self-update installing on the owner's Mac from a release to the next (0.7.0 to 0.9.0 is the next chance).
 - Screen sharing from the copilot window (macOS picker) and Pop out in a real call.
@@ -46,13 +59,17 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 
 ## Next
 
+0. **Before releasing 0.9.0:** add the release signing key to GitHub (`gh secret set RELEASE_SIGNING_KEY < ~/.peguin/release-signing-key.jwk`) and back up that file somewhere safe. Without the secret the release workflow fails; without the key, future versions can't update installed apps.
+
 1. Release 0.9.0 from `main` (Work/Interview, Check online, Hide, Pop out, screen sharing), then confirm the installed app updates itself.
 2. Owner's real-call test: Join as me (Work and Interview, Check online, Pop out with a window share, Present), Join as Peguin end to end, a recap.
 3. Try a new xAI key in Settings (Grok chat, Grok voice "Hear it"). Revoke the key pasted in chat earlier.
 4. Copilot ideas the owner may want: notes window opening on a second display, a compact newest-answer view, recaps for copilot meetings.
 5. Owner setup: OAuth apps (`docs/OAUTH_SETUP.md`), `ADMIN_TOKEN`, tier prices (`cloud/scripts/paystack-setup.mjs`), Google's review for the calendar scope.
 6. Before charging strangers: legal entity and contact email in /privacy and /terms, Paystack live keys, Resend DNS, Apple Developer ID (notarised app), watermarking cloned audio.
-7. Later: Team seats, Slack recaps, Linear and Jira on the desktop, Teams via ACS, Windows.
+7. Chrome extension: a real Meet call, then decide plan gating (the desktop copilot is Pro/Team; the extension has no sign-in yet), then the Chrome Web Store listing.
+8. Voice control: the owner tries it for a day (Settings > Voice control), then decide plan gating and whether an opt-in AI mode ("research this") is wanted.
+9. Later: Team seats, Slack recaps, Linear and Jira on the desktop, Teams via ACS, Windows.
 
 ## Handoff (2026-10-10)
 

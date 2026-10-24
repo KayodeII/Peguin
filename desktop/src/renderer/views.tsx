@@ -10,6 +10,8 @@ import { AiSettings, StandardVoice, useXai } from "./ai";
 import { stripCues } from "../../../src/core/brain/prompts";
 import { PLANS } from "../../../src/core/plans";
 import { CalendarSettings } from "./calendars";
+import { VoiceControlSettings } from "./voicecontrol";
+import { WorkLogSource } from "./worklog";
 
 const SOURCE_INFO = {
   git: { name: "Git commits", desc: "Commits in repos on this computer." },
@@ -160,6 +162,7 @@ export function SourcesView({ settings, draft, save, prepare }: { settings: Sett
             </div>
           );
         })}
+        <WorkLogSource settings={settings} save={save} report={draft?.reports.find((r) => r.id === "mac")} />
         <h3 className="section-label">Coming soon</h3>
         {[["calendar", "Calendar"], ["linear", "Linear"], ["jira", "Jira"]].map(([id, t]) => (
           <div key={id} className="row-card muted"><BrandIcon id={id!} /><div className="row-main"><strong>{t}</strong></div><span className="tag">Soon</span></div>
@@ -176,11 +179,14 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
   const [aliases, setAliases] = useState(settings.aliases.join(", "));
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [sec, go] = useSection();
   const [xai, setXai] = useXai();
   // Appearance saves instantly; keep other unsaved edits when it does.
   useEffect(() => { setS((prev) => ({ ...prev, appearance: settings.appearance })); }, [settings.appearance]);
   // The voice switch also saves instantly.
   useEffect(() => { setS((prev) => ({ ...prev, voice: { ...prev.voice, mode: settings.voice.mode } })); }, [settings.voice.mode]);
+  // The voice control switch and Peguin's cursor save instantly too.
+  useEffect(() => { setS((prev) => ({ ...prev, pointer: { ...prev.pointer, enabled: settings.pointer.enabled, cursor: settings.pointer.cursor, island: settings.pointer.island } })); }, [settings.pointer.enabled, settings.pointer.cursor, settings.pointer.island]);
   const setAppearance = (a: Partial<Settings["appearance"]>) => void save({ ...settings, appearance: { ...settings.appearance, ...a } });
   const next = {
     ...s,
@@ -196,7 +202,17 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
   return (
     <>
       <ChannelHeader name="settings" />
-      <div className="scroll narrow">
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label="Settings">
+          {SECTIONS.map((x) => (
+            <button key={x.id} className={sec === x.id ? "on" : ""} aria-current={sec === x.id ? "page" : undefined} onClick={() => go(x.id)}>
+              <Icon name={x.icon} size={16} />{x.label}
+            </button>
+          ))}
+        </nav>
+        <div className="scroll narrow settings-page">
+        <h2 className="settings-title">{SECTIONS.find((x) => x.id === sec)!.label}</h2>
+        {sec === "general" && <>
         <h3 className="section-label">Account</h3>
         <AccountCard account={account} />
 
@@ -207,8 +223,35 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
         </div>
         <p className="hint">Joins as <strong>{preview(s.displayName)}</strong></p>
 
-        <h3 className="section-label">Your standup</h3>
-        <label>Link<input value={st.url} placeholder="https://meet.google.com/abc-defg-hij" onChange={(e) => setStandup({ url: e.target.value })} /></label>
+        <h3 className="section-label">Appearance</h3>
+        <div className="themes" role="radiogroup" aria-label="Theme">
+          {THEMES.map((t) => (
+            <button key={t.id} role="radio" aria-checked={settings.appearance.theme === t.id} className={`theme-opt ${settings.appearance.theme === t.id ? "on" : ""}`} onClick={() => setAppearance({ theme: t.id })}>
+              <div className={`swatch ${t.id === "system" ? "system" : ""}`} style={t.vars}><i /><i />{t.id === "system" && <i style={{ background: "#191919" }} />}</div>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="accents" role="radiogroup" aria-label="Accent colour">
+          {ACCENTS.map((a) => (
+            <button key={a.id} role="radio" aria-checked={settings.appearance.accent === a.id} aria-label={a.id} title={a.id}
+              className={`accent-dot ${settings.appearance.accent === a.id ? "on" : ""}`} style={{ background: a.color }} onClick={() => setAppearance({ accent: a.id })} />
+          ))}
+        </div>
+
+        <h3 className="section-label">Advanced</h3>
+        <label>Timezone<select value={s.timezone} onChange={(e) => setS({ ...s, timezone: e.target.value })}>{timezones.map((t) => <option key={t}>{t}</option>)}</select></label>
+        <div className="row-card">
+          <div className="row-main"><strong>Show meeting window</strong></div>
+          <Toggle on={!s.runHidden} onChange={(v) => setS({ ...s, runHidden: !v })} label="Show the meeting window" />
+        </div>
+        <div className="row-card">
+          <div className="row-main"><strong>Update automatically</strong><p>Downloads new versions in the background, then one click restarts into them (or they install when you quit).</p></div>
+          <Toggle on={s.autoUpdate} onChange={(v) => setS({ ...s, autoUpdate: v })} label="Update automatically" />
+        </div>
+        </>}
+        {sec === "standup" && <>
+                <label>Link<input value={st.url} placeholder="https://meet.google.com/abc-defg-hij" onChange={(e) => setStandup({ url: e.target.value })} /></label>
         <div className="field-grid">
           <label>Starts at<input type="time" value={st.time} onChange={(e) => setStandup({ time: e.target.value })} /></label>
           <div className="label">Days
@@ -229,31 +272,22 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
           <Toggle on={s.stopWhenInterrupted} onChange={(v) => setS({ ...s, stopWhenInterrupted: v })} label="Stop when someone talks over Peguin" />
         </div>
 
-        <h3 className="section-label">Appearance</h3>
-        <div className="themes" role="radiogroup" aria-label="Theme">
-          {THEMES.map((t) => (
-            <button key={t.id} role="radio" aria-checked={settings.appearance.theme === t.id} className={`theme-opt ${settings.appearance.theme === t.id ? "on" : ""}`} onClick={() => setAppearance({ theme: t.id })}>
-              <div className={`swatch ${t.id === "system" ? "system" : ""}`} style={t.vars}><i /><i />{t.id === "system" && <i style={{ background: "#191919" }} />}</div>
-              <span>{t.label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="accents" role="radiogroup" aria-label="Accent colour">
-          {ACCENTS.map((a) => (
-            <button key={a.id} role="radio" aria-checked={settings.appearance.accent === a.id} aria-label={a.id} title={a.id}
-              className={`accent-dot ${settings.appearance.accent === a.id ? "on" : ""}`} style={{ background: a.color }} onClick={() => setAppearance({ accent: a.id })} />
-          ))}
-        </div>
-
-        <h3 className="section-label" id="voice">Voice</h3>
-        <StandardVoice s={s} setS={setS} saved={settings} xai={xai} setXai={setXai} />
+                </>}
+        {sec === "voice" && <>
+                <StandardVoice s={s} setS={setS} saved={settings} xai={xai} setXai={setXai} />
         <VoiceSettings settings={settings} draft={s} setDraft={setS} save={save} />
 
-        <h3 className="section-label">AI</h3>
-        <AiSettings s={s} setS={setS} xai={xai} setXai={setXai} />
+                </>}
+        {sec === "voice-control" && <>
+                <VoiceControlSettings s={s} setS={setS} settings={settings} save={save} />
 
-        <h3 className="section-label">Recaps</h3>
-        <div className="row-card">
+                </>}
+        {sec === "ai" && <>
+                <AiSettings s={s} setS={setS} xai={xai} setXai={setXai} />
+
+                </>}
+        {sec === "recaps" && <>
+                <div className="row-card">
           <div className="row-main"><strong>Summarize with your AI</strong><p>Sends the meeting transcript to your AI (Settings, AI) for a short summary and extra follow-ups. Off: you still get every question Peguin deferred.</p></div>
           <Toggle on={s.recap.summarize} onChange={(v) => setS({ ...s, recap: { ...s.recap, summarize: v } })} label="Summarize with your AI" />
         </div>
@@ -270,17 +304,9 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
           </div>
         </div>
 
-        <h3 className="section-label">Advanced</h3>
-        <label>Timezone<select value={s.timezone} onChange={(e) => setS({ ...s, timezone: e.target.value })}>{timezones.map((t) => <option key={t}>{t}</option>)}</select></label>
-        <div className="row-card">
-          <div className="row-main"><strong>Show meeting window</strong></div>
-          <Toggle on={!s.runHidden} onChange={(v) => setS({ ...s, runHidden: !v })} label="Show the meeting window" />
-        </div>
-        <div className="row-card">
-          <div className="row-main"><strong>Update automatically</strong><p>Downloads new versions in the background, then one click restarts into them (or they install when you quit).</p></div>
-          <Toggle on={s.autoUpdate} onChange={(v) => setS({ ...s, autoUpdate: v })} label="Update automatically" />
-        </div>
+                </>}
         {error && <div className="notice error">{error}</div>}
+        </div>
       </div>
       {dirty && (
         <div className="savebar">
@@ -291,6 +317,24 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
       )}
     </>
   );
+}
+
+type SectionId = "general" | "standup" | "voice" | "voice-control" | "ai" | "recaps";
+const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
+  { id: "general", label: "General", icon: "settings" },
+  { id: "standup", label: "Standup", icon: "calendar" },
+  { id: "voice", label: "Voice", icon: "mic" },
+  { id: "voice-control", label: "Voice control", icon: "pointer" },
+  { id: "ai", label: "AI", icon: "sparkle" },
+  { id: "recaps", label: "Recaps", icon: "recaps" },
+];
+
+/** The Settings page last open, remembered on this Mac (a convenience; falls back to General). */
+function useSection(): [SectionId, (id: SectionId) => void] {
+  const [sec, setSec] = useState<SectionId>(() => {
+    try { const v = localStorage.getItem("settings-section"); return SECTIONS.some((x) => x.id === v) ? (v as SectionId) : "general"; } catch { return "general"; }
+  });
+  return [sec, (id) => { setSec(id); try { localStorage.setItem("settings-section", id); } catch { /* not kept */ } }];
 }
 
 const THEMES: { id: Settings["appearance"]["theme"]; label: string; vars: Record<string, string> }[] = [

@@ -26,6 +26,7 @@ Rules:
 - Write for the ear: short sentences of about 15 words or fewer, plain words, numbers as words. Don't stack technical nouns: say "added retries for payment webhooks", not "merged the payment webhook retries". Spell out anything with symbols.
 - Only state things supported by the activity or notes. If something is unclear, leave it out.
 - Items from AI coding sessions (source "claude_code") are what ${first(name)} asked an AI assistant to work on. Treat them as in progress unless a commit, PR or ticket shows the work is done. Describe the work, not the prompts.
+- Items from source "mac" are window titles ${first(name)} had in front, with roughly how long. They show where time went, not what got done: mention one only as something ${first(name)} spent time on or is working on, never claim it's finished, merged or decided because of a window title, and never put one in facts unless other activity supports it. Skip anything that looks personal.
 - Mention a blocker only if the activity or notes show one; otherwise just say "no blockers". Never talk about the activity data or notes themselves.
 - If there's no activity, say so plainly and mention the standing notes.
 - No greeting and no sign-off; those are added separately.
@@ -59,6 +60,9 @@ export function isQuestion(text: string): boolean {
   const lead = t.replace(/^(so|and|okay|ok|alright|right|now|great|cool)[,.]?\s+/, "").replace(/^[a-z'’-]+,\s+/, "");
   return /\?\s*$/.test(t) || /^(what|why|how|when|where|who|which|can|could|would|will|do|does|did|is|are|was|were|have|has|should|any)\b/.test(lead) || REQUEST.test(lead);
 }
+
+/** Posted in the meeting chat from the owner's account before the private copilot hides from shares (desktop pop-out, Chrome side panel). */
+export const AI_NOTICE = "Heads-up: I'm using Peguin, an AI assistant, in this call. It hears the conversation and privately suggests answers to me.";
 
 /** How a copilot suggestion starts, so the panel (and the owner) can tell where it came from. */
 export const COPILOT_LABELS = { notes: "From your notes:", general: "General knowledge:", unknown: "Not in your notes." } as const;

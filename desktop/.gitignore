@@ -4,3 +4,4 @@ vendor
 release
 build/whisper
 build/calendar
+build/pointer

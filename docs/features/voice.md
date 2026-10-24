@@ -25,7 +25,8 @@ How Peguin sounds in the meeting.
 | `desktop/src/main/speech/voice/engine.ts` | Chatterbox Turbo through onnxruntime-node |
 | `desktop/src/main/speech/voice/model.ts` | Model download, pinned revision and sizes |
 | `desktop/src/main/speech/voice/eleven.ts` | ElevenLabs engine, clone lifecycle, emotion cues |
-| `desktop/src/main/speech/voice/store.ts` | The sample, encrypted, deletable |
+| `desktop/src/main/speech/voice/store.ts` | The sample, encrypted, deletable; `replaceTalk` (from ticked clips), `loadConsentAudio` |
+| `desktop/src/main/speech/voice/clips.ts`, `clipRules.ts` | Learn my voice: clips kept while voice control listens, encrypted until ticked or deleted; which clips are clean, likeness, joining (pure) |
 | `desktop/src/main/speech/voice/text.ts`, `sampling.ts`, `audio.ts` | Text clean-up and respelling, token sampling, audio joins and levelling (pure) |
 | `desktop/src/renderer/voice.tsx` | Settings > Voice: record, download, pronunciations, tuning, try it |
 | `desktop/src/renderer/ai.tsx` | `StandardVoice`: Mac/Grok, voice id, Hear it |

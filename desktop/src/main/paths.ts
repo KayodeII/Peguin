@@ -10,14 +10,27 @@ import { fileURLToPath } from "node:url";
 export const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."); // out/
 const sourceRoot = path.resolve(outDir, "..");                                         // desktop/
 
+/**
+ * A PENGUIN_* development override. Installed builds ignore them all, so an
+ * environment variable can't point the app at another server, licence key,
+ * page or profile.
+ */
+export const devEnv = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name]);
+
 /** A file shipped next to the app: extraResources when installed, desktop/resources from source. */
 export const resource = (name: string) => app.isPackaged ? path.join(process.resourcesPath, name) : path.join(sourceRoot, "resources", name);
 
 /** EventKit helper that reads the Mac's calendars (built by scripts/build-calendar-helper.sh). */
 export const calendarHelperPath = () => app.isPackaged ? path.join(process.resourcesPath, "calendar", "calendar-helper") : path.join(sourceRoot, "build/calendar/calendar-helper");
 
+/** Swift helper that moves the mouse, types and reads button names for voice control (scripts/build-pointer-helper.sh). */
+export const pointerHelperPath = () => app.isPackaged ? path.join(process.resourcesPath, "pointer", "pointer-helper") : path.join(sourceRoot, "build/pointer/pointer-helper");
+
 export const WHISPER_MODEL = "large-v3-turbo-q5_0"; // ~550 MB; half the word errors of base.en on call audio
 export const MODEL_URL = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${WHISPER_MODEL}.bin`;
+
+/** Silero voice activity model (ggml-org/whisper-vad, under 1 MB), shipped with the app. */
+export const vadModelPath = () => resource("ggml-silero-v6.2.0.bin");
 
 export function whisperPaths() {
   const bin = app.isPackaged ? path.join(process.resourcesPath, "whisper", "whisper-server") : path.join(sourceRoot, "vendor/whisper.cpp/build/bin/whisper-server");

@@ -39,12 +39,18 @@ async function readSession(file: string, since: Date) {
   return { project, prompts };
 }
 
+/**
+ * Sessions run in a temporary folder (Peguin's own calls to Claude, one-off `claude -p`
+ * runs) aren't the owner's work. Project folders are the session's cwd with "/" as "-".
+ */
+export const scratch = (dir: string) => /^-(private-)?(tmp|var-folders)(-|$)/.test(dir);
+
 export async function claudeCodeActivity(since: Date, root = path.join(homedir(), ".claude/projects")): Promise<SourceResult> {
   let dirs: string[];
   try { dirs = await readdir(root); } catch {
     return { activity: [], report: { id: "claude_code", ok: false, items: 0, summary: "No Claude Code sessions on this computer" } };
   }
-  const files = (await Promise.all(dirs.map(async (d) => {
+  const files = (await Promise.all(dirs.filter((d) => !scratch(d)).map(async (d) => {
     const names = await readdir(path.join(root, d)).catch(() => [] as string[]);
     return Promise.all(names.filter((n) => n.endsWith(".jsonl")).map(async (n) => {
       const f = path.join(root, d, n);

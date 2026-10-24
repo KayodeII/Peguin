@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Peguin Copilot",
+  "short_name": "Peguin",
+  "description": "A private AI copilot for Google Meet. Suggests what you could say; tells the call AI is helping.",
+  "version": "0.1.0",
+  "minimum_chrome_version": "120",
+  "icons": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
+  "action": { "default_title": "Open Peguin", "default_icon": { "16": "icons/icon-16.png", "32": "icons/icon-32.png" } },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["sidePanel", "tabCapture", "offscreen", "storage", "activeTab"],
+  "host_permissions": ["https://meet.google.com/*", "https://api.anthropic.com/*", "https://api.openai.com/*", "https://api.x.ai/*", "https://huggingface.co/*", "https://*.hf.co/*"],
+  "content_scripts": [{ "matches": ["https://meet.google.com/*"], "js": ["content.js"], "run_at": "document_idle" }],
+  "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" }
+}

@@ -32,7 +32,37 @@ const Voice = z.object({
   expressiveness: z.number().min(0.3).max(0.9).default(0.6),
   /** How many times a prepared line is made again when a word comes back wrong (1 = no checking). */
   attempts: z.number().int().min(1).max(5).default(3),
+  /**
+   * Learn my voice: while voice control is listening, keep a few clean clips of
+   * the owner talking for them to review; ticked clips become a fuller sample.
+   * Off until the owner turns it on.
+   */
+  learn: z.object({
+    enabled: z.boolean().default(false),
+    perDay: z.number().int().min(1).max(30).default(8),
+  }).default(() => ({ enabled: false, perDay: 8 })),
 });
+
+/** Peguin's own cursor. Every value is the owner's preference. */
+const Cursor = z.object({
+  /** "penguin": Peguin's head, the beak points and the eye looks around; "fin": a flipper; "arrow": a classic pointer. */
+  shape: z.enum(["penguin", "fin", "arrow"]).default("penguin"),
+  /** The glow (and the fin or arrow); the penguin's head is always black. */
+  color: z.enum(["ink", "tomato", "blue", "green", "purple"]).default("tomato"),
+  size: z.number().min(0.7).max(1.8).default(1),
+  /** How long a move takes, in ms (slower is easier to follow). */
+  glideMs: z.number().int().min(150).max(1200).default(450),
+  /**
+   * Between commands. "roam": it rests around the middle of the screen, drifts now and then away
+   * from the owner's mouse, and looks at the window they're in when the work log notes it;
+   * "island": back on the island after `returnAfterS`; "stay": it waits where it last worked.
+   */
+  home: z.enum(["roam", "island", "stay"]).default("roam"),
+  returnAfterS: z.number().int().min(2).max(60).default(6),
+});
+
+/** Private by nature, so left out of the work log until the owner says otherwise. */
+const SKIP_APPS = ["1Password", "Bitwarden", "Keychain Access", "Passwords", "Messages", "WhatsApp", "Signal", "Telegram", "Mail", "FaceTime", "Photos"];
 
 /** Delivery cues only when the owner's voice is made by ElevenLabs and they've left cues on (pure). */
 export const wantsCues = (s: { voice: { mode: string; engine: string; eleven: { cues: boolean } } }) =>
@@ -105,6 +135,57 @@ export const Settings = z.preprocess(migrate, z.object({
     /** After the quick answer, look it up on the web (about 15 s more) and replace it. */
     web: z.boolean().default(false),
   }).default(() => ({ mode: "work" as const, web: false })),
+  /**
+   * Voice control: "Hey Peguin, ..." from the owner's own mic moves the mouse,
+   * clicks, types and draws on screen. Off until the owner turns it on; words are
+   * heard on this Mac and nothing is sent anywhere.
+   */
+  pointer: z.object({
+    enabled: z.boolean().default(false),
+    /** What the owner calls Peguin after "Hey". */
+    wakeWords: z.array(z.string().trim().min(2).max(30)).min(1).max(5).default(["Peguin"]),
+    /**
+     * "name": "Hey Peguin" wakes it. "hey": "Hey" on its own does too; then anything that isn't a
+     * clear command goes to the owner's AI quietly and is dropped if it isn't a request (a "Hey John").
+     * In meetings the name is always needed.
+     */
+    wake: z.enum(["name", "hey"]).default("name"),
+    /** Seconds Peguin waits for the request after it's woken ("Hey Peguin" … "open Music"); talking keeps it waiting. */
+    listenS: z.number().int().min(3).max(60).default(15),
+    /** Seconds after a request that a follow-up ("now close it") needs no wake word. 0: always say it. */
+    followS: z.number().int().min(0).max(120).default(30),
+    /** Press to give one command without the wake phrase (Electron accelerator). Empty: none. */
+    shortcut: z.string().trim().max(60).default("Control+Alt+Space"),
+    /** Where "search for ..." goes; %s is replaced by the words. */
+    searchUrl: z.string().trim().url().default("https://www.google.com/search?q=%s"),
+    /** Peguin's own cursor: how it looks, how fast it moves and where it rests. */
+    cursor: Cursor.default(() => Cursor.parse({})),
+    /**
+     * When a line starts with "Hey Peguin" but the rest isn't a command Peguin knows, ask the owner's
+     * AI (Settings > AI) what they meant. Only those words are sent, never audio or other talk.
+     */
+    askAi: z.boolean().default(true),
+    /**
+     * "smart": opening, finding, clicking and searching are planned by the owner's AI one visible step at a
+     * time (Dock, Finder, scrolling, like a person); "quick": fixed commands only, done directly. Instant
+     * things (scroll, keys, typing, drawing, stop) are always done directly.
+     */
+    drive: z.enum(["smart", "quick"]).default("smart"),
+    /** The Dynamic Island at the top of the screen: what Peguin hears and does. */
+    island: z.boolean().default(true),
+  }).default(() => ({ enabled: false, wakeWords: ["Peguin"], wake: "name" as const, listenS: 15, followS: 30, shortcut: "Control+Alt+Space", searchUrl: "https://www.google.com/search?q=%s", cursor: Cursor.parse({}), askAi: true, drive: "smart" as const, island: true })),
+  /**
+   * The work log: every few minutes, the app in front and its window title, so
+   * the draft knows what the owner spent time on. Off until the owner turns it on;
+   * encrypted on this Mac. Every value is the owner's preference.
+   */
+  watch: z.object({
+    enabled: z.boolean().default(false),
+    everyMinutes: z.number().int().min(1).max(30).default(5),
+    keepDays: z.number().int().min(1).max(30).default(7),
+    /** Apps (name or bundle id) and title words never noted. A starting list the owner edits. */
+    skipApps: z.array(z.string().trim().min(1).max(60)).max(50).default([...SKIP_APPS]),
+  }).default(() => ({ enabled: false, everyMinutes: 5, keepDays: 7, skipApps: [...SKIP_APPS] })),
   /** The Grok chat model, from the ones the owner's key can use. */
   grokModel: z.string().trim().max(80).optional(),
   /** Download new versions in the background and offer "Restart to update" (installs on quit too). */

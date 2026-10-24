@@ -1,6 +1,8 @@
 // Updating the installed app in place, without the owner downloading a .dmg.
-// The release publishes the app as a zip plus SHA256SUMS.txt. The new version is
-// downloaded in the background, checked against the published checksum,
+// The release publishes the app as a zip plus SHA256SUMS.txt, signed with the
+// release key (SHA256SUMS.txt.sig). The signature is checked first, so a release
+// or download URL that wasn't published by the release workflow is refused.
+// The new version is downloaded in the background, checked against the checksum,
 // unpacked, and checked again (its version must match). Then, on "Restart to
 // update" or when the app quits, a small script swaps the bundle once Peguin
 // has exited, and reopens it if asked. A download made by the app itself
@@ -10,13 +12,23 @@
 // electron-updater, which require a signed app on macOS.
 import { app } from "electron";
 import { execFile, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { accessSync, constants, createWriteStream, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
 export const ZIP_ASSET = "Peguin-mac-arm64.zip";
+
+/** Public half of the release key. The private half is the RELEASE_SIGNING_KEY secret, used only by release.yml. */
+export const RELEASE_PUBLIC_JWK: JsonWebKey = { kty: "OKP", crv: "Ed25519", x: "IM5XgcBlUt7Fy0D7wOII1e7ca1LWD9eJj1aE5YMIccw" };
+
+/** Whether `sig` (base64 Ed25519, from scripts/sign-sums.mjs) signs exactly these sums (pure). */
+export function sumsSigned(sums: string, sig: string, key: JsonWebKey = RELEASE_PUBLIC_JWK): boolean {
+  try {
+    return verify(null, Buffer.from(sums, "utf8"), createPublicKey({ key, format: "jwk" }), Buffer.from(sig.trim(), "base64"));
+  } catch { return false; }
+}
 
 /** The checksum listed for `name` in a shasum file ("<hex>  <name>" lines), or null (pure). */
 export function checksumFor(sums: string, name: string): string | null {
@@ -90,8 +102,10 @@ export function prepareUpdate(u: { version: string; zip: string; sums: string },
     try {
       dir = mkdtempSync(path.join(tmpdir(), "peguin-update-"));
       onState({ version: u.version, status: "downloading", progress: 0 });
-      const sumsRes = await fetch(u.sums, { signal: AbortSignal.timeout(60_000) });
-      const want = sumsRes.ok ? checksumFor(await sumsRes.text(), ZIP_ASSET) : null;
+      const [sumsRes, sigRes] = await Promise.all([u.sums, `${u.sums}.sig`].map((url) => fetch(url, { signal: AbortSignal.timeout(60_000) })));
+      const sums = sumsRes!.ok ? await sumsRes!.text() : "";
+      if (!sigRes!.ok || !sumsSigned(sums, await sigRes!.text())) throw new Error("The update isn't signed by Peguin, so it wasn't installed.");
+      const want = checksumFor(sums, ZIP_ASSET);
       if (!want) throw new Error("The release has no checksum for the update.");
       const zip = path.join(dir, ZIP_ASSET);
       const got = await download(u.zip, zip, (progress) => onState({ version: u.version, status: "downloading", progress }));

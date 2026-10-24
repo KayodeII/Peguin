@@ -6,17 +6,20 @@ import type { Activity, SourceId, SourceReport, SourceResult } from "./types.js"
 
 export type { Activity, SourceId, SourceReport } from "./types.js";
 
-const SOURCES: Record<SourceId, (since: Date) => Promise<SourceResult>> = {
+type Source = (since: Date) => Promise<SourceResult>;
+
+const SOURCES: Partial<Record<SourceId, Source>> = {
   git: gitActivity,
   github: githubActivity,
   claude_code: claudeCodeActivity,
 };
 
 /** Everything the user worked on since the previous workday, from every enabled source. */
-export async function gatherContext(enabled: Record<SourceId, boolean>, timezone: string, now = new Date()) {
+export async function gatherContext(enabled: Partial<Record<SourceId, boolean>>, timezone: string, now = new Date(), extra: Partial<Record<SourceId, Source>> = {}) {
   const since = previousWorkdayStart(now, timezone);
-  const ids = (Object.keys(SOURCES) as SourceId[]).filter((id) => enabled[id]);
-  const results = await Promise.all(ids.map((id) => SOURCES[id](since).catch((e): SourceResult => ({
+  const all = { ...SOURCES, ...extra };
+  const ids = (Object.keys(all) as SourceId[]).filter((id) => enabled[id]);
+  const results = await Promise.all(ids.map((id) => all[id]!(since).catch((e): SourceResult => ({
     activity: [], report: { id, ok: false, items: 0, summary: `Failed: ${String(e).slice(0, 120)}` },
   }))));
   const activity: Activity[] = results.flatMap((r) => r.activity).sort((a, b) => a.at.localeCompare(b.at));

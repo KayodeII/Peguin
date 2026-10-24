@@ -18,13 +18,13 @@ export const MIN_TALK_S = 12;
 export const MAX_TALK_S = 30;
 const MIN_CONSENT_S = 3;
 
-const dir = () => path.join(app.getPath("userData"), "voice");
+export const dir = () => path.join(app.getPath("userData"), "voice");
 const sampleFile = () => path.join(dir(), "sample.bin");
 const consentFile = () => path.join(dir(), "consent.json");
 const consentAudioFile = () => path.join(dir(), "consent.bin");
 
 /** `kind: "talk"` is a natural-talk sample; older samples (a read script) have no kind. */
-export type VoiceSampleInfo = { recordedAt: string; seconds: number; consent: string; kind?: "talk" };
+export type VoiceSampleInfo = { recordedAt: string; seconds: number; consent: string; kind?: "talk"; from?: "clips" };
 
 function writeAtomic(file: string, data: Buffer | string) {
   mkdirSync(path.dirname(file), { recursive: true });
@@ -56,6 +56,30 @@ export function saveSample(consent: Float32Array, talk: Float32Array): VoiceSamp
   const info: VoiceSampleInfo = { recordedAt: new Date().toISOString(), seconds: Math.round(trimmed.length / SAMPLE_RATE), consent: CONSENT_SENTENCE, kind: "talk" };
   writeAtomic(consentFile(), JSON.stringify(info, null, 2));
   return info;
+}
+
+/**
+ * Replaces the voice with clips the owner ticked (Learn my voice). The consent
+ * recording stays; without one there's nothing to replace.
+ */
+export function replaceTalk(talk: Float32Array): VoiceSampleInfo {
+  const old = sampleInfo();
+  if (!old) throw new Error("Record your voice sample first; clips can only add to it.");
+  const seconds = talk.length / SAMPLE_RATE;
+  if (seconds < MIN_TALK_S) throw new Error(`The ticked clips add up to ${seconds.toFixed(0)} seconds. Tick clips for at least ${MIN_TALK_S}.`);
+  const peak = peakOf(talk, "clips");
+  const trimmed = talk.subarray(0, SAMPLE_RATE * MAX_TALK_S);
+  writeSealed(sampleFile(), encodeWav(trimmed.map((v) => (v / peak) * 0.9)));
+  const info: VoiceSampleInfo = { ...old, recordedAt: new Date().toISOString(), seconds: Math.round(trimmed.length / SAMPLE_RATE), kind: "talk", from: "clips" };
+  writeAtomic(consentFile(), JSON.stringify(info, null, 2));
+  return info;
+}
+
+/** The consent recording: always the owner, recorded live, so clips are compared with it. */
+export function loadConsentAudio(): { samples: Float32Array; id: string } | null {
+  if (!existsSync(consentAudioFile())) return null;
+  const sealed = readFileSync(consentAudioFile());
+  try { return { samples: decodeWav(unseal(sealed)).samples, id: createHash("sha256").update(sealed).digest("hex").slice(0, 16) }; } catch { return null; }
 }
 
 export function sampleInfo(): VoiceSampleInfo | null {

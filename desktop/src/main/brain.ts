@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { answerContext, answerSystem, copilotSystem, copilotWebSystem, plainSpoken, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
 import { gatherContext, type SourceReport } from "./context/index.js";
+import { workLogActivity } from "./watch/index.js";
 import { wantsCues, type Settings } from "./settings.js";
 import { grokChat, grokChatStream, grokSearch, loadXai } from "./xai.js";
 import { claudeStream } from "./claude.js";
@@ -26,7 +27,8 @@ export type Draft = {
 /** One prompt in, one reply out. Runs outside any project so no CLAUDE.md applies. */
 function claude(prompt: string, timeoutMs: number, web = false): Promise<string> {
   return new Promise((resolve, reject) => {
-    const args = ["-p", "--output-format", "json", "--max-turns", web ? "4" : "1", ...(web ? ["--allowedTools", "WebSearch"] : [])];
+    // --no-session-persistence: Peguin's own prompts mustn't show up as the owner's Claude Code work.
+    const args = ["-p", "--no-session-persistence", "--output-format", "json", "--max-turns", web ? "4" : "1", ...(web ? ["--allowedTools", "WebSearch"] : [])];
     const child = spawn("claude", args, { cwd: tmpdir(), env: process.env });
     let out = "", err = "";
     const timer = setTimeout(() => { child.kill(); reject(new Error("Claude took too long to reply")); }, timeoutMs);
@@ -61,7 +63,8 @@ function codex(prompt: string, timeoutMs: number, web = false): Promise<string> 
       let text = "";
       try { text = readFileSync(out, "utf8").trim(); } catch { /* no reply written */ }
       if (code === 0 && text) resolve(text);
-      else reject(new Error(`Codex CLI failed: ${(err.match(/"message":"([^"]+)"/)?.[1] ?? err ?? `exit ${code}`).slice(0, 300)}`));
+      else if (/connection failed|error sending request|network|dns|timed out/i.test(err)) reject(new Error("Codex couldn't reach OpenAI. Check your internet connection and try again."));
+      else reject(new Error(`Codex CLI failed: ${(err.match(/"message":"([^"]+)"/)?.[1] ?? err.split("\n").map((l) => l.replace(/^\S+Z\s+(ERROR|WARN)\s+\S+:\s*/, "")).find((l) => l.trim()) ?? `exit ${code}`).slice(0, 300)}`));
     }));
     child.stdin.end(prompt);
   });
@@ -91,13 +94,35 @@ const collect = async (pieces: AsyncIterable<string>) => { let out = ""; for awa
 
 const draftFile = () => path.join(app.getPath("userData"), "draft.json");
 
+/**
+ * Voice control: a line that started with "Hey Peguin" but that Peguin couldn't
+ * understand ("Eypegül, can you swipe to Chrome"). Only the words go to the owner's
+ * AI, never audio; it answers with one command Peguin knows, or NONE.
+ */
+export async function interpretCommand(s: Settings, heard: string): Promise<string | null> {
+  const prompt = `You turn a spoken request to a Mac voice assistant into ONE command it understands. The words came from speech recognition, so some may be misheard.
+Commands it understands (use these exact shapes):
+click <button name> | click <number> | double click | right click | show numbers | hide numbers
+open <app name> | go to <website.com> | open my browser | search for <words>
+scroll up | scroll down | scroll down a bit | go back | go forward | new tab | close tab | reload
+type <text> | press enter | press <key> | find <words>
+draw a circle | draw an arrow | highlight this | underline this | clear | stop
+Reply with the single best command and nothing else. If it isn't a request to do something on the computer, reply NONE.
+Spoken: ${JSON.stringify(heard.slice(0, 300))}`;
+  const out = (await collect(generateStream(s, prompt, 20000))).split("\n")[0]!.replace(/^["'`]|["'`.]$/g, "").trim();
+  return !out || /^none\b/i.test(out) ? null : out.slice(0, 200);
+}
+
+/** One prompt to the owner's AI, the reply in full (the warm Claude CLI when voice control has one ready). */
+export const think = (s: Settings, prompt: string, timeoutMs = 30000) => collect(generateStream(s, prompt, timeoutMs));
+
 export function loadDraft(): Draft | null {
   try { return JSON.parse(readFileSync(draftFile(), "utf8")) as Draft; } catch { return null; }
 }
 
 /** Gather today's work, have Claude write the spoken update + facts, and keep it. */
 export async function prepareDraft(s: Settings): Promise<Draft> {
-  const ctx = await gatherContext(s.sources, s.timezone);
+  const ctx = await gatherContext({ ...s.sources, mac: s.watch.enabled }, s.timezone, new Date(), { mac: (since) => workLogActivity(since, s) });
   // Only titles, statuses and times leave the machine; never code.
   const activity = ctx.activity.map(({ source, kind, title, status, at }) => ({ source, kind, title, status, at }));
   const cues = wantsCues(s);

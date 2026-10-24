@@ -27,7 +27,7 @@ The owner joins their own meeting as themselves in a Peguin window. Peguin liste
 | `desktop/src/renderer/copilot.tsx` | The panel: header buttons, Work/Interview, Check online, cards, transcript |
 | `desktop/src/renderer/main.tsx` | Routes `#copilot` and `#copilot-out` to the panel |
 | `desktop/src/renderer/styles.css` | `.copilot`, `.cp-*` styles |
-| `src/core/brain/prompts.ts` | `isQuestion` (copilot's), `COPILOT_LABELS`, `copilotSystem`, `copilotWebSystem`, `plainSpoken` |
+| `src/core/brain/prompts.ts` | `isQuestion` (copilot's), `AI_NOTICE` (shared with the Chrome extension), `COPILOT_LABELS`, `copilotSystem`, `copilotWebSystem`, `plainSpoken` |
 | `desktop/src/main/brain.ts` | `suggestAnswer`, `checkOnline` |
 | `desktop/src/main/settings.ts` | `copilot.mode`, `copilot.web` |
 | `desktop/src/main/index.ts` | `startCopilot`, IPC `copilot:start|state|collapse|pop-out|stop` |

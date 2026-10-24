@@ -8,16 +8,18 @@ import type { Settings } from "../main/settings";
 import { Avatar, Icon, Logo, message } from "./ui";
 import { LiveView, Onboarding, SettingsView, SourcesView, TodayView } from "./views";
 import { RecapsView } from "./recaps";
+import { ContextBankView } from "./contextbank";
 import type { MeetingRecord } from "../main/meeting/record";
 
-export type View = "today" | "live" | "recaps" | "sources" | "settings";
+export type View = "today" | "live" | "recaps" | "context" | "sources" | "settings";
 const NAV: { id: View; label: string; icon: string; channel: string }[] = [
   { id: "today", label: "Today", icon: "today", channel: "today" },
   { id: "live", label: "Live meeting", icon: "live", channel: "live-meeting" },
   { id: "recaps", label: "Recaps", icon: "recaps", channel: "recaps" },
+  { id: "context", label: "Context bank", icon: "bank", channel: "context-bank" },
   { id: "sources", label: "Sources", icon: "sources", channel: "sources" },
 ];
-const VIEWS: View[] = ["today", "live", "recaps", "sources", "settings"];
+const VIEWS: View[] = ["today", "live", "recaps", "context", "sources", "settings"];
 
 export type DraftState = { draft: Draft | null; preparing: boolean; error?: string };
 export type LiveState = { status: MeetingStatus; detail?: string; events: MeetingEvent[] };
@@ -174,6 +176,7 @@ export function App() {
         {view === "today" && <TodayView settings={settings} draft={draft} prepare={prepare} goSources={() => setView("sources")} />}
         {view === "live" && <LiveView settings={settings} live={live} join={(u) => window.penguin.join(u).catch((e: unknown) => setToast(message(e)))} leave={() => void window.penguin.leave()}
           copilot={(u) => window.penguin.copilotStart(u).catch((e: unknown) => setToast(message(e)))} />}
+        {view === "context" && <ContextBankView goSources={() => setView("sources")} goSettings={() => setView("settings")} />}
         {view === "sources" && <SourcesView settings={settings} draft={draft.draft} save={save} prepare={prepare} />}
         {view === "recaps" && <RecapsView meetings={meetings} reload={reloadMeetings} keepDays={settings.recap.keepDays} />}
         {view === "settings" && <SettingsView settings={settings} save={save} preview={(n) => botName(n, "google_meet")} account={account} />}

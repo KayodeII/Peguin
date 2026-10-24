@@ -3,7 +3,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer } from "node:net";
-import { whisperPaths } from "../paths.js";
+import { vadModelPath, whisperPaths } from "../paths.js";
 import { whisperPrompt } from "./hints.js";
 
 const RATE = 16000;
@@ -30,7 +30,15 @@ export async function startWhisper(): Promise<Whisper> {
   if (!existsSync(bin)) throw new Error("Speech recognition is missing from this install. Reinstall Peguin, or run `npm run setup:whisper` in desktop/.");
   if (!existsSync(model)) throw new Error("The speech model hasn't finished downloading yet.");
   const port = await freePort();
-  const proc = spawn(bin, ["-m", model, "--host", "127.0.0.1", "--port", String(port), "-l", "en"], { stdio: "ignore" });
+  // Silero VAD keeps only the parts that are a voice. Measured on 2026-10-21: without it, more than half
+  // of what the owner's mic sent (hiss, hum, music, typing) came back as "Thank you." or "Okay.";
+  // with it, noise comes back empty and speech word for word (docs/features/voice-control.md).
+  const vad = existsSync(vadModelPath()) ? ["--vad", "-vm", vadModelPath()] : [];
+  const proc = spawn(bin, ["-m", model, "--host", "127.0.0.1", "--port", String(port), "-l", "en", ...vad], { stdio: "ignore" });
+  // However Peguin ends (even killed or force-quit in development), the server goes with it.
+  const kill = () => { try { proc.kill(); } catch { /* gone */ } };
+  process.once("exit", kill);
+  proc.once("exit", () => process.removeListener("exit", kill));
   const url = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 80; i++) {
     if (proc.exitCode !== null) throw new Error(`whisper-server exited with code ${proc.exitCode}`);
@@ -54,11 +62,11 @@ function clean(text: string): string {
   return text.replace(/\[[^\]]*\]|\([^)]*\)|\*[^*]*\*/g, " ").replace(/\s+/g, " ").trim();
 }
 
-async function transcribe(whisperUrl: string, pcm: Buffer, names: string[], vocab: string[] = []): Promise<string> {
+async function transcribe(whisperUrl: string, pcm: Buffer, names: string[], vocab: string[] = [], prompt?: string): Promise<string> {
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(wav(pcm))], { type: "audio/wav" }), "utterance.wav");
   form.append("response_format", "json");
-  form.append("prompt", whisperPrompt(names, vocab)); // nudges spelling of names and jargon
+  form.append("prompt", prompt ?? whisperPrompt(names, vocab)); // nudges spelling of names and jargon
   const res = await fetch(`${whisperUrl}/inference`, { method: "POST", body: form });
   if (!res.ok) throw new Error(`whisper returned ${res.status}`);
   const body = (await res.json()) as { text?: string };
@@ -77,7 +85,22 @@ export function transcribeSamples(whisperUrl: string, samples: Float32Array, nam
   return transcribe(whisperUrl, pcm, names);
 }
 
-export type Utterance = { text: string; sttMs: number; endedAt: number };
+/** `pcm` is the utterance as heard: PCM16 at the listener's `rate`. */
+export type Utterance = { text: string; sttMs: number; endedAt: number; pcm: Buffer };
+
+/** PCM16 from `rate` to whisper's 16 kHz (linear; 24 kHz mic audio is kept for the voice clips). */
+export function to16k(pcm: Buffer, rate: number): Buffer {
+  if (rate === RATE) return pcm;
+  const aligned = pcm.byteOffset % 2 ? Buffer.from(pcm) : pcm;
+  const src = new Int16Array(aligned.buffer, aligned.byteOffset, Math.floor(aligned.length / 2));
+  const n = Math.floor((src.length * RATE) / rate);
+  const out = Buffer.alloc(n * 2);
+  for (let i = 0; i < n; i++) {
+    const x = (i * rate) / RATE, j = Math.floor(x), f = x - j;
+    out.writeInt16LE(Math.round((src[j] ?? 0) * (1 - f) + (src[j + 1] ?? src[j] ?? 0) * f), i * 2);
+  }
+  return out;
+}
 
 /** Feed PCM chunks in; finished utterances come out in order, one at a time. */
 export function createListener(opts: {
@@ -85,8 +108,12 @@ export function createListener(opts: {
   names: string[];
   /** Jargon to spell right (from the owner's facts). */
   vocab?: () => string[];
+  /** A whole prompt instead of the meeting one (voice control primes for "Hey Peguin, ..."). */
+  prompt?: () => string;
   /** Pause that ends an utterance. Longer keeps questions with a mid-sentence pause whole. */
   endSilenceMs?: number;
+  /** Sample rate of the chunks fed in (default 16 kHz). */
+  rate?: number;
   onUtterance: (u: Utterance) => void;
   onError: (e: unknown) => void;
   /** Called once per utterance, as soon as someone has spoken for `sustainedMs` (talk-over detection). */
@@ -96,12 +123,13 @@ export function createListener(opts: {
   let chunks: Buffer[] = [], preroll: Buffer[] = [];
   let speaking = false, speechMs = 0, silentMs = 0, totalMs = 0, sustained = false;
   let queue = Promise.resolve();
+  const rate = opts.rate ?? RATE;
   // A transcript started early in the pause; dropped if they speak again.
   let early: { text: Promise<string>; started: number } | null = null;
 
   const run = (pcm: Buffer) => {
     const started = Date.now();
-    const text = transcribe(opts.whisperUrl, pcm, opts.names, opts.vocab?.() ?? []);
+    const text = transcribe(opts.whisperUrl, to16k(pcm, rate), opts.names, opts.vocab?.() ?? [], opts.prompt?.());
     text.catch(() => {}); // reported once, through the queue
     return { text, started };
   };
@@ -114,7 +142,7 @@ export function createListener(opts: {
     const job = done ?? run(pcm);
     queue = queue.then(async () => {
       const text = await job.text;
-      if (text) opts.onUtterance({ text, sttMs: Date.now() - job.started, endedAt });
+      if (text) opts.onUtterance({ text, sttMs: Date.now() - job.started, endedAt, pcm });
     }).catch(opts.onError);
   };
   const endSilence = opts.endSilenceMs ?? END_SILENCE_MS;
@@ -131,7 +159,7 @@ export function createListener(opts: {
     let sum = 0;
     for (const s of samples) sum += (s / 0x8000) ** 2;
     const voiced = Math.sqrt(sum / (samples.length || 1)) > VOICE_RMS;
-    const ms = (samples.length / RATE) * 1000;
+    const ms = (samples.length / rate) * 1000;
 
     if (!speaking) {
       preroll.push(chunk);

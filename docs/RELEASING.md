@@ -10,7 +10,7 @@
 3. `.github/workflows/release.yml` builds the .dmg on an Apple silicon runner (bundling a static whisper.cpp at the pinned commit) and publishes a GitHub Release with:
    - `Peguin-0.2.0-mac-arm64.dmg`
    - `Peguin-mac-arm64.dmg` (same file, stable name)
-   - `SHA256SUMS.txt`
+   - `SHA256SUMS.txt` and `SHA256SUMS.txt.sig` (signed with the `RELEASE_SIGNING_KEY` secret; installed apps refuse to update from a release without a valid signature, and the workflow fails without the secret)
 
 Nothing else changes. The Worker reads the latest release from `RELEASES_REPO` (cached ten minutes), so within that time:
 - `/download/mac` serves the new .dmg,
