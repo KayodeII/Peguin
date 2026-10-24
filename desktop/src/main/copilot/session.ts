@@ -12,6 +12,7 @@ import path from "node:path";
 import { AI_NOTICE, isQuestion } from "../../../../src/core/brain/prompts.js";
 import type { Draft } from "../brain.js";
 import { detectPlatform, webClientUrl } from "../meeting/platform.js";
+import { MeetingLog, type MeetingRecord } from "../meeting/record.js";
 import { outDir, resource } from "../paths.js";
 import type { Settings } from "../settings.js";
 import { createListener, type Whisper } from "../speech/whisper.js";
@@ -72,6 +73,9 @@ export class CopilotSession {
   private leftReply?: () => void;
   /** Everything shown so far, for the panel to catch up when it opens (it may subscribe after the first events). */
   private snapshot: { status?: Extract<CopilotEvent, { type: "status" }>; heard: { text: string; at: number }[]; cards: Map<number, CopilotCard> } = { heard: [], cards: new Map() };
+  /** For the recap: what the others said, each question and the suggestion the owner saw. */
+  private readonly log: MeetingLog;
+  private readonly questions = new Map<number, ReturnType<MeetingLog["asked"]>>();
 
   constructor(
     readonly url: string,
@@ -85,8 +89,11 @@ export class CopilotSession {
     },
     /** The panel page (the app's renderer at #copilot), loaded into the window itself. */
     private readonly panel: { url?: string; file?: string },
-    private readonly onEnd: () => void,
-  ) {}
+    /** The meeting's record when it ends, for the recap. */
+    private readonly onEnd: (record: MeetingRecord) => void,
+  ) {
+    this.log = new MeetingLog({ url, platform: detectPlatform(url), joinedAs: settings.displayName, kind: "copilot" });
+  }
 
   private send(e: CopilotEvent) {
     if (e.type === "status") this.snapshot.status = e;
@@ -169,6 +176,7 @@ export class CopilotSession {
     on("cop:log", (_e, msg: string) => {
       if (!/listening to/.test(msg)) return;
       this.send({ type: "status", status: "listening", detail: "Listening. Questions show up here." });
+      this.log.joined();
       if (this.settings.copilot.mode === "interview") void this.disclose();
     });
     on("cop:disclosed", (_e, error: unknown) => this.chatReply?.(typeof error === "string" && error ? error : null));
@@ -244,7 +252,12 @@ export class CopilotSession {
     this.recent.push(`Someone: ${text}`);
     if (this.recent.length > CONTEXT_LINES) this.recent.shift();
     this.send({ type: "heard", text, at });
-    if (isQuestion(text)) this.ask({ id: ++this.cards, question: text, at });
+    this.log.heard(text, at);
+    if (isQuestion(text)) {
+      const id = ++this.cards;
+      this.questions.set(id, this.log.asked(text, at));
+      this.ask({ id, question: text, at });
+    }
   }
 
   /** One suggestion at a time, in order; every card ends up answered, failed or marked skipped (never stuck thinking). */
@@ -254,6 +267,7 @@ export class CopilotSession {
     while (this.waiting.length > MAX_WAITING) {
       const dropped = this.waiting.shift()!;
       this.send({ type: "card", card: { ...dropped, error: "Skipped: newer questions came in faster than Peguin could answer." } });
+      this.questions.get(dropped.id)?.skipped();
     }
     this.next();
   }
@@ -266,6 +280,7 @@ export class CopilotSession {
     const recent = [...this.recent];
     void this.brain.suggest(card.question, recent)
       .then((answer) => {
+        this.questions.get(card.id)?.suggested(answer, !answer.startsWith(COPILOT_LABELS.unknown));
         const online = answer.startsWith(COPILOT_LABELS.general) ? this.brain.online() : null;
         this.send({ type: "card", card: { ...card, answer, ...(online ? { online: "checking" as const } : {}) } });
         if (online) {
@@ -274,7 +289,10 @@ export class CopilotSession {
             .catch((e: unknown) => this.send({ type: "card", card: { ...card, answer, online: { error: e instanceof Error ? e.message : String(e) } } }));
         }
       })
-      .catch((e: unknown) => this.send({ type: "card", card: { ...card, error: e instanceof Error ? e.message : String(e) } }))
+      .catch((e: unknown) => {
+        this.send({ type: "card", card: { ...card, error: e instanceof Error ? e.message : String(e) } });
+        this.questions.get(card.id)?.skipped();
+      })
       .finally(() => {
         this.busy = false;
         this.next();
@@ -358,6 +376,6 @@ export class CopilotSession {
     if (this.ended) return;
     this.ended = true;
     while (this.detach.length) this.detach.pop()!();
-    this.onEnd();
+    this.onEnd(this.log.end());
   }
 }

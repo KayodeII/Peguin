@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deferredFollowUps, expired, headline, MeetingLog, mergeFollowUps, transcriptLines, worthKeeping } from "../desktop/src/main/meeting/record.js";
-import { parseRecap, recapSystem, recapUser } from "../src/core/brain/prompts.js";
+import { copilotRecapSystem, parseRecap, recapSystem, recapUser } from "../src/core/brain/prompts.js";
 
 const meeting = () => {
   const log = new MeetingLog({ url: "https://meet.google.com/abc-defg-hij", platform: "google_meet", joinedAs: "Mujeeb Adebowale (AI)", now: 0 });
@@ -13,6 +13,52 @@ const meeting = () => {
   log.asked("Can Mujeeb review my PR today?", 12000).deferred("I'll get Mujeeb to follow up.", 12500);
   return log;
 };
+
+describe("copilot meeting record", () => {
+  const copilot = () => {
+    const log = new MeetingLog({ url: "https://meet.google.com/abc-defg-hij", platform: "google_meet", joinedAs: "Mujeeb Adebowale", kind: "copilot", now: 0 });
+    log.joined(1000);
+    log.heard("What's the status of the auth migration?", 2000);
+    log.asked("What's the status of the auth migration?", 2000).suggested("From your notes: The token refresh is merged; the rollout is next.", true);
+    log.heard("When will the billing export ship?", 5000);
+    log.asked("When will the billing export ship?", 5000).suggested("Not in your notes. I'll check and get back to you today.", false);
+    log.heard("What's a mutex?", 8000);
+    log.asked("What's a mutex?", 8000).skipped();
+    return log;
+  };
+
+  it("keeps suggestions out of what Peguin said, and follows up only what the notes didn't cover", () => {
+    const r = copilot().end(60000);
+    expect(r.kind).toBe("copilot");
+    expect(r.entries.some((e) => e.who === "peguin")).toBe(false);
+    expect(r.questions.map((q) => q.outcome)).toEqual(["answered", "deferred", "skipped"]);
+    expect(r.questions[1]?.answer).toMatch(/^Not in your notes\./);
+    expect(deferredFollowUps(r)).toEqual(['Follow up on: "When will the billing export ship?"']);
+    expect(headline(r)).toBe("Copilot: 3 questions, 1 to follow up");
+    expect(transcriptLines(r)).toEqual(["Someone: What's the status of the auth migration?", "Someone: When will the billing export ship?", "Someone: What's a mutex?"]);
+  });
+
+  it("doesn't turn a question still waiting at the end into a follow-up: the owner was there to answer it", () => {
+    const log = copilot();
+    log.asked("Any blockers?", 50000);
+    expect(log.end(51000).questions.at(-1)?.outcome).toBe("skipped");
+  });
+
+  it("isn't kept when Peguin never started listening or heard nobody", () => {
+    expect(worthKeeping(new MeetingLog({ url: "u", platform: "zoom", joinedAs: "x", kind: "copilot" }).end())).toBe(false);
+    const quiet = new MeetingLog({ url: "u", platform: "zoom", joinedAs: "x", kind: "copilot" });
+    quiet.joined(0);
+    expect(worthKeeping(quiet.end())).toBe(false);
+    expect(worthKeeping(copilot().end())).toBe(true);
+  });
+
+  it("asks for a recap without guessing what the owner said", () => {
+    const p = copilotRecapSystem("Mujeeb Adebowale");
+    expect(p).toMatch(/only heard the other people/);
+    expect(p).toMatch(/Don't guess what Mujeeb said/);
+    expect(p).toMatch(/Return JSON only/);
+  });
+});
 
 describe("meeting record", () => {
   it("records what was heard, what Peguin said and how each question went", () => {

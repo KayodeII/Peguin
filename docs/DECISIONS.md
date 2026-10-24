@@ -2,6 +2,10 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-24: Recaps for copilot meetings
+
+The owner chose this as the next feature. Copilot meetings now get a recap in `#recaps`, from the same `MeetingLog` with `kind: "copilot"`, so one list, one retention setting and one summary path serve both. Differences, because the owner was there themselves: suggestions are stored on the question, not as something Peguin said; only "Not in your notes." questions become follow-ups ("Follow up on: ..."); questions with no suggestion in time are "skipped", not follow-ups; the summary prompt says the owner's words are missing and must not be guessed. It's on by default like Peguin's own recaps, with its own switch in Settings > Recaps, since it keeps other people's words from meetings Peguin didn't join; the Privacy Policy says so.
+
 ## 2026-10-24: Tamper-resistant installed app and signed updates
 
 The owner asked that Peguin "can't be reverse engineered". A local Electron app can always be read by someone determined; what can be stopped is changing it, running it as something else, and pushing code to other people's Macs. So:

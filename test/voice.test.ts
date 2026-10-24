@@ -109,7 +109,8 @@ describe("own voice: settings and disclosure", () => {
     expect(Settings.parse({}).copilot).toEqual({ mode: "work", web: false });
     // Settings from before engines keep working and stay on this Mac.
     expect(Settings.parse({ voice: { mode: "mine", pause: 0.4 } }).voice).toMatchObject({ mode: "mine", engine: "mac", pause: 0.4 });
-    expect(Settings.parse({}).recap).toEqual({ summarize: true, keepDays: 30 });
+    expect(Settings.parse({}).recap).toEqual({ summarize: true, keepDays: 30, copilot: true });
+    expect(Settings.parse({ recap: { summarize: false, keepDays: 7 } }).recap.copilot).toBe(true); // saved before copilot recaps
     expect(() => Settings.parse({ voice: { pause: 5 } })).toThrow();
   });
   it("migrates older voice settings instead of resetting everything", () => {
