@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { answerContext, answerSystem, copilotSystem, copilotWebSystem, plainSpoken, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
+import { answerContext, answerSystem, copilotRecapSystem, copilotSystem, copilotWebSystem, plainSpoken, draftSystem, draftUser, parseDraft, parseRecap, recapSystem, recapUser } from "../../../src/core/brain/prompts.js";
 import { gatherContext, type SourceReport } from "./context/index.js";
 import { workLogActivity } from "./watch/index.js";
 import { wantsCues, type Settings } from "./settings.js";
@@ -163,7 +163,8 @@ export function isFresh(d: Draft | null, timezone: string, now = new Date()): bo
   return day(new Date(d.generatedAt)) === day(now);
 }
 
-/** Summary and extra follow-ups for a meeting, from its transcript only. */
-export async function summarizeMeeting(s: Settings, lines: string[]): Promise<{ summary: string; followUps: string[] }> {
-  return parseRecap(await generate(s, `${recapSystem(s.displayName)}\n\n${recapUser(lines)}`, 60000));
+/** Summary and extra follow-ups for a meeting, from its transcript only. `copilot`: the owner was there themselves. */
+export async function summarizeMeeting(s: Settings, lines: string[], copilot = false): Promise<{ summary: string; followUps: string[] }> {
+  const system = copilot ? copilotRecapSystem(s.displayName) : recapSystem(s.displayName);
+  return parseRecap(await generate(s, `${system}\n\n${recapUser(lines)}`, 60000));
 }

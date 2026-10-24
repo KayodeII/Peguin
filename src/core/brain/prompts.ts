@@ -127,6 +127,17 @@ Rules:
 Return JSON only: {"summary": string, "followUps": string[]}`;
 }
 
+/** A meeting the owner attended themselves with the private copilot. Only the others were recorded, never the owner's mic. */
+export function copilotRecapSystem(name: string): string {
+  return `You write a short private recap for ${name} of a meeting they attended themselves. Their assistant only heard the other people, so ${first(name)}'s own words are missing from the transcript.
+Rules:
+- Use ONLY the transcript. Speakers aren't identified; say "someone" or "the team", never guess names. Don't guess what ${first(name)} said.
+- "summary": two or three plain sentences: what was discussed, what was asked of ${first(name)}, and anything decided that affects them.
+- "followUps": short, specific things ${first(name)} should do because of this meeting: requests made of them, things they were asked to check or send. Start each with a verb. No duplicates, nothing invented. An empty list is fine.
+- Transcripts come from speech recognition and contain mistakes; ignore fragments that don't make sense rather than guessing.
+Return JSON only: {"summary": string, "followUps": string[]}`;
+}
+
 export function recapUser(lines: string[]): string {
   return `Transcript:\n${lines.join("\n") || "(nothing was heard)"}`;
 }

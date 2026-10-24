@@ -1,5 +1,6 @@
 // What happened in one meeting, as it happened (pure, no I/O): what was heard,
-// what Peguin said, and every question with how it was handled. The recap is
+// what Peguin said, and every question with how it was handled. Also kept for
+// copilot meetings (the owner there themselves), where Peguin only suggested. The recap is
 // built from this, so the follow-ups never depend on a model getting it right.
 
 import { stripCues } from "../../../../src/core/brain/prompts.js";
@@ -9,10 +10,16 @@ export type Entry =
   | { at: number; who: "peguin"; kind: "update" | "answer" | "defer" | "ack" | "handover"; text: string }
   | { at: number; who: "system"; text: string };
 
-export type Question = { at: number; text: string; outcome: "pending" | "answered" | "deferred"; answer?: string };
+/**
+ * "deferred": the owner should follow up. In a copilot meeting that's a question
+ * the notes didn't cover; "skipped" is one no suggestion was ready for in time.
+ */
+export type Question = { at: number; text: string; outcome: "pending" | "answered" | "deferred" | "skipped"; answer?: string };
 
 export type MeetingRecord = {
   id: string;
+  /** "copilot": the owner joined themselves and Peguin suggested answers. Absent: Peguin attended for them. */
+  kind?: "copilot";
   url: string;
   platform: string;
   joinedAs: string;
@@ -38,15 +45,19 @@ const MAX_ENTRIES = 2000;
 export class MeetingLog {
   private readonly r: MeetingRecord;
 
-  constructor(o: { url: string; platform: string; joinedAs: string; now?: number }) {
+  constructor(o: { url: string; platform: string; joinedAs: string; kind?: "copilot"; now?: number }) {
     const now = o.now ?? Date.now();
-    this.r = { id: `${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`, url: o.url, platform: o.platform, joinedAs: o.joinedAs,
+    this.r = { id: `${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`, ...(o.kind ? { kind: o.kind } : {}), url: o.url, platform: o.platform, joinedAs: o.joinedAs,
       startedAt: now, joinedAt: null, endedAt: null, updateGiven: false, entries: [], questions: [] };
   }
 
   private add(e: Entry) { if (this.r.entries.length < MAX_ENTRIES) this.r.entries.push(e); }
 
-  joined(now = Date.now()) { this.r.joinedAt ??= now; this.add({ at: now, who: "system", text: "Peguin joined" }); }
+  joined(now = Date.now()) {
+    if (this.r.joinedAt !== null) return;
+    this.r.joinedAt = now;
+    this.add({ at: now, who: "system", text: this.r.kind === "copilot" ? "Peguin started listening" : "Peguin joined" });
+  }
   heard(text: string, now = Date.now()) { this.add({ at: now, who: "them", text }); }
   note(text: string, now = Date.now()) { this.add({ at: now, who: "system", text }); }
 
@@ -63,23 +74,29 @@ export class MeetingLog {
     return {
       answered: (answer: string, at = Date.now()) => { q.outcome = "answered"; q.answer = stripCues(answer); this.said("answer", answer, at); },
       deferred: (said: string, at = Date.now()) => { q.outcome = "deferred"; this.said("defer", said, at); },
+      /** Copilot: the suggestion the owner saw (nothing was said by Peguin). Not covered by the notes means following up. */
+      suggested: (answer: string, covered: boolean) => { q.outcome = covered ? "answered" : "deferred"; q.answer = answer; },
+      skipped: () => { if (q.outcome === "pending") q.outcome = "skipped"; },
     };
   }
 
   end(now = Date.now()): MeetingRecord {
     this.r.endedAt ??= now;
     // A question still pending when the call ended was never answered: the owner should follow up.
-    for (const q of this.r.questions) if (q.outcome === "pending") q.outcome = "deferred";
+    // In a copilot meeting the owner was there to answer it; it just had no suggestion.
+    for (const q of this.r.questions) if (q.outcome === "pending") q.outcome = this.r.kind === "copilot" ? "skipped" : "deferred";
     return structuredClone(this.r);
   }
 }
 
-/** Worth keeping: Peguin got into the call. */
-export const worthKeeping = (r: MeetingRecord) => r.joinedAt !== null;
+/** Worth keeping: Peguin got into the call (a copilot meeting: it heard someone). */
+export const worthKeeping = (r: MeetingRecord) =>
+  r.joinedAt !== null && (r.kind !== "copilot" || r.entries.some((e) => e.who === "them"));
 
-/** The follow-ups no model is needed for: every question Peguin deferred, in order. */
+/** The follow-ups no model is needed for: every question Peguin deferred (or the notes didn't cover), in order. */
 export function deferredFollowUps(r: MeetingRecord): string[] {
-  return r.questions.filter((q) => q.outcome === "deferred").map((q) => `Answer: "${q.text.trim()}"`);
+  const verb = r.kind === "copilot" ? "Follow up on" : "Answer";
+  return r.questions.filter((q) => q.outcome === "deferred").map((q) => `${verb}: "${q.text.trim()}"`);
 }
 
 const STOP = new Set(["a", "an", "the", "to", "of", "and", "or", "is", "are", "be", "can", "could", "will", "would", "my", "your", "their",
@@ -113,6 +130,7 @@ export function mergeFollowUps(deferred: string[], extra: string[]): string[] {
 
 /** One line for the list and the notification: "Gave your update, answered 1, 2 to follow up". */
 export function headline(r: MeetingRecord): string {
+  if (r.kind === "copilot") return copilotHeadline(r);
   if (!r.joinedAt) return "Didn't get into the call";
   const answered = r.questions.filter((q) => q.outcome === "answered").length;
   const open = r.recap ? r.recap.followUps.filter((f) => !f.done).length : deferredFollowUps(r).length;
@@ -120,6 +138,12 @@ export function headline(r: MeetingRecord): string {
   if (answered) parts.push(`answered ${answered}`);
   parts.push(open ? `${open} to follow up` : "nothing to follow up");
   return parts.join(", ");
+}
+
+function copilotHeadline(r: MeetingRecord): string {
+  const asked = r.questions.length;
+  const open = r.recap ? r.recap.followUps.filter((f) => !f.done).length : deferredFollowUps(r).length;
+  return [`Copilot: ${asked ? `${asked} question${asked === 1 ? "" : "s"}` : "no questions"}`, open ? `${open} to follow up` : "nothing to follow up"].join(", ");
 }
 
 /** Transcript lines for the recap prompt. Speakers aren't identified, so others are "Someone". */
