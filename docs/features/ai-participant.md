@@ -25,6 +25,7 @@ A hidden Chromium window joins the meeting's web client as a guest named "<owner
 | `desktop/src/main/meeting/platform.ts` | Detects Meet/Zoom/Teams, web-client URLs, bot name, `chromeUserAgent` |
 | `src/realtime/turn.ts` | `TurnDetector`, `mentionsName`, `isHandoff`, `isQuestion` (pure, shared with the server stack) |
 | `src/core/brain/prompts.ts` | Disclosure, update and follow-up prompts (facts only) |
+| `desktop/src/main/once.ts` | `onePerMeeting`: Send clicked twice (or the schedule firing mid-join) sends one Peguin |
 | `desktop/src/main/brain.ts` | Drafts and live answers through the owner's AI (answers streamed) |
 | `desktop/src/main/speech/tts.ts` | Synthesises the prepared lines and live answers |
 | `desktop/src/main/meeting/record.ts` | Structured log of the meeting, for the recap |
@@ -33,4 +34,4 @@ A hidden Chromium window joins the meeting's web client as a guest named "<owner
 
 ## Tests
 
-`test/turn.test.ts` (turn-taking, false positives), `test/desktop.test.ts` (bot name and links, plain Chrome user agent), `test/voice.test.ts` (talking over Peguin, disclosure), `test/copilot.test.ts` ("Peguin's participant leaving").
+`test/turn.test.ts` (turn-taking, false positives), `test/desktop.test.ts` (bot name and links, plain Chrome user agent), `test/voice.test.ts` (talking over Peguin, disclosure), `test/copilot.test.ts` ("Peguin's participant leaving"), `test/once.test.ts`.
