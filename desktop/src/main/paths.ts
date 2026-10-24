@@ -10,6 +10,13 @@ import { fileURLToPath } from "node:url";
 export const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."); // out/
 const sourceRoot = path.resolve(outDir, "..");                                         // desktop/
 
+/**
+ * A PENGUIN_* development override. Installed builds ignore them all, so an
+ * environment variable can't point the app at another server, licence key,
+ * page or profile.
+ */
+export const devEnv = (name: string): string | undefined => (app.isPackaged ? undefined : process.env[name]);
+
 /** A file shipped next to the app: extraResources when installed, desktop/resources from source. */
 export const resource = (name: string) => app.isPackaged ? path.join(process.resourcesPath, name) : path.join(sourceRoot, "resources", name);
 

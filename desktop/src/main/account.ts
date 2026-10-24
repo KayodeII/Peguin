@@ -8,9 +8,10 @@ import path from "node:path";
 import type { PromptActivity } from "../../../src/core/brain/prompts.js";
 import { isPlanId, type PlanId } from "../../../src/core/plans.js";
 import { isNewer } from "../../../src/core/version.js";
+import { devEnv } from "./paths.js";
 
 /** Production for installed builds; the local Worker (cd cloud && npm run dev) when running from source. */
-export const CLOUD_URL = (process.env.PENGUIN_CLOUD_URL ?? (app.isPackaged ? "https://www.peguin.co" : "http://localhost:8787")).replace(/\/$/, "");
+export const CLOUD_URL = (devEnv("PENGUIN_CLOUD_URL") ?? (app.isPackaged ? "https://www.peguin.co" : "http://localhost:8787")).replace(/\/$/, "");
 
 /** Public halves of the licence keys. Production's private key is the Worker secret LICENSE_PRIVATE_JWK; dev's is in cloud/.dev.vars. */
 const LICENSE_PUBLIC_JWK: JsonWebKey = CLOUD_URL === "https://www.peguin.co"

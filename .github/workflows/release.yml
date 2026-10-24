@@ -47,6 +47,7 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
           cd desktop/release
           dmg=$(ls Peguin-*-mac-arm64.dmg)
@@ -54,5 +55,6 @@ jobs:
           cp "$dmg" Peguin-mac-arm64.dmg # stable names for /releases/latest/download/
           cp "$zip" Peguin-mac-arm64.zip # the app updates itself from this
           shasum -a 256 "$dmg" Peguin-mac-arm64.dmg "$zip" Peguin-mac-arm64.zip > SHA256SUMS.txt
-          gh release create "$GITHUB_REF_NAME" "$dmg" Peguin-mac-arm64.dmg "$zip" Peguin-mac-arm64.zip SHA256SUMS.txt \
+          node ../scripts/sign-sums.mjs SHA256SUMS.txt # the app won't update from an unsigned release
+          gh release create "$GITHUB_REF_NAME" "$dmg" Peguin-mac-arm64.dmg "$zip" Peguin-mac-arm64.zip SHA256SUMS.txt SHA256SUMS.txt.sig \
             --title "Peguin $GITHUB_REF_NAME" --generate-notes

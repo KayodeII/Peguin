@@ -93,6 +93,23 @@ describe("updating in place", async () => {
     expect(checksumFor(sums, "missing.zip")).toBeNull();
     expect(checksumFor("garbage", ZIP_ASSET)).toBeNull();
   });
+  it("accepts only sums signed by the release key, as sign-sums.mjs writes them (real script run)", async () => {
+    const { sumsSigned } = await import("../desktop/src/main/updater.js");
+    const { generateKeyPairSync } = await import("node:crypto");
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+    const pub = publicKey.export({ format: "jwk" });
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "peguin-sign-test-"));
+    const file = path.join(dir, "SHA256SUMS.txt");
+    const sums = `${sha("d")}  ${ZIP_ASSET}\n`;
+    fs.writeFileSync(file, sums);
+    execFileSync("node", ["desktop/scripts/sign-sums.mjs", file], { env: { ...process.env, RELEASE_SIGNING_KEY: JSON.stringify(privateKey.export({ format: "jwk" })) } });
+    const sig = fs.readFileSync(`${file}.sig`, "utf8");
+    expect(sumsSigned(sums, sig, pub)).toBe(true);
+    expect(sumsSigned(sums.replace(sha("d"), sha("e")), sig, pub)).toBe(false); // swapped checksum
+    expect(sumsSigned(sums, sig)).toBe(false);                                 // another key (the real release key)
+    expect(sumsSigned(sums, "not base64 at all", pub)).toBe(false);
+    expect(sumsSigned(sums, "", pub)).toBe(false);
+  });
   it("finds the app bundle from the running executable", () => {
     expect(bundleOf("/Applications/Peguin.app/Contents/MacOS/Peguin")).toBe("/Applications/Peguin.app");
     expect(bundleOf("/usr/local/bin/electron")).toBeNull();

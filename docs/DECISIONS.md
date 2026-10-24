@@ -2,6 +2,17 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-24: Tamper-resistant installed app and signed updates
+
+The owner asked that Peguin "can't be reverse engineered". A local Electron app can always be read by someone determined; what can be stopped is changing it, running it as something else, and pushing code to other people's Macs. So:
+
+- **Electron fuses** (`build.electronFuses` in `desktop/package.json`): no `ELECTRON_RUN_AS_NODE`, no `NODE_OPTIONS`, no `--inspect`, cookies encrypted, the app loads only from `app.asar`, and the asar's integrity is checked at launch. A modified bundle exits with "Integrity check failed" (tested by repacking a change into a packaged build). Until there's a Developer ID, someone can still re-sign their own edited copy on their own Mac; notarisation closes that for copies they hand to others.
+- **Minified main and preload bundles** (esbuild `--minify`, no source maps, no licence comments); the renderer already was. No obfuscator: it slows the app and breaks easily for little gain over minification.
+- **Development overrides are ignored when installed** (`devEnv()` in `paths.ts`): `PENGUIN_CLOUD_URL` used to switch the installed app to another server and the dev licence key, and `PENGUIN_RENDERER_URL` could load any page with the app's preload.
+- **The app's IPC answers only its own pages** (`handle()` in `index.ts` checks the sender frame); its pages can't navigate away, open windows or attach webviews (links go to the browser); DevTools close in installed builds.
+- **Updates must be signed by Peguin.** The release workflow signs `SHA256SUMS.txt` with an Ed25519 key (`RELEASE_SIGNING_KEY` secret, `desktop/scripts/sign-sums.mjs`) and the app checks `SHA256SUMS.txt.sig` against the public key in `updater.ts` before downloading. Someone who could change a GitHub release or `/api/release` still can't install code on users' Macs. The private key is kept outside the repo; losing it means shipping a new public key in a release users download by hand.
+- What actually protects revenue stays server-side: licences are Ed25519-signed by the Worker, and AI runs on the owner's own account.
+
 ## 2026-10-21: Silero VAD in front of whisper
 
 Voice control's mic is always on, and a fixed loudness gate passed room noise to whisper, which invents text for it ("Thank you.", "Okay."): over half of 1,336 transcribed lines in a day's testing were noise, only 36 were addressed to Peguin, and scraps of real speech ran as commands. whisper.cpp's built-in Silero VAD (`--vad`, a 0.9 MB model shipped in `desktop/resources/`) keeps only voiced parts: noise clips came back empty, commands word for word, and the owner's room went silent in the log. Whisper's confidence scores were checked first and can't tell invented filler from speech. VAD can't tell the owner from a TV: that needs a speaker-verification model (the voice-cloning encoder's likeness overlaps, 0.60-0.86 for the owner and 0.33-0.72 for other voices), left for later.

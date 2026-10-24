@@ -43,6 +43,8 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 
 ## Not verified yet
 
+- **The hardened build launching normally from /Applications** (fuses, integrity check, the IPC sender check in every window: copilot panel, notes, overlays). A packaged build stayed up, a tampered one was refused, and the minified app booted from source; a full click-through of an installed copy hasn't been done.
+
 - **Chrome extension in a real Meet call:** the caption reading, the chat notice and tab audio after the toolbar click were tested only against a fake Meet page in Chrome for Testing; whisper only on a synthetic clip.
 
 - **Learn my voice end to end** (real clips from the owner's mic, a sample made from them, how it sounds against the recorded one) and the **work log over a real workday** (what the draft says from it). The pieces are unit tested; the likeness score was measured on the owner's spike recordings.
@@ -56,6 +58,8 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 - Paystack live payments; sign-in emails reaching inboxes (Resend DNS).
 
 ## Next
+
+0. **Before releasing 0.9.0:** add the release signing key to GitHub (`gh secret set RELEASE_SIGNING_KEY < ~/.peguin/release-signing-key.jwk`) and back up that file somewhere safe. Without the secret the release workflow fails; without the key, future versions can't update installed apps.
 
 1. Release 0.9.0 from `main` (Work/Interview, Check online, Hide, Pop out, screen sharing), then confirm the installed app updates itself.
 2. Owner's real-call test: Join as me (Work and Interview, Check online, Pop out with a window share, Present), Join as Peguin end to end, a recap.

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, systemPreferences, Tray } from "electron";
 import { existsSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   CLOUD_URL, calendarProviders, checkForUpdate, completeCalendarConnect, completeSignIn, refreshAccount, signOut, startCalendarConnect, startSignIn,
   type Account, type CalendarProvider, type Update,
@@ -21,7 +22,7 @@ import { canSelfUpdate, installOnExit, prepareUpdate, updateReady, type UpdateSt
 import { loadSettings, saveSettings } from "./settings.js";
 import { clearLog, WorkLog } from "./watch/index.js";
 import { contextBank } from "./contextBank.js";
-import { fixPath, outDir, resource } from "./paths.js";
+import { devEnv, fixPath, outDir, resource } from "./paths.js";
 import { ensureModel } from "./speech/model.js";
 import { standardSample, synthesize } from "./speech/tts.js";
 import { checkXaiKey, clearXai, loadXai, saveXai } from "./xai.js";
@@ -35,7 +36,7 @@ import { startWhisper, transcribeSamples, type Whisper } from "./speech/whisper.
 import { VoiceControl, type PointerStatus } from "./pointer/index.js";
 import { parse } from "./pointer/commands.js";
 
-const rendererUrl = process.env.PENGUIN_RENDERER_URL; // set by `npm run dev`
+const rendererUrl = devEnv("PENGUIN_RENDERER_URL"); // set by `npm run dev`
 
 fixPath();
 
@@ -52,9 +53,10 @@ app.userAgentFallback = chromeUserAgent(app.userAgentFallback);
 app.setName("Peguin");
 const dataDir = path.join(app.getPath("appData"), "Peguin");
 const legacyData = path.join(app.getPath("appData"), "Penguin");
-if (!process.env.PENGUIN_USER_DATA && existsSync(legacyData) && !existsSync(dataDir)) renameSync(legacyData, dataDir);
+const devData = devEnv("PENGUIN_USER_DATA");
+if (!devData && existsSync(legacyData) && !existsSync(dataDir)) renameSync(legacyData, dataDir);
 app.setPath("userData", dataDir);
-if (process.env.PENGUIN_USER_DATA) app.setPath("userData", process.env.PENGUIN_USER_DATA); // dev: separate profile
+if (devData) app.setPath("userData", devData); // dev: separate profile
 if (!app.requestSingleInstanceLock()) app.quit();
 
 // peguin:// links (sign-in hand-off). In development the Electron binary is
@@ -132,12 +134,12 @@ function openWindow() {
     webPreferences: { preload: path.join(outDir, "preload/app.cjs"), sandbox: true, contextIsolation: true },
   });
   if (rendererUrl) void win.loadURL(rendererUrl);
-  else void win.loadFile(path.join(outDir, "renderer/index.html"), { hash: process.env.PENGUIN_VIEW ?? "" });
+  else void win.loadFile(path.join(outDir, "renderer/index.html"), { hash: devEnv("PENGUIN_VIEW") ?? "" });
   // Come to the front on launch, even when started from a terminal.
   win.once("ready-to-show", () => { win?.show(); app.focus({ steal: true }); });
   win.on("closed", () => { win = null; });
   // Dev aid: PENGUIN_SNAPSHOT=out.png saves a picture of this window, then quits.
-  const snap = process.env.PENGUIN_SNAPSHOT;
+  const snap = devEnv("PENGUIN_SNAPSHOT");
   // PENGUIN_SNAPSHOT_SCROLL=<css selector> scrolls that element into view first.
   if (snap) win.webContents.once("did-finish-load", () => setTimeout(async () => {
     // PENGUIN_SNAPSHOT_EVENTS=<JSON array of app events> replays them first (e.g. a meeting in progress).
@@ -362,8 +364,33 @@ async function connectCalendar(url: string) {
 }
 app.on("open-url", (e, url) => { e.preventDefault(); app.isReady() ? handleUrl(url) : app.once("ready", () => handleUrl(url)); });
 
-ipcMain.handle("settings:get", () => loadSettings());
-ipcMain.handle("settings:save", async (_e, input: unknown) => {
+/** The app's own renderer (main window, copilot panel, notes, overlays), not a meeting page or anything it navigated to. */
+const rendererFile = pathToFileURL(path.join(outDir, "renderer/index.html")).href;
+const ownPage = (url: string | undefined) =>
+  !!url && (url.split("#")[0] === rendererFile || (!!rendererUrl && url.startsWith(rendererUrl)));
+
+// The app's pages never navigate or open windows; links go to the browser.
+// Installed builds close DevTools wherever they open.
+app.on("web-contents-created", (_e, wc) => {
+  wc.on("will-attach-webview", (e) => e.preventDefault());
+  wc.on("will-navigate", (e) => { if (ownPage(wc.getURL()) && !ownPage(e.url)) e.preventDefault(); });
+  wc.setWindowOpenHandler(({ url }) => {
+    if (/^https:\/\//.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  if (app.isPackaged) wc.on("devtools-opened", () => wc.closeDevTools());
+});
+
+/** IPC for the app's renderer only: a meeting page or anything else that reaches ipcMain is ignored. */
+function handle(channel: string, fn: (e: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown) {
+  ipcMain.handle(channel, (e, ...args) => {
+    if (!ownPage(e.senderFrame?.url)) throw new Error("Not allowed.");
+    return fn(e, ...args);
+  });
+}
+
+handle("settings:get", () => loadSettings());
+handle("settings:save", async (_e, input: unknown) => {
   const { pointer: before, watch: beforeWatch } = loadSettings();
   const s = saveSettings(input);
   if (JSON.stringify(beforeWatch) !== JSON.stringify(s.watch)) workLog.apply();
@@ -397,31 +424,31 @@ async function applyVoiceControl(before: ReturnType<typeof loadSettings>["pointe
   else if (before.shortcut !== s.pointer.shortcut) voice.bindShortcut();
   if (before?.enabled && (JSON.stringify(before.cursor) !== JSON.stringify(s.pointer.cursor) || before.island !== s.pointer.island)) voice.restyle();
 }
-ipcMain.handle("pointer:status", () => voice.status());
-ipcMain.handle("worklog:status", () => workLog.status());
-ipcMain.handle("context:bank", () => contextBank(loadSettings()));
-ipcMain.handle("worklog:clear", () => { clearLog(); return workLog.status(); });
-ipcMain.handle("voice:clips", () => reviewClips());
-ipcMain.handle("voice:clip-audio", (_e, id: string) => clipWav(String(id)));
-ipcMain.handle("voice:clips-delete", (_e, ids: string[] | "all") => { deleteClips(ids === "all" ? "all" : (Array.isArray(ids) ? ids.map(String) : [])); return reviewClips(); });
-ipcMain.handle("voice:clips-use", async (_e, ids: string[]) => {
+handle("pointer:status", () => voice.status());
+handle("worklog:status", () => workLog.status());
+handle("context:bank", () => contextBank(loadSettings()));
+handle("worklog:clear", () => { clearLog(); return workLog.status(); });
+handle("voice:clips", () => reviewClips());
+handle("voice:clip-audio", (_e, id: string) => clipWav(String(id)));
+handle("voice:clips-delete", (_e, ids: string[] | "all") => { deleteClips(ids === "all" ? "all" : (Array.isArray(ids) ? ids.map(String) : [])); return reviewClips(); });
+handle("voice:clips-use", async (_e, ids: string[]) => {
   useClips(Array.isArray(ids) ? ids.map(String) : []);
   forgetVoice();
   return { status: await voiceStatus(), clips: await reviewClips() };
 });
-ipcMain.handle("pointer:access", () => voice.requestAccess());
+handle("pointer:access", () => voice.requestAccess());
 // Settings' "Try it": runs a typed command as if it had been said.
-ipcMain.handle("pointer:try", (_e, text: string) => voice.command(String(text ?? "").slice(0, 300)));
-ipcMain.handle("draft:get", () => ({ draft: loadDraft(), preparing: !!preparing }));
-ipcMain.handle("draft:prepare", () => prepare());
+handle("pointer:try", (_e, text: string) => voice.command(String(text ?? "").slice(0, 300)));
+handle("draft:get", () => ({ draft: loadDraft(), preparing: !!preparing }));
+handle("draft:prepare", () => prepare());
 // The sidebar's "Next standup": from the calendars when they're on, else the fixed time.
-ipcMain.handle("standup:next", async () => {
+handle("standup:next", async () => {
   const s = loadSettings();
   const planned = await nextCalendarStandup(s).catch(() => null);
   if (planned) return { label: whenLabel(planned.start, new Date(), s.timezone), title: planned.title, url: planned.url };
   return nextStandup(s);
 });
-ipcMain.handle("calendar:status", async () => {
+handle("calendar:status", async () => {
   const s = loadSettings(), secrets = loadCalendarSecrets();
   return {
     mac: { on: s.calendar.mac, access: await macCalendarAccess() },
@@ -431,28 +458,28 @@ ipcMain.handle("calendar:status", async () => {
     calendlyToken: !!secrets.calendlyToken,
   };
 });
-ipcMain.handle("calendar:connect", (_e, provider: CalendarProvider) => {
+handle("calendar:connect", (_e, provider: CalendarProvider) => {
   if (!["google", "microsoft", "calendly"].includes(provider)) throw new Error("Unknown calendar.");
   return startCalendarConnect(provider);
 });
-ipcMain.handle("calendar:disconnect", (_e, id: string) => {
+handle("calendar:disconnect", (_e, id: string) => {
   const secrets = loadCalendarSecrets();
   saveCalendarSecrets({ ...secrets, accounts: secrets.accounts.filter((a) => a.id !== String(id)) });
   refreshCalendars();
 });
-ipcMain.handle("calendar:mac-connect", async () => {
+handle("calendar:mac-connect", async () => {
   const access = await requestMacCalendarAccess();
   const s = loadSettings();
   if (access === "authorized") saveSettings({ ...s, calendar: { ...s.calendar, mac: true, enabled: true } });
   refreshCalendars();
   return access;
 });
-ipcMain.handle("calendar:mac-disconnect", () => {
+handle("calendar:mac-disconnect", () => {
   const s = loadSettings();
   saveSettings({ ...s, calendar: { ...s.calendar, mac: false } });
   refreshCalendars();
 });
-ipcMain.handle("calendar:add-link", (_e, link: string) => {
+handle("calendar:add-link", (_e, link: string) => {
   const secrets = loadCalendarSecrets();
   if (!/^(https?|webcal):\/\//i.test(String(link).trim())) throw new Error("That doesn't look like a calendar link. It should start with https:// or webcal://.");
   saveCalendarSecrets({ ...secrets, links: [...secrets.links, String(link)] });
@@ -460,40 +487,40 @@ ipcMain.handle("calendar:add-link", (_e, link: string) => {
   if (!s.calendar.enabled) saveSettings({ ...s, calendar: { ...s.calendar, enabled: true } });
   refreshCalendars();
 });
-ipcMain.handle("calendar:remove-link", (_e, index: number) => {
+handle("calendar:remove-link", (_e, index: number) => {
   const secrets = loadCalendarSecrets();
   saveCalendarSecrets({ ...secrets, links: secrets.links.filter((_, i) => i !== Number(index)) });
   refreshCalendars();
 });
 // Removing a Calendly personal access token saved before one-click connections.
-ipcMain.handle("calendar:remove-calendly-token", () => {
+handle("calendar:remove-calendly-token", () => {
   saveCalendarSecrets({ ...loadCalendarSecrets(), calendlyToken: null });
   refreshCalendars();
 });
-ipcMain.handle("calendar:upcoming", (_e, fresh?: boolean) => { if (fresh) refreshCalendars(); return upcoming(loadSettings()); });
-ipcMain.handle("meeting:join", (_e, url: string) => join(url));
-ipcMain.handle("meeting:leave", async () => { const m = meeting; meeting = null; await m?.stop(); });
-ipcMain.handle("meeting:handover", () => handOver());
-ipcMain.handle("copilot:start", (_e, url: string) => startCopilot(String(url ?? "").trim()));
-ipcMain.handle("copilot:state", () => copilot?.state() ?? null);
+handle("calendar:upcoming", (_e, fresh?: boolean) => { if (fresh) refreshCalendars(); return upcoming(loadSettings()); });
+handle("meeting:join", (_e, url: string) => join(url));
+handle("meeting:leave", async () => { const m = meeting; meeting = null; await m?.stop(); });
+handle("meeting:handover", () => handOver());
+handle("copilot:start", (_e, url: string) => startCopilot(String(url ?? "").trim()));
+handle("copilot:state", () => copilot?.state() ?? null);
 // Closing the window leaves the call: the meeting page goes with it.
-ipcMain.handle("copilot:collapse", (_e, collapsed: boolean) => copilot?.setCollapsed(!!collapsed));
-ipcMain.handle("copilot:pop-out", (_e, out: boolean) => copilot?.popOut(!!out));
-ipcMain.handle("copilot:stop", async () => { const c = copilot; copilot = null; await c?.stop(); });
-ipcMain.handle("account:get", () => account);
-ipcMain.handle("meetings:list", () => listMeetings(loadSettings().recap.keepDays));
-ipcMain.handle("meetings:follow-up", (_e, id: string, index: number, done: boolean) => setFollowUpDone(String(id), Number(index), !!done));
-ipcMain.handle("meetings:delete", (_e, id: string) => { deleteMeeting(String(id)); });
-ipcMain.handle("meetings:delete-all", () => { deleteAllMeetings(); });
-ipcMain.handle("voice:status", () => voiceStatus());
-ipcMain.handle("voice:download", () => downloadVoiceModel().then(voiceStatus));
-ipcMain.handle("voice:mic", () => (process.platform === "darwin" ? systemPreferences.askForMediaAccess("microphone") : true));
-ipcMain.handle("voice:save", (_e, consent: ArrayBuffer, talk: ArrayBuffer) => {
+handle("copilot:collapse", (_e, collapsed: boolean) => copilot?.setCollapsed(!!collapsed));
+handle("copilot:pop-out", (_e, out: boolean) => copilot?.popOut(!!out));
+handle("copilot:stop", async () => { const c = copilot; copilot = null; await c?.stop(); });
+handle("account:get", () => account);
+handle("meetings:list", () => listMeetings(loadSettings().recap.keepDays));
+handle("meetings:follow-up", (_e, id: string, index: number, done: boolean) => setFollowUpDone(String(id), Number(index), !!done));
+handle("meetings:delete", (_e, id: string) => { deleteMeeting(String(id)); });
+handle("meetings:delete-all", () => { deleteAllMeetings(); });
+handle("voice:status", () => voiceStatus());
+handle("voice:download", () => downloadVoiceModel().then(voiceStatus));
+handle("voice:mic", () => (process.platform === "darwin" ? systemPreferences.askForMediaAccess("microphone") : true));
+handle("voice:save", (_e, consent: ArrayBuffer, talk: ArrayBuffer) => {
   saveSample(new Float32Array(consent), new Float32Array(talk));
   forgetVoice();
   return voiceStatus();
 });
-ipcMain.handle("voice:eleven-connect", async (_e, apiKey: string) => {
+handle("voice:eleven-connect", async (_e, apiKey: string) => {
   const key = String(apiKey ?? "").trim();
   if (!key) throw new Error("Paste your ElevenLabs API key.");
   await checkKey(key);
@@ -501,7 +528,7 @@ ipcMain.handle("voice:eleven-connect", async (_e, apiKey: string) => {
   return voiceStatus();
 });
 // Disconnecting also removes the clone Peguin made in the owner's ElevenLabs account.
-ipcMain.handle("voice:eleven-disconnect", async () => {
+handle("voice:eleven-disconnect", async () => {
   const a = loadEleven();
   if (a?.voiceId) await deleteVoice(a.apiKey, a.voiceId);
   clearEleven();
@@ -509,53 +536,53 @@ ipcMain.handle("voice:eleven-disconnect", async () => {
   if (s.voice.engine === "elevenlabs") saveSettings({ ...s, voice: { ...s.voice, engine: "mac", mode: "standard" } });
   return voiceStatus();
 });
-ipcMain.handle("voice:delete", async () => {
+handle("voice:delete", async () => {
   useStandardVoice(); deleteSample(); forgetVoice();
   // The ElevenLabs clone was made from this sample, so it goes too.
   const a = loadEleven();
   if (a?.voiceId) { await deleteVoice(a.apiKey, a.voiceId); saveEleven({ ...a, voiceId: null, sampleId: null }); }
   return voiceStatus();
 });
-ipcMain.handle("voice:delete-model", () => { useStandardVoice(); deleteVoiceModel(); return voiceStatus(); });
+handle("voice:delete-model", () => { useStandardVoice(); deleteVoiceModel(); return voiceStatus(); });
 // Previews use the owner's own lines: the disclosure and the start of their latest update.
-ipcMain.handle("voice:preview", async () => {
+handle("voice:preview", async () => {
   const s = loadSettings();
   if (!engineReady(loadSettings())) throw new Error(loadSettings().voice.engine === "elevenlabs" ? "Add your ElevenLabs API key first." : "Download the voice model first.");
   return speakInOwnVoice(sentences(lines(s, loadDraft(), true).update).slice(0, 3).join(" "), s);
 });
-ipcMain.handle("voice:say-word", async (_e, word: string) => {
+handle("voice:say-word", async (_e, word: string) => {
   if (!engineReady(loadSettings())) throw new Error(loadSettings().voice.engine === "elevenlabs" ? "Add your ElevenLabs API key first." : "Download the voice model first.");
   return speakInOwnVoice(`This is how I say ${String(word).slice(0, 40)}.`, loadSettings());
 });
 // The owner's xAI key: Grok as their AI (Settings > AI) and/or as the standard voice.
 const xaiStatus = () => { const x = loadXai(); return { connected: !!x, models: x?.models ?? [] }; };
-ipcMain.handle("xai:status", () => xaiStatus());
-ipcMain.handle("xai:connect", async (_e, apiKey: string) => {
+handle("xai:status", () => xaiStatus());
+handle("xai:connect", async (_e, apiKey: string) => {
   const key = String(apiKey ?? "").trim();
   if (!key) throw new Error("Paste your xAI API key.");
   saveXai({ apiKey: key, models: await checkXaiKey(key) });
   return xaiStatus();
 });
 // Without a key, nothing may stay pointed at Grok.
-ipcMain.handle("xai:disconnect", () => {
+handle("xai:disconnect", () => {
   clearXai();
   const s = loadSettings();
   saveSettings({ ...s, ai: s.ai === "grok" ? "claude" : s.ai, voice: { ...s.voice, standard: "mac" } });
   return xaiStatus();
 });
-ipcMain.handle("voice:standard-sample", () => standardSample(loadSettings(), "Hi, I'm Peguin, an AI assistant. This is how I'll sound in your meetings."));
-ipcMain.handle("update:get", () => update);
-ipcMain.handle("update:open", () => { if (update) void shell.openExternal(update.url); });
-ipcMain.handle("update:state", () => updateState);
+handle("voice:standard-sample", () => standardSample(loadSettings(), "Hi, I'm Peguin, an AI assistant. This is how I'll sound in your meetings."));
+handle("update:get", () => update);
+handle("update:open", () => { if (update) void shell.openExternal(update.url); });
+handle("update:state", () => updateState);
 // Restart to update: hand the swap to the helper, then quit; it reopens the new version.
-ipcMain.handle("update:install", () => {
+handle("update:install", () => {
   if (meeting || copilot) throw new Error("Peguin is in a meeting. Update after it ends.");
   if (!installOnExit(true)) throw new Error("The update isn't ready yet.");
   app.quit();
 });
-ipcMain.handle("account:signin", () => startSignIn());
-ipcMain.handle("account:open-page", () => shell.openExternal(`${CLOUD_URL}/account`));
-ipcMain.handle("account:signout", () => updateAccount(async () => { await signOut(); return null; }));
+handle("account:signin", () => startSignIn());
+handle("account:open-page", () => shell.openExternal(`${CLOUD_URL}/account`));
+handle("account:signout", () => updateAccount(async () => { await signOut(); return null; }));
 
 app.whenReady().then(() => {
   const icon = nativeImage.createFromPath(resource("trayTemplate.png"));
