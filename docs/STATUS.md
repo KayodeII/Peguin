@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-10. Earlier history is in `git log` and `docs/DECISIONS.md`; where each feature lives is in `docs/features/`. **Start with "Handoff" below.**
+Last updated: 2026-10-26. Earlier history is in `git log` and `docs/DECISIONS.md`; where each feature lives is in `docs/features/`. **Start with "Handoff" below.**
 
 ## Phase: private beta
 
@@ -14,9 +14,9 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 - **Your own AI** for drafts, answers, suggestions and recap summaries: Claude Code, Codex CLI or an xAI key (Settings > AI). The Worker no longer runs AI for the app.
 - **Speech recognition:** whisper.cpp large-v3-turbo q5_0 (~550 MB, downloaded on first run), primed with names and terms from the facts.
 - **Voice:** the Mac's voice or a Grok voice (falls back to the Mac's); opt-in own voice on the Mac (Chatterbox Turbo) or ElevenLabs, from a live-recorded, consented, encrypted sample; prepared lines checked by ear.
-- **Update writing** from git, GitHub (via `gh`) and Claude Code sessions, 15 minutes before the standup.
+- **Update writing** from git, GitHub (via `gh`), Claude Code sessions and, once connected with the owner's own API key in Sources, Linear and Jira issues assigned to them, 15 minutes before the standup. (Linear and Jira: branch `desktop-linear-jira`, not released.)
 - **Calendars:** Mac Calendar (EventKit), Google Calendar and Outlook (one click, OAuth through the Worker), Calendly, iCal links; joins calendar standups automatically.
-- **Recaps** in `#recaps`: follow-ups (every deferred question), optional summary, transcript; encrypted, kept 30 days by default. Copilot meetings too (questions, suggestions, what the notes didn't cover as follow-ups; branch `copilot-recaps`, not released).
+- **Recaps** in `#recaps`: follow-ups (every deferred question), optional summary, transcript; encrypted, kept 30 days by default. Copilot meetings too (questions, suggestions, what the notes didn't cover as follow-ups; in 0.9.0).
 - **Plans** gated offline from the signed licence; Discord-style UI with Notion themes; sign-in via `peguin://`.
 - **Self-update** from GitHub Releases: download, SHA-256 check, unpack, "Restart to update".
 
@@ -59,17 +59,18 @@ Goal: 5-10 people using Peguin in their real standups every day. Everything belo
 
 ## Next
 
-0. **Before releasing 0.9.0:** add the release signing key to GitHub (`gh secret set RELEASE_SIGNING_KEY < ~/.peguin/release-signing-key.jwk`) and back up that file somewhere safe. Without the secret the release workflow fails; without the key, future versions can't update installed apps.
+0. **0.9.0 is released and signed** (2026-10-24, `/api/release` serves it). Back up `~/.peguin/release-signing-key.jwk` somewhere safe: without it, future versions can't update installed apps.
 
-1. Release 0.9.0 from `main` (Work/Interview, Check online, Hide, Pop out, screen sharing), then confirm the installed app updates itself.
+1. Owner tests 0.9.0 on the Mac: the update from 0.7.0, the hardened app (no "Not allowed." in the copilot panel, notes or overlays; Google sign-in in Join as me), a copilot recap, Send Peguin twice, voice control. 0.9.0 to 0.9.1 is the first update that checks the signature.
 2. Owner's real-call test: Join as me (Work and Interview, Check online, Pop out with a window share, Present), Join as Peguin end to end, a recap.
 3. Try a new xAI key in Settings (Grok chat, Grok voice "Hear it"). Revoke the key pasted in chat earlier.
-4. Copilot ideas the owner may want: notes window opening on a second display, a compact newest-answer view. (Recaps for copilot meetings: built on `copilot-recaps`; try one real call.)
+4. Copilot ideas the owner may want: notes window opening on a second display, a compact newest-answer view. (Recaps for copilot meetings: released in 0.9.0; try one real call.)
 5. Owner setup: OAuth apps (`docs/OAUTH_SETUP.md`), `ADMIN_TOKEN`, tier prices (`cloud/scripts/paystack-setup.mjs`), Google's review for the calendar scope.
 6. Before charging strangers: legal entity and contact email in /privacy and /terms, Paystack live keys, Resend DNS, Apple Developer ID (notarised app), watermarking cloned audio.
 7. Chrome extension: a real Meet call, then decide plan gating (the desktop copilot is Pro/Team; the extension has no sign-in yet), then the Chrome Web Store listing.
 8. Voice control: the owner tries it for a day (Settings > Voice control), then decide plan gating and whether an opt-in AI mode ("research this") is wanted.
-9. Later: Team seats, Slack recaps, Linear and Jira on the desktop, Teams via ACS, Windows.
+9. Linear and Jira on the desktop (`desktop-linear-jira`): connect real accounts and check what the draft says from them; OAuth one-click connect later if personal keys put people off.
+10. Later: Team seats, Slack recaps, Teams via ACS, Windows.
 
 ## Handoff (2026-10-10)
 
