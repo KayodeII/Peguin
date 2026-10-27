@@ -1,6 +1,8 @@
 # Desktop app shell
 
-The Electron app around the features: the main window (Discord's layout, Notion's colour and type), Settings, themes and accents, the menu bar icon, the `peguin://` links, and settings storage. Built with Vite (renderer) and esbuild (main and preloads).
+The Electron app around the features: the main window (Discord's layout, Notion's colour and type), Settings, themes and accents, the menu bar icon, the `peguin://` links, the first run, and settings storage.
+
+The first run is one step at a time, like Tailscale's setup: what Peguin does (including that it always says it's an AI), your name and nicknames, where the update comes from, which of your AIs to use (Claude Code and Codex are detected on the Mac), your standup, what macOS will ask for and when (nothing is asked during setup) with the speech model download, signing in for the trial, and where Peguin lives afterwards. Nothing is saved until the last step. Built with Vite (renderer) and esbuild (main and preloads).
 
 ## Decisions
 
@@ -8,6 +10,7 @@ The Electron app around the features: the main window (Discord's layout, Notion'
 - 2026-10-07: Product shape: desktop app first (build tooling)
 - 2026-10-07: Notion-style themes; domain www.peguin.co
 - 2026-10-06: Name (user-facing "Peguin", internal "penguin")
+- 2026-10-27: A first run that explains each step
 
 ## Files
 
@@ -19,6 +22,7 @@ The Electron app around the features: the main window (Discord's layout, Notion'
 | `desktop/src/preload/app.ts` | `window.penguin` bridge for the renderer |
 | `desktop/src/renderer/App.tsx`, `main.tsx`, `index.html` | Window shell and routing |
 | `desktop/src/renderer/views.tsx` | Home, live view, Settings sections |
+| `desktop/src/renderer/onboarding.tsx` | The first run (`ai:detect` in `index.ts` finds Claude Code and Codex) |
 | `desktop/src/renderer/ui.tsx`, `styles.css`, `global.d.ts` | Components, icons, themes, types |
 | `desktop/scripts/dev.mjs` | `npm run dev` |
 | `desktop/scripts/icons.cjs`, `icns.sh`, `tray.mjs` | App and menu bar icons |

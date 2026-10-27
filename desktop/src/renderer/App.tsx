@@ -6,7 +6,8 @@ import { botName } from "../main/meeting/platform";
 import type { MeetingEvent, MeetingStatus } from "../main/meeting/runner";
 import type { Settings } from "../main/settings";
 import { Avatar, Icon, Logo, message } from "./ui";
-import { LiveView, Onboarding, SettingsView, SourcesView, TodayView } from "./views";
+import { LiveView, SettingsView, SourcesView, TodayView } from "./views";
+import { Onboarding } from "./onboarding";
 import { RecapsView } from "./recaps";
 import { ContextBankView } from "./contextbank";
 import type { MeetingRecord } from "../main/meeting/record";
@@ -182,7 +183,7 @@ export function App() {
         {view === "settings" && <SettingsView settings={settings} save={save} preview={(n) => botName(n, "google_meet")} account={account} />}
       </main>
 
-      {!settings.onboarded && <Onboarding settings={settings} save={save} done={() => { void prepare(); setView("today"); }} />}
+      {!settings.onboarded && <Onboarding settings={settings} save={save} model={model} account={account} done={() => { void prepare(); setView("today"); }} />}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
