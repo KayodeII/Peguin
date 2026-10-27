@@ -11,6 +11,7 @@ import { stripCues } from "../../../src/core/brain/prompts";
 import { PLANS } from "../../../src/core/plans";
 import { CalendarSettings } from "./calendars";
 import { VoiceControlSettings } from "./voicecontrol";
+import { TrackerSources } from "./trackers";
 import { WorkLogSource } from "./worklog";
 
 const SOURCE_INFO = {
@@ -163,10 +164,7 @@ export function SourcesView({ settings, draft, save, prepare }: { settings: Sett
           );
         })}
         <WorkLogSource settings={settings} save={save} report={draft?.reports.find((r) => r.id === "mac")} />
-        <h3 className="section-label">Coming soon</h3>
-        {[["calendar", "Calendar"], ["linear", "Linear"], ["jira", "Jira"]].map(([id, t]) => (
-          <div key={id} className="row-card muted"><BrandIcon id={id!} /><div className="row-main"><strong>{t}</strong></div><span className="tag">Soon</span></div>
-        ))}
+        <TrackerSources settings={settings} save={save} reports={draft?.reports ?? []} />
       </div>
     </>
   );

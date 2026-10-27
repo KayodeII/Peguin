@@ -1,5 +1,8 @@
 // Preload for the main window: the only API the React UI can call.
 import { contextBridge, ipcRenderer } from "electron";
+import type { trackerStatus } from "../main/trackerKeys.js";
+
+type Trackers = ReturnType<typeof trackerStatus>;
 
 const api = {
   getSettings: () => ipcRenderer.invoke("settings:get"),
@@ -30,6 +33,9 @@ const api = {
   xaiStatus: () => ipcRenderer.invoke("xai:status") as Promise<{ connected: boolean; models: string[] }>,
   xaiConnect: (apiKey: string) => ipcRenderer.invoke("xai:connect", apiKey) as Promise<{ connected: boolean; models: string[] }>,
   xaiDisconnect: () => ipcRenderer.invoke("xai:disconnect") as Promise<{ connected: boolean; models: string[] }>,
+  trackersStatus: () => ipcRenderer.invoke("trackers:status") as Promise<Trackers>,
+  trackersConnect: (kind: "linear" | "jira", input: { apiKey?: string; site?: string; email?: string; token?: string }) => ipcRenderer.invoke("trackers:connect", kind, input) as Promise<Trackers>,
+  trackersDisconnect: (kind: "linear" | "jira") => ipcRenderer.invoke("trackers:disconnect", kind) as Promise<Trackers>,
   voiceStandardSample: () => ipcRenderer.invoke("voice:standard-sample"),
   voiceElevenDisconnect: () => ipcRenderer.invoke("voice:eleven-disconnect"),
   voiceSave: (consent: ArrayBuffer, talk: ArrayBuffer) => ipcRenderer.invoke("voice:save", consent, talk),

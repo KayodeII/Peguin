@@ -121,7 +121,7 @@ export function Onboarding({ settings, save, done, model, account }: {
                   <Toggle on={sources[id]} onChange={(v) => setSources({ ...sources, [id]: v })} label={SOURCES[id].name} />
                 </div>
               ))}
-              <p className="hint">More in Sources later: your calendar, and On this Mac (the apps you spent time in).</p>
+              <p className="hint">Later, in Sources: connect Linear or Jira, or turn on On this Mac (the apps you spent time in).</p>
             </>
           )}
 

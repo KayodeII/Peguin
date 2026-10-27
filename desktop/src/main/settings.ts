@@ -99,7 +99,10 @@ export const Settings = z.preprocess(migrate, z.object({
     git: z.boolean().default(true),
     github: z.boolean().default(true),
     claude_code: z.boolean().default(true),
-  }).default({ git: true, github: true, claude_code: true }),
+    /** Used only once connected in Sources (the keys live in trackers.sealed). */
+    linear: z.boolean().default(true),
+    jira: z.boolean().default(true),
+  }).default({ git: true, github: true, claude_code: true, linear: true, jira: true }),
   appearance: z.object({
     theme: z.enum(["system", "light", "dark", "midnight"]).default("system"),
     accent: z.enum(["blue", "purple", "green", "orange", "pink"]).default("blue"),

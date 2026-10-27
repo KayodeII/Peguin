@@ -5,6 +5,7 @@ import { loadDraft } from "./brain.js";
 import { gatherContext, type Activity, type SourceReport } from "./context/index.js";
 import { listMeetings } from "./meetings.js";
 import type { Settings } from "./settings.js";
+import { trackerSources } from "./trackerKeys.js";
 import { listClips } from "./speech/voice/clips.js";
 import { sampleInfo } from "./speech/voice/store.js";
 import { readLog, workLogActivity } from "./watch/index.js";
@@ -24,7 +25,8 @@ export type ContextBank = {
 };
 
 export async function contextBank(s: Settings): Promise<ContextBank> {
-  const ctx = await gatherContext({ ...s.sources, mac: s.watch.enabled }, s.timezone, new Date(), { mac: (since) => workLogActivity(since, s) });
+  const trackers = trackerSources(s);
+  const ctx = await gatherContext({ ...s.sources, ...trackers.enabled, mac: s.watch.enabled }, s.timezone, new Date(), { ...trackers.extra, mac: (since) => workLogActivity(since, s) });
   const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
   const draft = loadDraft();
   return {
