@@ -38,7 +38,8 @@ import {
 import { checkKey, clearEleven, deleteVoice, loadEleven, saveEleven } from "./speech/voice/eleven.js";
 import { sentences } from "./speech/voice/text.js";
 import { startWhisper, transcribeSamples, type Whisper } from "./speech/whisper.js";
-import { VoiceControl, type PointerStatus } from "./pointer/index.js";
+import { VoiceControl, type Mode as VoiceMode, type PointerStatus } from "./pointer/index.js";
+import { hasNotch, Mini } from "./mini.js";
 import { parse } from "./pointer/commands.js";
 
 const rendererUrl = devEnv("PENGUIN_RENDERER_URL"); // set by `npm run dev`
@@ -90,6 +91,12 @@ const voice = new VoiceControl(
   (prompt) => think(loadSettings(), prompt),
 );
 
+voice.onMode = (mode, text) => send({ kind: "voice-mode", mode, text });
+
+/** Mini Peguin (Settings > General): the island over the notch, or a small floating window. */
+const mini = new Mini(loadSettings, { url: rendererUrl, file: path.join(outDir, "renderer/index.html") }, path.join(outDir, "preload/app.cjs"),
+  (x, y) => { const s = loadSettings(); saveSettings({ ...s, mini: { ...s.mini, x, y } }); });
+
 /** Settings > Sources > On this Mac: app and window titles, every few minutes. */
 const workLog = new WorkLog(loadSettings, (win, app) => voice.peek(win, app));
 
@@ -115,12 +122,18 @@ export type AppEvent =
   | { kind: "recaps" }
   | { kind: "calendar"; error?: string }
   | { kind: "pointer"; status: PointerStatus }
+  | { kind: "voice-mode"; mode: VoiceMode; text?: string }
   | { kind: "show"; view: string };
+
+/** The meeting Peguin is in, as last reported, for Mini Peguin when it opens. */
+let liveStatus: { status: string; detail?: string } = { status: "ended" };
 
 function send(e: AppEvent) {
   // Development: meeting progress in the terminal too, so a failed join can be diagnosed from the logs.
   if (!app.isPackaged && (e.kind === "log" || e.kind === "meeting")) console.log("[peguin]", JSON.stringify(e).slice(0, 600));
   if (win && !win.isDestroyed()) win.webContents.send("app:event", e);
+  mini.send("app:event", e);
+  if (e.kind === "meeting" && e.event.kind === "status") liveStatus = { status: e.event.status, detail: e.event.detail };
   if (e.kind === "meeting" && e.event.kind === "status") tray?.setTitle(e.event.status === "in_call" ? " ●" : "");
 }
 
@@ -414,8 +427,9 @@ function handle(channel: string, fn: (e: Electron.IpcMainInvokeEvent, ...args: a
 
 handle("settings:get", () => loadSettings());
 handle("settings:save", async (_e, input: unknown) => {
-  const { pointer: before, watch: beforeWatch } = loadSettings();
+  const { pointer: before, watch: beforeWatch, mini: beforeMini } = loadSettings();
   const s = saveSettings(input);
+  if (beforeMini.mode !== s.mini.mode) { mini.apply(); voice.restyle(); }
   if (JSON.stringify(beforeWatch) !== JSON.stringify(s.watch)) workLog.apply();
   try { await applyVoiceControl(before, s); }
   catch (e) { saveSettings({ ...s, pointer: { ...s.pointer, enabled: false } }); throw e; }
@@ -453,6 +467,17 @@ async function applyVoiceControl(before: ReturnType<typeof loadSettings>["pointe
   )) voice.restyle(); // tip under the cursor + look
 }
 handle("pointer:status", () => voice.status());
+// Mini Peguin: where it is, opening the island, the meeting it's in, and the full window.
+handle("mini:info", () => mini.info());
+handle("mini:fit", (_e, open: boolean, height?: number) => mini.fit(!!open, typeof height === "number" ? height : undefined));
+handle("live:status", () => liveStatus);
+// The main window's "Mini Peguin" button: shrink to the mini (the island when there's a notch) and close the window.
+handle("mini:shrink", () => {
+  const s = loadSettings();
+  if (s.mini.mode === "off") { saveSettings({ ...s, mini: { ...s.mini, mode: hasNotch() ? "island" : "window" } }); mini.apply(); voice.restyle(); }
+  win?.close();
+});
+handle("app:open", (_e, view?: string) => { openWindow(); if (typeof view === "string") send({ kind: "show", view }); });
 handle("worklog:status", () => workLog.status());
 handle("context:bank", () => contextBank(loadSettings()));
 handle("worklog:clear", () => { clearLog(); return workLog.status(); });
@@ -657,11 +682,13 @@ app.whenReady().then(() => {
     { label: "Open Peguin", click: openWindow },
     { label: "Prepare today's update", click: () => void prepare().catch(() => {}) },
     { label: "Hand over to me", click: () => void handOver() },
+    { label: "Mini Peguin", click: () => { const s = loadSettings(); saveSettings({ ...s, mini: { ...s.mini, mode: s.mini.mode === "off" ? "window" : "off" } }); mini.apply(); voice.restyle(); } },
     { label: "Leave meeting", click: () => { const m = meeting; meeting = null; void m?.stop(); } },
     { type: "separator" },
     { label: "Quit Peguin", role: "quit" },
   ]));
   openWindow();
+  mini.apply();
   void speechModel().catch(() => {});
   void updateAccount(refreshAccount);
   setInterval(() => void updateAccount(refreshAccount), 6 * 3600 * 1000);

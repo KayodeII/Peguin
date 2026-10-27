@@ -293,8 +293,10 @@ export function CursorSettings({ settings, save }: { settings: Settings; save: (
         </label>}
       </div>
       <div className="row-card">
-        <div className="row-main"><strong>Dynamic Island</strong><p>A small pill at the top of your screen (around the notch, if your Mac has one) that shows when Peguin is listening and what it's doing.</p></div>
-        <Toggle on={p.island} onChange={(v) => keep({}, v)} label="Dynamic Island" />
+        <div className="row-main"><strong>Status at the top of the screen</strong><p>{settings.mini.mode !== "off"
+          ? "Mini Peguin is on (Settings, General), so it shows when Peguin is listening and what it's doing instead."
+          : "A small pill at the top of your screen (around the notch, if your Mac has one) that shows when Peguin is listening and what it's doing. For a small Peguin with buttons too, turn on Mini Peguin in Settings, General."}</p></div>
+        {settings.mini.mode === "off" && <Toggle on={p.island} onChange={(v) => keep({}, v)} label="Status at the top of the screen" />}
       </div>
     </>
   );

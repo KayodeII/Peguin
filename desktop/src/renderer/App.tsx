@@ -173,6 +173,7 @@ export function App() {
         <footer className="userbar">
           <Avatar name={settings.displayName} />
           <div className="who"><strong>{settings.displayName || "Your name"}</strong><span className={inCall ? "online" : ""}>{statusLine}</span></div>
+          <button className="icon-btn" onClick={() => void window.penguin.miniShrink()} title="Shrink to Mini Peguin" aria-label="Shrink to Mini Peguin"><Icon name="mini" size={18} /></button>
           <button className={`icon-btn ${view === "settings" ? "on" : ""}`} onClick={() => setView("settings")} title="Settings" aria-label="Settings"><Icon name="settings" size={18} /></button>
         </footer>
       </aside>
