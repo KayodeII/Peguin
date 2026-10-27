@@ -29,6 +29,7 @@ const api = {
   voiceDownload: () => ipcRenderer.invoke("voice:download"),
   voiceMic: () => ipcRenderer.invoke("voice:mic"),
   voiceElevenConnect: (apiKey: string) => ipcRenderer.invoke("voice:eleven-connect", apiKey),
+  aiDetect: () => ipcRenderer.invoke("ai:detect") as Promise<{ claude: boolean; codex: boolean }>,
   xaiStatus: () => ipcRenderer.invoke("xai:status") as Promise<{ connected: boolean; models: string[] }>,
   xaiConnect: (apiKey: string) => ipcRenderer.invoke("xai:connect", apiKey) as Promise<{ connected: boolean; models: string[] }>,
   xaiDisconnect: () => ipcRenderer.invoke("xai:disconnect") as Promise<{ connected: boolean; models: string[] }>,

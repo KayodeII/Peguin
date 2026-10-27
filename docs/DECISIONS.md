@@ -2,6 +2,10 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-27: A first run that explains each step
+
+The owner asked for a first start like Tailscale's: the old welcome was one form (name, link, time, sources) that didn't say what Peguin does or why it needs anything. The first run is now eight short steps, each with a sentence on why: what Peguin does, your name (it listens for it), sources (titles and statuses, never code), your AI (Claude Code and Codex detected with `--version`), your standup, what macOS will ask for and when, signing in for the trial, and the menu bar. Permissions are explained, not requested: macOS still asks when a feature first needs it, so setup never opens a system prompt the owner didn't trigger. Nothing is saved until the last step, so quitting halfway shows the first run again.
+
 ## 2026-10-27: Sources sessions — Codex, Cursor, Gemini, Copilot, Continue, DeepSeek
 
 The owner asked for an orderly Sessions box with more AI coding tools, not only Claude Code. Each is a toggle that reads the owner's own prompts from that tool's local files on this Mac (never code or model output): Claude Code (`~/.claude/projects`), Codex (`~/.codex/history.jsonl`), Cursor (`~/.cursor/projects/.../agent-transcripts`), Gemini CLI, Copilot CLI, Continue, DeepSeek (desktop app / `~/.deepseek` when present). Missing installs report cleanly. Same privacy rule as Claude Code.

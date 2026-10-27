@@ -18,6 +18,10 @@ const paths: Record<string, ReactNode> = {
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></>,
   mic: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></>,
   pointer: <path d="M5 3c4 1 11 5 14 11 1.6 3.2-1.4 5.6-4.2 3.7C10.8 15 7 9.5 5 3z" />,
+  shield: <><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6l-8-3z" /><path d="m9 12 2 2 4-4" /></>,
+  screen: <><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></>,
+  access: <><circle cx="12" cy="5" r="2" /><path d="M5 9l7 1 7-1M12 10v5l-3 6M12 15l3 6" /></>,
+  check: <path d="m5 12 5 5L20 7" />,
   sparkle: <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16z" />,
 };
 
