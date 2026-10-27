@@ -16,7 +16,7 @@ import { WorkLogSource } from "./worklog";
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
-function ChannelHeader({ name, topic, children }: { name: string; topic?: string; children?: React.ReactNode }) {
+export function ChannelHeader({ name, topic, children }: { name: string; topic?: string; children?: React.ReactNode }) {
   return (
     <header className="channel-head">
       <Icon name="hash" size={22} /><h1>{name}</h1>
@@ -250,7 +250,7 @@ export function SourcesView({ settings, draft, save, prepare }: { settings: Sett
 
 /* ---------------------------------------------------------------- Settings */
 
-export function SettingsView({ settings, save, preview, account }: { settings: Settings; save: (s: Settings) => Promise<Settings>; preview: (n: string) => string; account: Account | null }) {
+export function SettingsView({ settings, save, preview, account, goCursor }: { settings: Settings; save: (s: Settings) => Promise<Settings>; preview: (n: string) => string; account: Account | null; goCursor: () => void }) {
   const [s, setS] = useState(settings);
   const [aliases, setAliases] = useState(settings.aliases.join(", "));
   const [error, setError] = useState("");
@@ -298,6 +298,9 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
           <label>Also called<input value={aliases} placeholder="Nicknames, or how people say your name" onChange={(e) => setAliases(e.target.value)} /></label>
         </div>
         <p className="hint">Joins as <strong>{preview(s.displayName)}</strong></p>
+
+        <h3 className="section-label">Mini Peguin</h3>
+        <MiniSettings settings={settings} save={save} />
 
         <h3 className="section-label">Appearance</h3>
         <div className="themes" role="radiogroup" aria-label="Theme">
@@ -355,7 +358,7 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
 
                 </>}
         {sec === "voice-control" && <>
-                <VoiceControlSettings s={s} setS={setS} settings={settings} save={save} />
+                <VoiceControlSettings s={s} setS={setS} settings={settings} goCursor={goCursor} />
 
                 </>}
         {sec === "ai" && <>
@@ -399,7 +402,7 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
   );
 }
 
-type SectionId = "general" | "standup" | "voice" | "voice-control" | "ai" | "recaps";
+export type SectionId = "general" | "standup" | "voice" | "voice-control" | "ai" | "recaps";
 const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "general", label: "General", icon: "settings" },
   { id: "standup", label: "Standup", icon: "calendar" },
@@ -414,7 +417,12 @@ function useSection(): [SectionId, (id: SectionId) => void] {
   const [sec, setSec] = useState<SectionId>(() => {
     try { const v = localStorage.getItem("settings-section"); return SECTIONS.some((x) => x.id === v) ? (v as SectionId) : "general"; } catch { return "general"; }
   });
-  return [sec, (id) => { setSec(id); try { localStorage.setItem("settings-section", id); } catch { /* not kept */ } }];
+  return [sec, (id) => { setSec(id); rememberSection(id); }];
+}
+
+/** Open Settings on this page next time it shows. */
+export function rememberSection(id: SectionId) {
+  try { localStorage.setItem("settings-section", id); } catch { /* not kept */ }
 }
 
 const THEMES: { id: Settings["appearance"]["theme"]; label: string; vars: Record<string, string> }[] = [
@@ -453,3 +461,29 @@ function AccountCard({ account }: { account: Account | null }) {
   );
 }
 
+
+/** Mini Peguin: off, around the camera notch (Macs that have one), or a small floating window. Saves at once. */
+function MiniSettings({ settings, save }: { settings: Settings; save: (s: Settings) => Promise<Settings> }) {
+  const [notch, setNotch] = useState<boolean | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => { void window.penguin.miniInfo().then((i) => setNotch(i.hasNotch)); }, []);
+  const mode = settings.mini.mode;
+  const set = (m: Settings["mini"]["mode"]) => { setError(""); save({ ...settings, mini: { ...settings.mini, mode: m } }).catch((e) => setError(message(e))); };
+  const options: [Settings["mini"]["mode"], string][] = [["off", "Off"], ...(notch ? [["island", "Dynamic Island"] as [Settings["mini"]["mode"], string]] : []), ["window", "Small window"]];
+  return (
+    <div className="row-card column">
+      <div className="row-main">
+        <strong>A small Peguin that stays on screen</strong>
+        <p>{mode === "island"
+          ? "Around your Mac's camera, like the iPhone's Dynamic Island. Point at it to open it: the next standup, the meeting Peguin is in, what voice control hears, and quick buttons."
+          : mode === "window"
+            ? "A small window you can drag anywhere; it stays above other apps. It shows the next standup, the meeting Peguin is in and what voice control hears, with quick buttons."
+            : `Keep Peguin's status and quick buttons on screen while this window is closed${notch ? ": around your Mac's camera, or in a small window" : ", in a small window"}.`}</p>
+      </div>
+      <div className="segmented" role="radiogroup" aria-label="Mini Peguin">
+        {options.map(([id, label]) => <button key={id} role="radio" aria-checked={mode === id} className={mode === id ? "on" : ""} onClick={() => set(id)}>{label}</button>)}
+      </div>
+      {error && <div className="notice error">{error}</div>}
+    </div>
+  );
+}

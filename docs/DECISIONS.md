@@ -2,6 +2,14 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-27: Mini Peguin: the Dynamic Island or a small window
+
+The owner asked for the Dynamic Island to be optional, "like a minimized version of the app" on Macs with a notch, and otherwise "a portable small window like Tailscale mini". Mini Peguin is its own window loading the app's page (`#mini-island` / `#mini-window`) with the app's preload, so it uses the same IPC and sender check as the main window. Off by default; Settings > General picks Off, Dynamic Island (only listed on a Mac with a notch) or Small window, and the main window has a button to shrink into it. It's the app's status and quick actions, not only voice control's: it works with voice control off, and while it's on, voice control's status pill steps aside (`pointer.island` still decides that pill when Mini is off). The island sits over the menu bar at screen-saver level like the overlay, opens under the pointer, and is sized to its content so the see-through part never blocks clicks; the notch is detected from the menu bar height (32 pt or more), as the overlay does without its helper.
+
+## 2026-10-27: Peguin's cursor gets its own channel
+
+The owner asked to bring the cursor "out of settings to somewhere they can easily see to turn on". Voice control and Peguin's cursor now have a **#cursor** channel in the sidebar, marked ON or OFF, with the switch beside a preview of the cursor, the permissions, how it looks, things to say and Try it; each saves at once. The rarer options (how to talk to it, Smart or Quick, search address, asking the AI) stay in Settings > Voice control, which links to #cursor.
+
 ## 2026-10-27: A first run that explains each step
 
 The owner asked for a first start like Tailscale's: the old welcome was one form (name, link, time, sources) that didn't say what Peguin does or why it needs anything. The first run is now eight short steps, each with a sentence on why: what Peguin does, your name (it listens for it), sources (titles and statuses, never code), your AI (Claude Code and Codex detected with `--version`), your standup, what macOS will ask for and when, signing in for the trial, and the menu bar. Permissions are explained, not requested: macOS still asks when a feature first needs it, so setup never opens a system prompt the owner didn't trigger. Nothing is saved until the last step, so quitting halfway shows the first run again.

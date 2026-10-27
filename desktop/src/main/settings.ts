@@ -140,6 +140,16 @@ export const Settings = z.preprocess(migrate, z.object({
   stopWhenInterrupted: z.boolean().default(true),
   runHidden: z.boolean().default(true),
   /**
+   * Mini Peguin: a small version of the app that stays on screen. "island" hugs the
+   * camera notch on Macs that have one; "window" is a small floating window the owner
+   * can put anywhere (its last position is kept). Off until the owner picks one.
+   */
+  mini: z.object({
+    mode: z.enum(["off", "island", "window"]).default("off"),
+    x: z.number().int().optional(),
+    y: z.number().int().optional(),
+  }).default(() => ({ mode: "off" as const })),
+  /**
    * The AI that writes the update, answers follow-ups, suggests copilot answers and
    * summarises recaps. Always the owner's own: their Claude Code sign-in, their
    * Codex CLI sign-in, or their xAI key. Peguin never pays for anyone's AI.
