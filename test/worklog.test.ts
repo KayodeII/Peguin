@@ -87,6 +87,7 @@ describe("learn my voice", () => {
 });
 
 import { scratch } from "../desktop/src/main/context/claudeCode.js";
+import { cursorProject, cursorPrompt } from "../desktop/src/main/context/sessions.js";
 
 describe("Claude Code sessions that aren't the owner's work", () => {
   it("skips temporary folders (Peguin's own calls, one-off runs)", () => {
@@ -95,5 +96,16 @@ describe("Claude Code sessions that aren't the owner's work", () => {
     expect(scratch("-tmp-x")).toBe(true);
     expect(scratch("-Users-adebowalemujeeb-Desktop-penguin")).toBe(false);
     expect(scratch("-Users-me-tmpl-project")).toBe(false);
+  });
+});
+
+describe("Cursor session prompts", () => {
+  it("takes the user_query and drops the timestamp wrapper", () => {
+    expect(cursorPrompt("<timestamp>Tue</timestamp>\n<user_query>\nfix the draft\n</user_query>")).toBe("fix the draft");
+    expect(cursorPrompt("plain ask")).toBe("plain ask");
+    expect(cursorPrompt("<user_query>  </user_query>")).toBeNull();
+  });
+  it("names the project from the Cursor slug", () => {
+    expect(cursorProject("Users-adebowalemujeeb-Desktop-penguin")).toBe("penguin");
   });
 });

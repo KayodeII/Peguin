@@ -98,11 +98,22 @@ export const Settings = z.preprocess(migrate, z.object({
   sources: z.object({
     git: z.boolean().default(true),
     github: z.boolean().default(true),
+    /** AI coding sessions on this Mac: the owner's prompts only. */
     claude_code: z.boolean().default(true),
+    codex: z.boolean().default(true),
+    cursor: z.boolean().default(true),
+    gemini: z.boolean().default(true),
+    copilot: z.boolean().default(true),
+    continue: z.boolean().default(true),
+    deepseek: z.boolean().default(true),
     /** Used only once connected in Sources (the keys live in trackers.sealed). */
     linear: z.boolean().default(true),
     jira: z.boolean().default(true),
-  }).default({ git: true, github: true, claude_code: true, linear: true, jira: true }),
+  }).default({
+    git: true, github: true,
+    claude_code: true, codex: true, cursor: true, gemini: true, copilot: true, continue: true, deepseek: true,
+    linear: true, jira: true,
+  }),
   appearance: z.object({
     theme: z.enum(["system", "light", "dark", "midnight"]).default("system"),
     accent: z.enum(["blue", "purple", "green", "orange", "pink"]).default("blue"),
@@ -159,7 +170,12 @@ export const Settings = z.preprocess(migrate, z.object({
     listenS: z.number().int().min(3).max(60).default(15),
     /** Seconds after a request that a follow-up ("now close it") needs no wake word. 0: always say it. */
     followS: z.number().int().min(0).max(120).default(30),
-    /** Press to give one command without the wake phrase (Electron accelerator). Empty: none. */
+    /**
+     * How to start a command. "hold" (default, like Clicky): hold Control+Option, speak, release to run.
+     * "wake": “Hey Peguin” or the press shortcut. "both": either.
+     */
+    trigger: z.enum(["hold", "wake", "both"]).default("hold"),
+    /** Press to give one command without the wake phrase (Electron accelerator). Empty: none. Used when trigger is wake or both. */
     shortcut: z.string().trim().max(60).default("Control+Alt+Space"),
     /** Where "search for ..." goes; %s is replaced by the words. */
     searchUrl: z.string().trim().url().default("https://www.google.com/search?q=%s"),
@@ -178,7 +194,7 @@ export const Settings = z.preprocess(migrate, z.object({
     drive: z.enum(["smart", "quick"]).default("smart"),
     /** The Dynamic Island at the top of the screen: what Peguin hears and does. */
     island: z.boolean().default(true),
-  }).default(() => ({ enabled: false, wakeWords: ["Peguin"], wake: "name" as const, listenS: 15, followS: 30, shortcut: "Control+Alt+Space", searchUrl: "https://www.google.com/search?q=%s", cursor: Cursor.parse({}), askAi: true, drive: "smart" as const, island: true })),
+  }).default(() => ({ enabled: false, wakeWords: ["Peguin"], wake: "name" as const, listenS: 15, followS: 30, trigger: "hold" as const, shortcut: "Control+Alt+Space", searchUrl: "https://www.google.com/search?q=%s", cursor: Cursor.parse({}), askAi: true, drive: "smart" as const, island: true })),
   /**
    * The work log: every few minutes, the app in front and its window title, so
    * the draft knows what the owner spent time on. Off until the owner turns it on;

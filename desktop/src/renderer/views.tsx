@@ -14,12 +14,6 @@ import { VoiceControlSettings } from "./voicecontrol";
 import { TrackerSources } from "./trackers";
 import { WorkLogSource } from "./worklog";
 
-const SOURCE_INFO = {
-  git: { name: "Git commits", desc: "Commits in repos on this computer." },
-  github: { name: "GitHub", desc: "PRs and reviews, via the gh CLI." },
-  claude_code: { name: "Claude Code", desc: "Your prompts only. Never code or output." },
-} as const;
-type SourceKey = keyof typeof SOURCE_INFO;
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
 function ChannelHeader({ name, topic, children }: { name: string; topic?: string; children?: React.ReactNode }) {
@@ -140,31 +134,115 @@ export function LiveView({ settings, live, join, leave, copilot }: { settings: S
 
 /* ---------------------------------------------------------------- Sources */
 
+type SessionKey = "claude_code" | "codex" | "cursor" | "gemini" | "copilot" | "continue" | "deepseek";
+type ToggleKey = "git" | SessionKey;
+
+const SESSIONS: { id: SessionKey; name: string; desc: string }[] = [
+  { id: "claude_code", name: "Claude Code", desc: "Your prompts only." },
+  { id: "codex", name: "Codex", desc: "Your prompts from the Codex CLI." },
+  { id: "continue", name: "Continue", desc: "Your Continue chat prompts." },
+  { id: "copilot", name: "Copilot CLI", desc: "Your Copilot CLI prompts." },
+  { id: "cursor", name: "Cursor", desc: "Your Cursor agent prompts." },
+  { id: "deepseek", name: "DeepSeek", desc: "Your DeepSeek chat prompts." },
+  { id: "gemini", name: "Gemini CLI", desc: "Your Gemini CLI prompts." },
+];
+
+function SourceToggle({ id, name, desc, settings, save, report }: {
+  id: ToggleKey; name: string; desc: string;
+  settings: Settings; save: (s: Settings) => Promise<Settings>;
+  report?: { ok: boolean; summary: string; hint?: string };
+}) {
+  const on = settings.sources[id];
+  return (
+    <div className="source-app">
+      <div className="row-head">
+        <BrandIcon id={id} />
+        <div className="row-main">
+          <strong>{name}</strong>
+          <p>{desc}</p>
+          {on && report && <p className={report.ok ? "ok" : "warn"}>{report.ok ? "✓ " : "! "}{report.summary}{report.hint ? ` · ${report.hint}` : ""}</p>}
+        </div>
+        <Toggle on={on} onChange={(v) => void save({ ...settings, sources: { ...settings.sources, [id]: v } })} label={name} />
+      </div>
+    </div>
+  );
+}
+
+function GithubApp({ settings, save, report }: {
+  settings: Settings; save: (s: Settings) => Promise<Settings>;
+  report?: { ok: boolean; summary: string; hint?: string };
+}) {
+  type Gh = { installed: boolean; signedIn: boolean; who: string | null };
+  const [st, setSt] = useState<Gh | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { void window.penguin.githubStatus().then(setSt); }, []);
+  const run = (fn: () => Promise<Gh>) => {
+    setBusy(true); setError("");
+    fn().then(setSt).catch((e) => setError(message(e))).finally(() => setBusy(false));
+  };
+  const on = settings.sources.github;
+  return (
+    <div className="source-app">
+      <div className="row-head">
+        <BrandIcon id="github" />
+        <div className="row-main">
+          <strong>GitHub</strong>
+          <p>{!st ? "Checking…"
+            : !st.installed ? "Install the GitHub CLI (gh), then Connect. PRs and reviews."
+            : st.signedIn ? `Linked as ${st.who ?? "you"}. PRs and reviews via gh.`
+            : "PRs and reviews. Connect opens GitHub in your browser — no key to paste."}</p>
+          {on && st?.signedIn && report && <p className={report.ok ? "ok" : "warn"}>{report.ok ? "✓ " : "! "}{report.summary}{report.hint ? ` · ${report.hint}` : ""}</p>}
+        </div>
+        {st?.signedIn ? (
+          <>
+            <button className="btn link" disabled={busy} onClick={() => run(() => window.penguin.githubDisconnect())}>Disconnect</button>
+            <Toggle on={on} onChange={(v) => void save({ ...settings, sources: { ...settings.sources, github: v } })} label="GitHub" />
+          </>
+        ) : (
+          <button className="btn ghost" disabled={busy || st?.installed === false} onClick={() => run(() => window.penguin.githubConnect())}>
+            {busy ? "Waiting for browser" : "Connect"}
+          </button>
+        )}
+      </div>
+      {error && <div className="notice error">{error}</div>}
+    </div>
+  );
+}
+
 export function SourcesView({ settings, draft, save, prepare }: { settings: Settings; draft: Draft | null; save: (s: Settings) => Promise<Settings>; prepare: () => void }) {
-  const report = (id: SourceKey) => draft?.reports.find((r) => r.id === id);
-  const setSource = (id: SourceKey, on: boolean) => void save({ ...settings, sources: { ...settings.sources, [id]: on } });
+  const r = (id: string) => draft?.reports.find((x) => x.id === id);
   return (
     <>
       <ChannelHeader name="sources">
         <button className="btn ghost" onClick={prepare}><Icon name="refresh" size={16} />Re-check</button>
       </ChannelHeader>
       <div className="scroll narrow">
-        {(Object.keys(SOURCE_INFO) as SourceKey[]).map((id) => {
-          const r = report(id);
-          return (
-            <div key={id} className="row-card">
-              <BrandIcon id={id} />
-              <div className="row-main">
-                <strong>{SOURCE_INFO[id].name}</strong>
-                <p>{SOURCE_INFO[id].desc}</p>
-                {settings.sources[id] && r && <p className={r.ok ? "ok" : "warn"}>{r.ok ? "✓ " : "! "}{r.summary}{r.hint ? ` · ${r.hint}` : ""}</p>}
-              </div>
-              <Toggle on={settings.sources[id]} onChange={(v) => setSource(id, v)} label={SOURCE_INFO[id].name} />
+        <p className="hint sources-lead">Apps Peguin reads for your update. Code and sessions stay on this Mac; tickets connect in the browser.</p>
+        <div className="sources-grid">
+          <section className="source-box">
+            <h3 className="section-label">Code</h3>
+            <SourceToggle id="git" name="Git" desc="Commits in repos on this Mac." settings={settings} save={save} report={r("git")} />
+            <GithubApp settings={settings} save={save} report={r("github")} />
+          </section>
+          <section className="source-box">
+            <h3 className="section-label">Tickets</h3>
+            <TrackerSources settings={settings} save={save} reports={draft?.reports ?? []} />
+          </section>
+          <section className="source-box wide">
+            <h3 className="section-label">Sessions</h3>
+            <p className="hint">Your prompts only — never code or model output. Switch off any tool you don’t want read.</p>
+            <div className="source-apps">
+              {SESSIONS.map((s) => (
+                <SourceToggle key={s.id} id={s.id} name={s.name} desc={s.desc} settings={settings} save={save} report={r(s.id)} />
+              ))}
             </div>
-          );
-        })}
-        <WorkLogSource settings={settings} save={save} report={draft?.reports.find((r) => r.id === "mac")} />
-        <TrackerSources settings={settings} save={save} reports={draft?.reports ?? []} />
+          </section>
+          <section className="source-box wide">
+            <h3 className="section-label">This Mac</h3>
+            <WorkLogSource settings={settings} save={save} report={r("mac")} />
+          </section>
+        </div>
       </div>
     </>
   );

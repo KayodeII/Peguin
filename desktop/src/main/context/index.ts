@@ -1,7 +1,7 @@
 import { previousWorkdayStart } from "../../../../src/core/sources/types.js";
-import { claudeCodeActivity } from "./claudeCode.js";
 import { gitActivity } from "./git.js";
 import { githubActivity } from "./github.js";
+import { SESSION_SOURCES } from "./sessions.js";
 import type { Activity, SourceId, SourceReport, SourceResult } from "./types.js";
 
 export type { Activity, SourceId, SourceReport } from "./types.js";
@@ -11,7 +11,7 @@ type Source = (since: Date) => Promise<SourceResult>;
 const SOURCES: Partial<Record<SourceId, Source>> = {
   git: gitActivity,
   github: githubActivity,
-  claude_code: claudeCodeActivity,
+  ...SESSION_SOURCES,
 };
 
 /** Everything the user worked on since the previous workday, from every enabled source. */

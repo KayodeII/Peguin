@@ -29,6 +29,7 @@ import { ensureModel } from "./speech/model.js";
 import { standardSample, synthesize } from "./speech/tts.js";
 import { checkXaiKey, clearXai, loadXai, saveXai } from "./xai.js";
 import { checkJira, checkLinear, jiraSite } from "./context/trackers.js";
+import { githubConnect, githubDisconnect, githubStatus } from "./context/githubAuth.js";
 import { loadTrackers, saveTrackers, trackerStatus } from "./trackerKeys.js";
 import {
   CONSENT_SENTENCE, deleteSample, deleteVoiceModel, ensureVoiceModel, forgetVoice, ownVoiceStatus, saveSample,
@@ -140,7 +141,13 @@ function openWindow() {
   if (rendererUrl) void win.loadURL(rendererUrl);
   else void win.loadFile(path.join(outDir, "renderer/index.html"), { hash: devEnv("PENGUIN_VIEW") ?? "" });
   // Come to the front on launch, even when started from a terminal.
-  win.once("ready-to-show", () => { win?.show(); app.focus({ steal: true }); });
+  const reveal = () => { if (win && !win.isDestroyed() && !win.isVisible()) { win.show(); app.focus({ steal: true }); } };
+  win.once("ready-to-show", reveal);
+  // Dev: if Vite isn't up yet, ready-to-show never fires and the window stays invisible.
+  win.webContents.on("did-fail-load", (_e, _code, _desc, url, isMain) => {
+    if (isMain) { console.error("[peguin] window failed to load", url); reveal(); }
+  });
+  setTimeout(reveal, 2500);
   win.on("closed", () => { win = null; });
   // Dev aid: PENGUIN_SNAPSHOT=out.png saves a picture of this window, then quits.
   const snap = devEnv("PENGUIN_SNAPSHOT");
@@ -437,7 +444,7 @@ async function applyVoiceControl(before: ReturnType<typeof loadSettings>["pointe
   warmVoiceAi(s);
   if (!s.pointer.enabled) { if (before?.enabled) await voice.stop(); return; }
   if (!before?.enabled) await voice.start();
-  else if (before.shortcut !== s.pointer.shortcut) voice.bindShortcut();
+  else if (before.trigger !== s.pointer.trigger || before.shortcut !== s.pointer.shortcut) await voice.bindTrigger();
   if (before?.enabled && (JSON.stringify(before.cursor) !== JSON.stringify(s.pointer.cursor) || before.island !== s.pointer.island)) voice.restyle();
 }
 handle("pointer:status", () => voice.status());
@@ -592,8 +599,16 @@ handle("xai:disconnect", () => {
   saveSettings({ ...s, ai: s.ai === "grok" ? "claude" : s.ai, voice: { ...s.voice, standard: "mac" } });
   return xaiStatus();
 });
+handle("github:status", () => githubStatus());
+handle("github:connect", () => githubConnect());
+handle("github:disconnect", () => githubDisconnect());
 // The owner's Linear and Jira keys (Sources): checked before they're kept.
 handle("trackers:status", () => trackerStatus());
+handle("trackers:open-key", (_e, kind: "linear" | "jira") => {
+  void shell.openExternal(kind === "linear"
+    ? "https://linear.app/settings/account/security"
+    : "https://id.atlassian.com/manage-profile/security/api-tokens");
+});
 handle("trackers:connect", async (_e, kind: "linear" | "jira", input: { apiKey?: string; site?: string; email?: string; token?: string }) => {
   const k = loadTrackers();
   if (kind === "linear") {

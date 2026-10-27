@@ -53,15 +53,18 @@ export function VoiceControlSettings({ s, setS, settings, save }: { s: Settings;
     <>
       <div className="row-card">
         <div className="row-main">
-          <strong>“Hey Peguin”</strong>
-          <p>Say “Hey Peguin” and a command, and Peguin moves the mouse, clicks, types and draws for you. Only your own microphone, heard on this Mac. Lines that aren't for Peguin are dropped and never sent anywhere{s.voice.learn.enabled ? ", except clean clips of you that Learn my voice keeps for you to review (Settings > Voice)" : ""}. With Smart on, a follow-up{p.wake === "hey" ? " or a line starting with “Hey”" : ""} goes to your AI as words (never audio) to tell whether it's a request.</p>
+          <strong>Voice control</strong>
+          <p>{p.trigger === "hold"
+            ? "Hold Control+Option, say what you want, release — Peguin moves the mouse, clicks, types and draws. Only your own microphone, heard on this Mac."
+            : "Say “Hey Peguin” and a command, and Peguin moves the mouse, clicks, types and draws for you. Only your own microphone, heard on this Mac."}
+            {" "}Lines that aren't for Peguin are dropped and never sent anywhere{s.voice.learn.enabled ? ", except clean clips of you that Learn my voice keeps for you to review (Settings > Voice)" : ""}. With Smart on, a follow-up{p.wake === "hey" ? " or a line starting with “Hey”" : ""} goes to your AI as words (never audio) to tell whether it's a request.</p>
         </div>
         <Toggle on={settings.pointer.enabled} onChange={(v) => !busy && toggle(v)} label="Voice control" />
       </div>
       {settings.pointer.enabled && status && (
         <div className="row-card column">
-          <PermissionRow ok={status.mic === "granted"} name="Microphone" detail="To hear “Hey Peguin”." fix={status.mic === "granted" ? undefined : "Open System Settings > Privacy & Security > Microphone and switch Peguin on."} />
-          <PermissionRow ok={status.trusted} name="Accessibility" detail="To click, type and read the names of buttons."
+          <PermissionRow ok={status.mic === "granted"} name="Microphone" detail={p.trigger === "hold" ? "To hear you while Control+Option is held." : "To hear “Hey Peguin”."} fix={status.mic === "granted" ? undefined : "Open System Settings > Privacy & Security > Microphone and switch Peguin on."} />
+          <PermissionRow ok={status.trusted} name="Accessibility" detail="To click, type, read button names, and watch Control+Option."
             fix={`Click Allow, then switch on “${status.appName}” in System Settings > Privacy & Security > Accessibility.${status.appName === "Electron" ? " (This is a development build, so macOS calls Peguin “Electron”.)" : ""} If it's already on, switch it off and on again.`}
             action={status.trusted ? undefined : <button className="btn ghost" onClick={() => void window.penguin.pointerAccess().then(setStatus)}>Allow</button>} />
           {status.last && <p className="hint">Last heard: “{status.last.heard || "typed"}”. {status.last.did}.</p>}
@@ -69,37 +72,59 @@ export function VoiceControlSettings({ s, setS, settings, save }: { s: Settings;
         </div>
       )}
       {error && <div className="notice error">{error}</div>}
-      <div className="field-grid">
-        <label>Call it<input value={words} placeholder="Peguin" onChange={(e) => { setWords(e.target.value); setPointer({ wakeWords: listOf(e.target.value) }); }} /></label>
-        <label>Shortcut for one command<input value={p.shortcut} placeholder="Control+Alt+Space" onChange={(e) => setPointer({ shortcut: e.target.value })} /></label>
-      </div>
-      <p className="hint">After “Hey”. Separate a few names with commas. The shortcut listens for one command without the wake phrase.</p>
       <div className="row-card column">
         <div className="row-main">
-          <strong>Wake word</strong>
-          <p>{p.wake === "hey"
-            ? "“Hey” on its own wakes Peguin: “Hey, open Music”, or “Hey” and then what you want. People say “Hey” to each other too, so anything that isn't a clear command goes to your AI, and Peguin quietly ignores it if it isn't a request for your Mac. In meetings it still needs its name."
-            : `Say “Hey ${p.wakeWords[0] ?? "Peguin"}” first, so Peguin never mistakes a “Hey” meant for someone else.`}</p>
+          <strong>How to talk to it</strong>
+          <p>{p.trigger === "hold"
+            ? "Hold Control and Option together, speak your command, then let go. Peguin runs it when you release — no wake phrase."
+            : p.trigger === "both"
+              ? "Hold Control+Option to speak a command, or say “Hey Peguin …” / use the shortcut below."
+              : `Say “Hey ${p.wakeWords[0] ?? "Peguin"}” first, or press the shortcut below for one command without the name.`}</p>
         </div>
-        <div className="segmented" role="radiogroup" aria-label="Wake word">
-          {([["name", `“Hey ${p.wakeWords[0] ?? "Peguin"}”`], ["hey", "Just “Hey”"]] as const).map(([id, label]) => (
-            <button key={id} role="radio" aria-checked={p.wake === id} className={p.wake === id ? "on" : ""} onClick={() => setPointer({ wake: id })}>{label}</button>
+        <div className="segmented" role="radiogroup" aria-label="How to talk to it">
+          {([["hold", "Hold Control+Option"], ["wake", "Wake word"], ["both", "Both"]] as const).map(([id, label]) => (
+            <button key={id} role="radio" aria-checked={p.trigger === id} className={p.trigger === id ? "on" : ""} onClick={() => setPointer({ trigger: id })}>{label}</button>
           ))}
         </div>
       </div>
-      <div className="field-grid">
-        <label>After waking, wait for you
-          <select value={p.listenS} onChange={(e) => setPointer({ listenS: Number(e.target.value) })}>
-            {[5, 10, 15, 20, 30, 45, 60].map((n) => <option key={n} value={n}>{n} seconds</option>)}
-          </select>
-        </label>
-        <label>Keep listening for follow-ups
-          <select value={p.followS} onChange={(e) => setPointer({ followS: Number(e.target.value) })}>
-            {[0, 10, 20, 30, 45, 60, 90, 120].map((n) => <option key={n} value={n}>{n ? `${n} seconds` : "Off"}</option>)}
-          </select>
-        </label>
-      </div>
-      <p className="hint">While you're still talking, Peguin keeps waiting. Follow-ups like “now close it” need no wake word; anything that isn't for your Mac is ignored.</p>
+      {(p.trigger === "wake" || p.trigger === "both") && (
+        <>
+          <div className="field-grid">
+            <label>Call it<input value={words} placeholder="Peguin" onChange={(e) => { setWords(e.target.value); setPointer({ wakeWords: listOf(e.target.value) }); }} /></label>
+            <label>Shortcut for one command<input value={p.shortcut} placeholder="Control+Alt+Space" onChange={(e) => setPointer({ shortcut: e.target.value })} /></label>
+          </div>
+          <p className="hint">After “Hey”. Separate a few names with commas. The shortcut listens for one command without the wake phrase.</p>
+          <div className="row-card column">
+            <div className="row-main">
+              <strong>Wake word</strong>
+              <p>{p.wake === "hey"
+                ? "“Hey” on its own wakes Peguin: “Hey, open Music”, or “Hey” and then what you want. People say “Hey” to each other too, so anything that isn't a clear command goes to your AI, and Peguin quietly ignores it if it isn't a request for your Mac. In meetings it still needs its name."
+                : `Say “Hey ${p.wakeWords[0] ?? "Peguin"}” first, so Peguin never mistakes a “Hey” meant for someone else.`}</p>
+            </div>
+            <div className="segmented" role="radiogroup" aria-label="Wake word">
+              {([["name", `“Hey ${p.wakeWords[0] ?? "Peguin"}”`], ["hey", "Just “Hey”"]] as const).map(([id, label]) => (
+                <button key={id} role="radio" aria-checked={p.wake === id} className={p.wake === id ? "on" : ""} onClick={() => setPointer({ wake: id })}>{label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="field-grid">
+            <label>After waking, wait for you
+              <select value={p.listenS} onChange={(e) => setPointer({ listenS: Number(e.target.value) })}>
+                {[5, 10, 15, 20, 30, 45, 60].map((n) => <option key={n} value={n}>{n} seconds</option>)}
+              </select>
+            </label>
+            <label>Keep listening for follow-ups
+              <select value={p.followS} onChange={(e) => setPointer({ followS: Number(e.target.value) })}>
+                {[0, 10, 20, 30, 45, 60, 90, 120].map((n) => <option key={n} value={n}>{n ? `${n} seconds` : "Off"}</option>)}
+              </select>
+            </label>
+          </div>
+          <p className="hint">While you're still talking, Peguin keeps waiting. Follow-ups like “now close it” need no wake word; anything that isn't for your Mac is ignored.</p>
+        </>
+      )}
+      {p.trigger === "hold" && (
+        <p className="hint">Hold Control+Option (same as Clicky). Speak while the keys are down; Peguin runs the command when you release. Needs Accessibility on.</p>
+      )}
       <label>Search address<input value={p.searchUrl} onChange={(e) => setPointer({ searchUrl: e.target.value })} /></label>
       <p className="hint">Where “search for …” goes. %s is replaced by what you said.</p>
       <div className="row-card column">

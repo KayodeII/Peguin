@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
-import { siApple, siCalendly, siClaude, siGit, siGithub, siGooglecalendar, siGooglemeet, siJira, siLinear, siZoom, type SimpleIcon } from "simple-icons";
+import {
+  siApple, siCalendly, siClaude, siCursor, siDeepseek, siGit, siGithub, siGithubcopilot,
+  siGooglecalendar, siGooglegemini, siGooglemeet, siJira, siLinear, siZoom, type SimpleIcon,
+} from "simple-icons";
 
 /** Small inline icons (24px grid, stroke follows currentColor). */
 const paths: Record<string, ReactNode> = {
@@ -34,13 +37,18 @@ const BRANDS: Record<string, SimpleIcon> = {
   git: siGit, github: siGithub, claude_code: siClaude, calendar: siGooglecalendar, google_calendar: siGooglecalendar,
   apple_calendar: siApple, mac: siApple, calendly: siCalendly,
   linear: siLinear, jira: siJira, google_meet: siGooglemeet, zoom: siZoom,
+  cursor: siCursor, gemini: siGooglegemini, copilot: siGithubcopilot, deepseek: siDeepseek,
 };
 
 /** Marks simple-icons doesn't carry: a plain calendar glyph on the brand's colour. */
 const CALENDAR_GLYPH = "M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V9h14v11zM7 11h5v5H7z";
+/** Simple chat bubble for tools without a brand mark in simple-icons. */
+const CHAT_GLYPH = "M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2z";
 const OTHER: Record<string, Pick<SimpleIcon, "hex" | "path" | "title">> = {
   outlook: { hex: "0078D4", path: CALENDAR_GLYPH, title: "Outlook" },
   calendar_link: { hex: "6B6B6B", path: CALENDAR_GLYPH, title: "Calendar link" },
+  codex: { hex: "000000", path: CHAT_GLYPH, title: "Codex" },
+  continue: { hex: "1C1C1C", path: CHAT_GLYPH, title: "Continue" },
 };
 
 /** A brand mark on its brand colour, readable in every theme. */

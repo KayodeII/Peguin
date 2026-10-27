@@ -6,6 +6,14 @@ Newest first. Add an entry when you make a choice a future agent might otherwise
 
 The owner asked for a first start like Tailscale's: the old welcome was one form (name, link, time, sources) that didn't say what Peguin does or why it needs anything. The first run is now eight short steps, each with a sentence on why: what Peguin does, your name (it listens for it), sources (titles and statuses, never code), your AI (Claude Code and Codex detected with `--version`), your standup, what macOS will ask for and when, signing in for the trial, and the menu bar. Permissions are explained, not requested: macOS still asks when a feature first needs it, so setup never opens a system prompt the owner didn't trigger. Nothing is saved until the last step, so quitting halfway shows the first run again.
 
+## 2026-10-27: Sources sessions — Codex, Cursor, Gemini, Copilot, Continue, DeepSeek
+
+The owner asked for an orderly Sessions box with more AI coding tools, not only Claude Code. Each is a toggle that reads the owner's own prompts from that tool's local files on this Mac (never code or model output): Claude Code (`~/.claude/projects`), Codex (`~/.codex/history.jsonl`), Cursor (`~/.cursor/projects/.../agent-transcripts`), Gemini CLI, Copilot CLI, Continue, DeepSeek (desktop app / `~/.deepseek` when present). Missing installs report cleanly. Same privacy rule as Claude Code.
+
+## 2026-10-27: Sources as app boxes (Code, Tickets, Sessions, This Mac)
+
+The owner wanted Sources grouped like apps you link, not a flat list of toggles and paste fields. Sources is now four boxes: **Code** (Git + GitHub), **Tickets** (Linear + Jira), **Sessions** (Claude Code and the other AI coding tools), **This Mac** (work log). GitHub Connect runs `gh auth login -w` so nothing is pasted. Linear/Jira Connect opens their site to create a key, then one paste; full one-click OAuth through the Worker (like calendars) is still the follow-up when keys put people off.
+
 ## 2026-10-26: Linear and Jira on the desktop with the owner's own API keys
 
 The desktop update only read git, GitHub and Claude Code, though the product promises Linear and Jira. The owner pastes a Linear personal API key, or a Jira site, email and Atlassian API token, in Sources. Each is checked (Linear's `viewer`, Jira's `/myself`), sealed with the Keychain in `trackers.sealed` and sent only to Linear or that Jira site. The fetches reuse the server stack's `src/core/sources/linear.ts` and `jira.ts`: issues assigned to the owner, updated since the previous workday; titles, statuses and times only. OAuth apps through the Worker (like calendars) would be one click, but need app registrations, a callback and token refresh on our side, and send the tokens through our server; personal keys need none of that and match "the owner's own" pattern of the xAI and ElevenLabs keys. OAuth can be added later as a second way to connect. A key that stops working shows as a source warning with how to fix it; it never fails the draft.
@@ -47,6 +55,18 @@ After voice control, the owner asked that Peguin "regularly get context from the
 - **Learn my voice, Settings > Voice** (`desktop/src/main/speech/voice/clips.ts`, `clipRules.ts`): there is no training in the fine-tuning sense; the on-Mac voice and ElevenLabs both copy a voice from a sample, so a better sample is what "learning" means. While voice control listens, lines that aren't commands go to `learnFrom`, which keeps clean ones (4 to 15 s, 8+ words, 60%+ speech, not distorted, up to the owner's daily limit, 30 waiting at most), only after the owner has recorded their consent, and never while the copilot or a meeting is live (the speakers carry other voices). The overlay now records at 24 kHz so clips match the recorded sample's quality; whisper still gets 16 kHz.
 - **The owner decides what's them.** Each clip shows a likeness to the consent recording from the voice model's speaker embedding, as a hint only. Measured with `spikes/voice/vendor` and `gen/me.wav` as the reference: the owner's dataset clips of 4 s or more scored 0.60 to 0.86, six macOS voices 0.33 to 0.72 ("Daniel" 0.72). Too close to trust, so nothing is pre-ticked. Ticked clips (12 s or more) replace the sample, up to 30 s; the consent recording stays, the ElevenLabs clone is remade on the next line, and the used clips leave the list.
 - **Disclosure doesn't change.** Speaking in the owner's voice still starts with the AI introduction and keeps "(AI)" in the name; the consent sentence already says so.
+
+## 2026-10-27: Screenshot when asked; local LLM later, not bundled yet
+
+Smart drive refused “take a screenshot of WhatsApp” because the cloud AI treated it as a privacy risk and Peguin had no screenshot step. Screenshots are now a first-class action (`screenshot` in drive + parse): `screencapture` writes a PNG to the Desktop when the owner asks; Screen Recording may be required for Electron/Peguin. A bundled local LLM (so the planner isn't rate-limited or over-cautious) is still attractive for offline Smart drive, but shipping a capable instruct model inside the .dmg is a large download and a separate product decision — prefer optional download (MLX / llama.cpp on Apple Silicon) later, with the owner's Claude/Codex/Grok remaining the default planner. Local models still need the same action grammar (including screenshot); they don't replace tools.
+
+## 2026-10-27: Session-limit falls across the owner's AIs
+
+When Claude (or Codex / Grok) returns a session or rate limit, `brain.ts` marks that AI exhausted until the reset it reported (or one hour) and retries the same prompt on the next available agent on this Mac (Claude CLI, Codex CLI, or an xAI key). If none can answer, voice control shows a short "out of uses" line in a box under Peguin's cursor. Preference in Settings is unchanged; only that request (and later ones while the limit lasts) skip the exhausted AI.
+
+## 2026-10-27: Voice control default is hold Control+Option (Clicky-style)
+
+Clicky's UX is hold Control+Option, speak, release to act. Peguin matched the wake-word path first; ambient listening invented noise as commands until VAD, and the press shortcut never felt as reliable as a held modifier. Default `pointer.trigger` is now `hold`: the Swift helper watches flags with a listen-only CGEvent tap (`ptt-on`), PCM only feeds whisper while the keys are down, and release flushes the utterance. Wake word / press shortcut remain as `wake` or `both`. Same Accessibility permission as clicks.
 
 ## 2026-10-20: Voice control ("Hey Peguin"), without AI
 

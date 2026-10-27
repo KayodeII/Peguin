@@ -14,14 +14,76 @@
 //   targets {dock?}              -> {"app", "elements": [{label, role, x, y, w, h, area}]}: the front app's window and menu bar (and the Dock)
 //   browser                      -> brings the default browser forward, {"name"}
 //   front                        -> {"app", "bundle", "title", "idle", "frame"?}: the app in front, its window title, seconds since the last input
+//   ptt-on                       -> starts Clicky-style hold Control+Option watch; emits {"event":"ptt","phase":"down"|"up"} lines
+//   ptt-off                      -> stops the watch
 import AppKit
 import ApplicationServices
 import Foundation
 
+let outLock = NSLock()
 func emit(_ value: [String: Any]) {
   let data = try! JSONSerialization.data(withJSONObject: value, options: [])
+  outLock.lock()
   FileHandle.standardOutput.write(data)
   FileHandle.standardOutput.write("\n".data(using: .utf8)!)
+  outLock.unlock()
+}
+
+/** Clicky-style push-to-talk: hold Control+Option (listen-only CGEvent tap). */
+final class PttWatch {
+  static let shared = PttWatch()
+  private var tap: CFMachPort?
+  private var loop: CFRunLoop?
+  private var held = false
+  private let lock = NSLock()
+
+  private func matching(_ flags: CGEventFlags) -> Bool {
+    let mods: CGEventFlags = [.maskControl, .maskAlternate, .maskShift, .maskCommand]
+    return flags.intersection(mods) == [.maskControl, .maskAlternate]
+  }
+
+  @discardableResult
+  func start() -> Bool {
+    lock.lock(); defer { lock.unlock() }
+    if tap != nil { return true }
+    let mask = (1 << CGEventType.flagsChanged.rawValue)
+    guard let port = CGEvent.tapCreate(
+      tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
+      eventsOfInterest: CGEventMask(mask),
+      callback: { _, type, event, refcon in
+        guard let refcon else { return Unmanaged.passUnretained(event) }
+        let watch = Unmanaged<PttWatch>.fromOpaque(refcon).takeUnretainedValue()
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+          if let t = watch.tap { CGEvent.tapEnable(tap: t, enable: true) }
+          return Unmanaged.passUnretained(event)
+        }
+        let down = watch.matching(event.flags)
+        watch.lock.lock()
+        let was = watch.held
+        watch.held = down
+        watch.lock.unlock()
+        if down != was { emit(["ok": true, "event": "ptt", "phase": down ? "down" : "up"]) }
+        return Unmanaged.passUnretained(event)
+      },
+      userInfo: Unmanaged.passUnretained(self).toOpaque()
+    ) else { return false }
+    tap = port
+    let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0)
+    DispatchQueue.global(qos: .userInteractive).async {
+      self.loop = CFRunLoopGetCurrent()
+      CFRunLoopAddSource(self.loop, source, .commonModes)
+      CGEvent.tapEnable(tap: port, enable: true)
+      CFRunLoopRun()
+    }
+    return true
+  }
+
+  func stop() {
+    lock.lock(); defer { lock.unlock() }
+    if let t = tap { CGEvent.tapEnable(tap: t, enable: false) }
+    if let l = loop { CFRunLoopStop(l) }
+    tap = nil; loop = nil; held = false
+  }
 }
 
 func cursor() -> CGPoint { CGEvent(source: nil)?.location ?? .zero }
@@ -287,6 +349,17 @@ func handle(_ m: [String: Any]) throws -> [String: Any] {
     // Let NSWorkspace catch up first: this process has no run loop, so its list goes stale otherwise.
     RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
     return ["names": NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }.compactMap { $0.localizedName }]
+  case "ptt-on":
+    guard AXIsProcessTrusted() else {
+      throw NSError(domain: "pointer", code: 3, userInfo: [NSLocalizedDescriptionKey: "Switch on Accessibility for Peguin (or Electron) so Control+Option push-to-talk can work."])
+    }
+    guard PttWatch.shared.start() else {
+      throw NSError(domain: "pointer", code: 4, userInfo: [NSLocalizedDescriptionKey: "Couldn't watch Control+Option. Switch Accessibility off and on for Peguin (or Electron), then toggle Voice control again."])
+    }
+    return ["watching": true]
+  case "ptt-off":
+    PttWatch.shared.stop()
+    return ["watching": false]
   default: throw NSError(domain: "pointer", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown command"])
   }
 }

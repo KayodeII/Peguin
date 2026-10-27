@@ -14,10 +14,13 @@ type Found = { claude: boolean; codex: boolean } | null;
 const STEPS = ["welcome", "you", "work", "ai", "standup", "permissions", "account", "done"] as const;
 type Step = (typeof STEPS)[number];
 
+/** The AI coding tools whose prompts count as sessions; one switch here, one each in Sources. */
+const SESSIONS = ["claude_code", "codex", "cursor", "gemini", "copilot", "continue", "deepseek"] as const;
+
 const SOURCES = {
-  git: { name: "Git commits", desc: "Commits you made in repos on this Mac. Found without any login." },
-  github: { name: "GitHub", desc: "PRs you opened, merged or reviewed, through the GitHub CLI you're already signed in to." },
-  claude_code: { name: "Claude Code", desc: "The prompts you gave Claude Code, so work in progress counts. Never code or Claude's output." },
+  git: { icon: "git", name: "Git commits", desc: "Commits you made in repos on this Mac. Found without any login." },
+  github: { icon: "github", name: "GitHub", desc: "PRs you opened, merged or reviewed, through the GitHub CLI. Not signed in? Connect it in Sources." },
+  sessions: { icon: "claude_code", name: "AI coding sessions", desc: "The prompts you gave Claude Code, Codex, Cursor, Gemini and other coding AIs, so work in progress counts. Never code or their output." },
 } as const;
 
 const AIS: { id: Settings["ai"]; name: string; desc: string; detect?: "claude" | "codex"; get: string }[] = [
@@ -114,14 +117,18 @@ export function Onboarding({ settings, save, done, model, account }: {
               <div className="ob-art"><span className="ob-icon"><Icon name="sources" size={30} /></span></div>
               <h2 id="ob-title">Where your update comes from</h2>
               <p className="ob-sub">Peguin reads the titles and statuses of your recent work since the previous workday. It never reads your code, and nothing is uploaded to Peguin.</p>
-              {(Object.keys(SOURCES) as (keyof typeof SOURCES)[]).map((id) => (
-                <div key={id} className="row-card compact">
-                  <BrandIcon id={id} size={28} />
-                  <div className="row-main"><strong>{SOURCES[id].name}</strong><p>{SOURCES[id].desc}</p></div>
-                  <Toggle on={sources[id]} onChange={(v) => setSources({ ...sources, [id]: v })} label={SOURCES[id].name} />
-                </div>
-              ))}
-              <p className="hint">Later, in Sources: connect Linear or Jira, or turn on On this Mac (the apps you spent time in).</p>
+              {(Object.keys(SOURCES) as (keyof typeof SOURCES)[]).map((id) => {
+                const on = id === "sessions" ? SESSIONS.some((k) => sources[k]) : sources[id];
+                const set = (v: boolean) => setSources(id === "sessions" ? { ...sources, ...Object.fromEntries(SESSIONS.map((k) => [k, v])) } : { ...sources, [id]: v });
+                return (
+                  <div key={id} className="row-card compact">
+                    <BrandIcon id={SOURCES[id].icon} size={28} />
+                    <div className="row-main"><strong>{SOURCES[id].name}</strong><p>{SOURCES[id].desc}</p></div>
+                    <Toggle on={on} onChange={set} label={SOURCES[id].name} />
+                  </div>
+                );
+              })}
+              <p className="hint">Later, in Sources: connect Linear or Jira, pick which coding AIs count, or turn on On this Mac (the apps you spent time in).</p>
             </>
           )}
 
