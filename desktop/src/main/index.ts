@@ -22,6 +22,7 @@ import { allowed, checkWeeklyLimit, currentFeatures, currentPlan, recordJoin } f
 import { canSelfUpdate, installOnExit, prepareUpdate, updateReady, type UpdateState } from "./updater.js";
 import { loadSettings, saveSettings } from "./settings.js";
 import { clearLog, WorkLog } from "./watch/index.js";
+import { sh } from "./context/exec.js";
 import { contextBank } from "./contextBank.js";
 import { devEnv, fixPath, outDir, resource } from "./paths.js";
 import { ensureModel } from "./speech/model.js";
@@ -570,6 +571,12 @@ handle("voice:say-word", async (_e, word: string) => {
 // The owner's xAI key: Grok as their AI (Settings > AI) and/or as the standard voice.
 const xaiStatus = () => { const x = loadXai(); return { connected: !!x, models: x?.models ?? [] }; };
 handle("xai:status", () => xaiStatus());
+// First run: which of the owner's AIs are installed on this Mac.
+handle("ai:detect", async () => {
+  const has = (cmd: string) => sh(cmd, ["--version"], { timeoutMs: 8000 }).then(() => true, () => false);
+  const [claude, codex] = await Promise.all([has("claude"), has("codex")]);
+  return { claude, codex };
+});
 handle("xai:connect", async (_e, apiKey: string) => {
   const key = String(apiKey ?? "").trim();
   if (!key) throw new Error("Paste your xAI API key.");

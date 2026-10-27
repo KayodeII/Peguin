@@ -2,6 +2,10 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-27: A first run that explains each step
+
+The owner asked for a first start like Tailscale's: the old welcome was one form (name, link, time, sources) that didn't say what Peguin does or why it needs anything. The first run is now eight short steps, each with a sentence on why: what Peguin does, your name (it listens for it), sources (titles and statuses, never code), your AI (Claude Code and Codex detected with `--version`), your standup, what macOS will ask for and when, signing in for the trial, and the menu bar. Permissions are explained, not requested: macOS still asks when a feature first needs it, so setup never opens a system prompt the owner didn't trigger. Nothing is saved until the last step, so quitting halfway shows the first run again.
+
 ## 2026-10-24: Recaps for copilot meetings
 
 The owner chose this as the next feature. Copilot meetings now get a recap in `#recaps`, from the same `MeetingLog` with `kind: "copilot"`, so one list, one retention setting and one summary path serve both. Differences, because the owner was there themselves: suggestions are stored on the question, not as something Peguin said; only "Not in your notes." questions become follow-ups ("Follow up on: ..."); questions with no suggestion in time are "skipped", not follow-ups; the summary prompt says the owner's words are missing and must not be guessed. It's on by default like Peguin's own recaps, with its own switch in Settings > Recaps, since it keeps other people's words from meetings Peguin didn't join; the Privacy Policy says so.

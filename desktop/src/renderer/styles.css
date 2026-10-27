@@ -428,3 +428,46 @@ details.advanced[open] > summary::after { transform: rotate(90deg); }
 .bank-day time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .bank-facts li { padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--raised); border-radius: 4px; font-size: 13.5px; }
 .bank-note { margin-top: 18px; }
+
+/* First run: one step at a time, over the whole window. */
+.ob { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: var(--side); overflow: auto; }
+.ob-card { width: min(560px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: var(--main); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.ob-body { padding: 32px 36px 8px; overflow: auto; }
+.ob-art { display: flex; justify-content: center; margin-bottom: 8px; }
+.ob-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 18px; background: var(--accent-soft); color: var(--accent); }
+.ob h2 { text-align: center; margin: 8px 0 6px; color: var(--ink-strong); font-size: 24px; }
+.ob-sub { text-align: center; color: var(--muted); margin: 0 auto 22px; max-width: 440px; line-height: 1.5; }
+.ob-note { text-align: center; color: var(--muted); font-size: 13px; margin: 18px 0 4px; }
+.ob-feature { display: flex; gap: 14px; align-items: flex-start; margin: 0 0 14px; }
+.ob-feature-icon { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--active); color: var(--ink-strong); }
+.ob-feature strong { color: var(--ink-strong); }
+.ob-feature p { margin: 2px 0 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.ob-feature em { font-style: normal; color: var(--ink); }
+.ob .row-card { background: var(--side); }
+.ob-choices { display: grid; gap: 10px; }
+.ob-choice { display: flex; gap: 12px; align-items: flex-start; text-align: left; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--side); color: var(--ink); }
+.ob-choice:hover { background: var(--hover); }
+.ob-choice.on { border-color: var(--accent); background: var(--accent-soft); }
+.ob-radio { flex: none; width: 18px; height: 18px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--muted); }
+.ob-choice.on .ob-radio { border: 5px solid var(--accent); }
+.ob-choice-main { display: grid; gap: 3px; font-size: 14px; }
+.ob-choice-main strong { color: var(--ink-strong); font-size: 15px; }
+.ob-choice-main .ok { color: var(--green); display: inline-flex; align-items: center; gap: 4px; }
+.ob-choice-main .muted { color: var(--muted); }
+.ob-model { margin-top: 6px; padding: 14px; border-radius: 10px; background: var(--side); }
+.ob-model strong { color: var(--ink-strong); }
+.ob-model p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.ob-model p.ok { color: var(--green); display: flex; align-items: center; gap: 4px; margin-top: 8px; }
+.ob-model p.warn { color: var(--red); }
+.ob-progress { position: relative; height: 8px; margin-top: 10px; border-radius: 4px; background: var(--active); }
+.ob-progress span { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--accent); transition: width .3s; }
+.ob-progress em { position: absolute; right: 0; top: 10px; font-style: normal; font-size: 12px; color: var(--muted); }
+.ob-signed { display: flex; justify-content: center; align-items: center; gap: 6px; color: var(--green); }
+.ob-signed strong { color: var(--ink-strong); }
+.ob-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 36px 20px; border-top: 1px solid var(--line); }
+.ob-dots { display: flex; gap: 6px; }
+.ob-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.ob-dots span.past { background: var(--muted); }
+.ob-dots span.on { background: var(--accent); width: 18px; border-radius: 4px; }
+.ob-actions { display: flex; gap: 8px; align-items: center; }
+@media (max-width: 520px) { .ob-body { padding: 24px 18px 8px; } .ob-foot { padding: 14px 18px 16px; } }
