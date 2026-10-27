@@ -16,16 +16,21 @@ function towards(a: { x: number; y: number }, b: { x: number; y: number }) {
 
 type Rect = { x: number; y: number; w: number; h: number };
 type Mark = { id: number; shape: "circle" | "box" | "arrow" | "underline" | "highlight" | "pen"; rect: Rect; points?: [number, number][] };
-type Bridge = { onEvent: (fn: (e: OverlayEvent) => void) => void; pcm: (b: ArrayBuffer) => void; micError: (why: string) => void; penDone: () => void };
+type Bridge = { onEvent: (fn: (e: OverlayEvent) => void) => void; ready: () => void; pcm: (b: ArrayBuffer) => void; micError: (why: string) => void; penDone: () => void };
 declare global { interface Window { peguinPointer?: Bridge } }
 
 let bound = false; // StrictMode runs effects twice in development; bind the bridge once
+let micStarted = false; // origin can arrive twice (load + ready); only open the mic once
 const CAPTION_MS = 2600;
 
 async function startMic(bridge: Bridge) {
+  if (micStarted) return;
+  micStarted = true;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
     const ctx = new AudioContext({ sampleRate: 24000 });
+    // Chromium often starts the context suspended; without resume, dictation gets silence forever.
+    if (ctx.state === "suspended") await ctx.resume();
     const src = ctx.createMediaStreamSource(stream);
     const proc = ctx.createScriptProcessor(2048, 1, 1);
     const mute = ctx.createGain();
@@ -40,6 +45,7 @@ async function startMic(bridge: Bridge) {
       bridge.pcm(out.buffer);
     };
   } catch (e) {
+    micStarted = false;
     bridge.micError(e instanceof Error ? e.message : String(e));
   }
 }
@@ -133,7 +139,9 @@ export function PointerOverlay() {
           window.clearTimeout(timer.current);
           setMode({ mode: e.mode, text: e.text, key: ++ids.current });
           // Working and warn fade back to idle; hearing waits for the command (main ends it).
-          if (e.mode === "working" || e.mode === "warn") timer.current = window.setTimeout(() => setMode({ mode: "idle", key: ++ids.current }), e.mode === "warn" ? CAPTION_MS * 2 : CAPTION_MS);
+          // Quota / long warn lines stay long enough to read under the cursor.
+          const warnMs = e.mode === "warn" ? Math.max(CAPTION_MS * 3, Math.min(12000, 40 * (e.text?.length ?? 0))) : CAPTION_MS;
+          if (e.mode === "working" || e.mode === "warn") timer.current = window.setTimeout(() => setMode({ mode: "idle", key: ++ids.current }), warnMs);
           if (e.mode === "hearing") timer.current = window.setTimeout(() => setMode({ mode: "idle", key: ++ids.current }), 12000);
           return;
         case "numbers": setNumbers(e.items.map((i) => ({ ...i, ...local(i) }))); return;
@@ -142,6 +150,8 @@ export function PointerOverlay() {
         case "clear": setMarks([]); setNumbers([]); return;
       }
     });
+    // Ask main to (re)send origin/mic — did-finish-load can beat this effect, which left dictation silent.
+    bridge.ready();
   }, []);
 
   useEffect(() => {
@@ -178,10 +188,16 @@ export function PointerOverlay() {
       </svg>
       {numbers.map((b) => <div key={b.n} className="badge" style={{ left: b.x, top: b.y }}>{b.n}</div>)}
       {agent && (
-        <div className={`agent ${c.shape} ${agent.animate ? "moving" : ""} ${agent.docked && style.island ? "docked" : ""} ${m === "hearing" ? "hearing" : ""}`} style={{ transform: `translate(${agent.x}px, ${agent.y}px)`, ...(agent.ms ? { "--glide": `${agent.ms}ms` } : {}) } as React.CSSProperties}>
+        <div className={`agent ${c.shape} ${agent.animate ? "moving" : ""} ${agent.docked && style.island ? "docked" : ""} ${m === "hearing" ? "hearing" : ""} ${m === "warn" ? "warn" : ""}`} style={{ transform: `translate(${agent.x}px, ${agent.y}px)`, ...(agent.ms ? { "--glide": `${agent.ms}ms` } : {}) } as React.CSSProperties}>
           <svg className="arrow" width="34" height="34" viewBox="0 0 34 34" aria-hidden><CursorArt shape={c.shape} color={c.color} gaze={gaze} wide={hearing} /></svg>
           {c.shape === "penguin" ? <span className="bubble"><Wave /></span> : <span className="blob"><Wave /></span>}
           {agent.animate && <span key={agent.key} className="pulse" />}
+          {(m === "working" || m === "warn") && mode.text && (
+            <div key={mode.key} className={`callout ${m}`} role="status">
+              <span className="callout-caret" aria-hidden />
+              <p className="callout-body">{mode.text}</p>
+            </div>
+          )}
         </div>
       )}
       {island && style.island && (island.notch ? (
@@ -193,13 +209,13 @@ export function PointerOverlay() {
             <span className="cam" />
             <span className="ear r"><Wave n={m === "hearing" ? 5 : 3} /></span>
           </div>
-          <span key={mode.key} className="island-text">{m === "hearing" ? "Listening…" : m === "working" || m === "warn" ? mode.text : ""}</span>
+          <span key={mode.key} className="island-text">{m === "hearing" ? (mode.text || "Listening…") : m === "working" || m === "warn" ? mode.text : ""}</span>
         </div>
       ) : (
         <div className={`island float ${m}`}>
           <span className="dot" />
           <span key={mode.key} className="island-text">
-            {m === "hearing" ? "Listening…" : m === "working" || m === "warn" ? mode.text : "Peguin"}
+            {m === "hearing" ? (mode.text || "Listening…") : m === "working" || m === "warn" ? mode.text : "Peguin"}
           </span>
           <Wave n={m === "hearing" ? 5 : 3} />
         </div>
@@ -242,6 +258,22 @@ html.pointer-overlay, html.pointer-overlay body, html.pointer-overlay #root { ba
 .agent .blob { scale: var(--size); }
 .agent.hearing .blob { opacity: 1; transform: scale(calc(1 + var(--lvl, 0) * .35)); }
 .agent .pulse { position: absolute; left: 3px; top: 2px; width: 10px; height: 10px; margin: -5px; border-radius: 50%; border: 2px solid var(--pg); opacity: 0; animation: pulse .7s ease-out var(--glide) 2; }
+/* Rectangular callout under Peguin's cursor: status and out-of-uses lines. */
+.callout { position: absolute; left: 4px; top: 40px; width: max-content; max-width: 260px; min-width: 148px; box-sizing: border-box;
+  display: grid; grid-template-columns: 3px 1fr; align-items: stretch; gap: 0;
+  background: #1a1a1a; color: #f4f4f2; border: 1px solid rgba(255, 255, 255, .14); border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .45); pointer-events: none; animation: callout-in .22s cubic-bezier(.2, 1.1, .4, 1); z-index: 2;
+  overflow: visible; }
+.callout::before { content: ""; grid-column: 1; background: var(--pg); border-radius: 5px 0 0 5px; }
+.callout-body { grid-column: 2; margin: 0; padding: 8px 11px 9px; font: 600 12px/1.4 -apple-system, "SF Pro Text", sans-serif;
+  letter-spacing: -0.01em; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.callout-caret { position: absolute; left: 10px; top: -6px; width: 10px; height: 6px; background: #1a1a1a;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%); filter: drop-shadow(0 -1px 0 rgba(255, 255, 255, .14)); }
+.callout.warn { background: #2a1410; border-color: rgba(255, 120, 90, .35); }
+.callout.warn::before { background: #ff5a36; }
+.callout.warn .callout-caret { background: #2a1410; filter: drop-shadow(0 -1px 0 rgba(255, 120, 90, .35)); }
+.callout.warn .callout-body { color: #ffe8e0; }
+@keyframes callout-in { from { opacity: 0; transform: translateY(-4px) scale(.96); } to { opacity: 1; transform: none; } }
 .wave { display: inline-flex; gap: 2.5px; align-items: center; height: 18px; }
 .wave i { width: 3px; border-radius: 2px; background: #fff; height: calc(3px + var(--b) * (3px + var(--lvl, 0) * 26px)); animation: wobble .8s ease-in-out infinite alternate; }
 .island { position: absolute; left: 50%; top: 0; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; color: #fff; background: #000;

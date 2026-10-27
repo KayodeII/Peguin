@@ -15,7 +15,7 @@ import { createListener, type Whisper } from "../speech/whisper.js";
 import { glanceTarget, nextDrift, roamTarget } from "./roam.js";
 import { canType, drivePrompt, finishes, listTabs, stuck, MAX_STEPS, observe, readStep, screenKey, stepLine, type Seen, type Step } from "./drive.js";
 import { BROWSERS, closeScript, listScript, readTabs, switchScript, type Tab } from "./tabs.js";
-import { centre, commandPrompt, dockLabel, fragment, matchApp, describe, Echo, isFiller, matchTarget, parse, searchUrl, wake, type Action, type Element, type Shape, type Target } from "./commands.js";
+import { centre, commandPrompt, dockLabel, fragment, matchApp, describe, Echo, isFiller, matchTarget, parse, searchUrl, softenSpeech, wake, type Action, type Element, type Shape, type Target } from "./commands.js";
 
 /** What the copilot hears from the meeting; a matching "Hey Peguin" from the mic came out of the speakers. */
 export const echo = new Echo();
@@ -25,7 +25,7 @@ export const echo = new Echo();
  * else (and opening or quitting an app whose name doesn't match one on this Mac)
  * goes to the owner's AI, which sees the screen, the tabs and the running apps.
  */
-const INSTANT = new Set<Action["kind"]>(["scroll", "key", "type", "draw", "clear", "numbers", "stop"]);
+const INSTANT = new Set<Action["kind"]>(["scroll", "key", "type", "draw", "clear", "numbers", "screenshot", "stop"]);
 /** Told to the AI when the words may not have been for Peguin: after a bare "Hey", or as a follow-up to the last request. */
 const UNSURE = {
   greeting: "This may not have been said to Peguin: \"Hey\" is also how the owner greets a person (\"Hey John, …\"). Unless it's clearly a request to do something on this computer, reply {\"action\":\"stop\",\"say\":\"not a request\"}.",
@@ -142,6 +142,8 @@ export class Helper {
   private proc: ChildProcess | null = null;
   private waiting = new Map<number, (r: Reply) => void>();
   private id = 0;
+  /** Unsolicited lines from the helper (Clicky-style Control+Option push-to-talk). */
+  onEvent: ((e: { event: string; phase?: string }) => void) | null = null;
 
   private start() {
     const p = spawn(pointerHelperPath(), [], { stdio: ["pipe", "pipe", "ignore"] });
@@ -152,8 +154,9 @@ export class Helper {
       this.waiting.clear();
     });
     createInterface({ input: p.stdout! }).on("line", (line) => {
-      let r: Reply & { id?: number };
+      let r: Reply & { id?: number; event?: string; phase?: string };
       try { r = JSON.parse(line); } catch { return; }
+      if (r.event) { this.onEvent?.({ event: r.event, phase: r.phase }); return; }
       const done = this.waiting.get(r.id ?? -1);
       if (done) { this.waiting.delete(r.id!); done(r); }
     });
@@ -190,7 +193,7 @@ const pad = (r: Rect, n: number): Rect => ({ x: r.x - n, y: r.y - n, w: r.w + 2 
 export class VoiceControl {
   private helper = new Helper();
   private overlays = new Map<number, BrowserWindow>();
-  private listen: ((chunk: ArrayBuffer) => void) | null = null;
+  private listen: (((chunk: ArrayBuffer) => void) & { flush: () => boolean }) | null = null;
   private armedUntil = 0;
   private numbered: Element[] = [];
   private penWindow: BrowserWindow | null = null;
@@ -207,6 +210,8 @@ export class VoiceControl {
   private eyes: NodeJS.Timeout | null = null;
   private roamTimer: NodeJS.Timeout | null = null;
   private chunks = 0;
+  /** Holding Control+Option (Clicky-style push-to-talk). */
+  private holding = false;
   /** The armed window is a follow-up after a command (not "Hey Peguin" on its own). */
   private followUp = false;
   /** Woken by a bare "Hey" (not the name): the request must be a clear one. */
@@ -256,21 +261,18 @@ export class VoiceControl {
   async start() {
     if (this.running) return this.status();
     if (!existsSync(pointerHelperPath())) throw new Error("Voice control is missing from this install. Reinstall Peguin, or run `npm run setup:pointer` in desktop/.");
-    if (process.platform === "darwin" && !(await systemPreferences.askForMediaAccess("microphone"))) {
-      throw new Error("Peguin needs your microphone to hear “Hey Peguin”. Allow it in System Settings > Privacy & Security > Microphone.");
+    // Ask up front, but don't abort: the overlay also calls getUserMedia, and a denied
+    // permission used to leave dictation dead with no overlay and no way to retry.
+    let micDenied = false;
+    if (process.platform === "darwin") {
+      const ok = await systemPreferences.askForMediaAccess("microphone");
+      micDenied = !ok;
+      if (!ok) debug("mic permission not granted yet");
     }
     const w = await this.whisper();
-    const s = this.settings();
-    this.listen = createListener({
-      whisperUrl: w.url,
-      names: [s.displayName || "the owner"],
-      prompt: () => commandPrompt(this.settings().pointer.wakeWords[0] ?? "Peguin"),
-      endSilenceMs: 900, // long enough for a pause mid-sentence ("close my Gmail on the… other window")
-      rate: MIC_RATE,
-      onUtterance: ({ text, pcm }) => this.heard(text, pcm),
-      onError: (e) => { debug(`stt error: ${message(e)}`); this.update({ error: `Speech recognition error: ${message(e)}` }); },
-    });
     this.running = true;
+    this.helper.onEvent = (e) => { if (e.event === "ptt" && (e.phase === "down" || e.phase === "up")) this.ptt(e.phase); };
+    this.openListen(w.url);
     cameraNotch = await this.helper.call<{ w?: number }>("notch").then((r) => r.w || null, () => null);
     this.openOverlays();
     const rebuild = () => { if (this.running) { this.closeOverlays(); this.openOverlays(); } };
@@ -278,7 +280,7 @@ export class VoiceControl {
     screen.on("display-removed", rebuild);
     screen.on("display-metrics-changed", rebuild);
     this.detach.push(() => { screen.removeListener("display-added", rebuild); screen.removeListener("display-removed", rebuild); screen.removeListener("display-metrics-changed", rebuild); });
-    this.bindShortcut();
+    await this.bindTrigger();
     // The penguin's eye follows the owner's mouse (only when it moved; ~8 times a second).
     let last = "";
     this.eyes = setInterval(() => {
@@ -290,23 +292,70 @@ export class VoiceControl {
     const rate = setInterval(() => { debug(`mic chunks in the last 10 s: ${this.chunks}`); this.chunks = 0; }, 10000);
     this.detach.push(() => clearInterval(rate));
     const st = await this.status();
-    this.update({ ...st, error: st.trusted ? undefined : `Switch on ${st.appName} under Accessibility so Peguin can click and type.` });
+    const error = micDenied
+      ? "Allow Electron (or Peguin) under System Settings > Privacy & Security > Microphone, then toggle Voice control off and on."
+      : !st.trusted ? `Switch on ${st.appName} under Accessibility so Peguin can click, type and hold Control+Option.`
+      : this.lastStatus.error; // keep a ptt-on failure from bindTrigger
+    this.update({ ...st, error });
     return this.lastStatus;
   }
 
   async stop() {
     this.running = false;
+    this.holding = false;
     if (this.homeTimer) clearTimeout(this.homeTimer);
     if (this.roamTimer) clearTimeout(this.roamTimer);
     if (this.eyes) clearInterval(this.eyes);
     this.eyes = null;
     this.listen = null;
+    this.helper.onEvent = null;
     if (this.shortcut) globalShortcut.unregister(this.shortcut);
     this.shortcut = "";
     for (const d of this.detach.splice(0)) d();
     this.closeOverlays();
     this.helper.stop();
     this.update({ on: false });
+  }
+
+  /** Whisper listener; hold-to-talk waits for release instead of a short pause. */
+  private openListen(whisperUrl: string) {
+    const s = this.settings();
+    const hold = s.pointer.trigger === "hold";
+    this.listen = createListener({
+      whisperUrl,
+      names: [s.displayName || "the owner"],
+      prompt: () => commandPrompt(this.settings().pointer.wakeWords[0] ?? "Peguin"),
+      // Hold: speak while keys are down, run on release (Clicky). Wake: pause ends the line.
+      endSilenceMs: hold ? 60_000 : 900,
+      rate: MIC_RATE,
+      // While Control+Option is down, only release (flush) ends the utterance — not a mid-hold pause.
+      canAutoFinish: () => !this.holding,
+      onUtterance: ({ text, pcm }) => this.heard(text, pcm),
+      onError: (e) => { debug(`stt error: ${message(e)}`); this.update({ error: `Speech recognition error: ${message(e)}` }); },
+    });
+  }
+
+  /**
+   * Clicky-style push-to-talk and/or the press shortcut + wake words.
+   * Hold Control+Option to speak; release to run. Needs Accessibility on the helper.
+   */
+  async bindTrigger() {
+    if (!this.running) return;
+    const t = this.settings().pointer.trigger;
+    if (t === "hold" || t === "both") {
+      await this.helper.call("ptt-on").catch((e) => {
+        debug(`ptt-on: ${message(e)}`);
+        this.update({ error: message(e) });
+      });
+    } else {
+      await this.helper.call("ptt-off").catch(() => {});
+      this.holding = false;
+    }
+    // Press-to-arm shortcut when wake words are in play; hold-only uses Control+Option.
+    if (t === "wake" || t === "both") this.bindShortcut();
+    else if (this.shortcut) { globalShortcut.unregister(this.shortcut); this.shortcut = ""; }
+    const w = await this.whisper().catch(() => null);
+    if (w) this.openListen(w.url);
   }
 
   /** The shortcut (Settings) arms one command without the wake phrase. */
@@ -323,6 +372,44 @@ export class VoiceControl {
     }
   }
 
+  /** Control+Option down: listen. Up: finish the utterance and run it. */
+  private ptt(phase: "down" | "up") {
+    if (!this.running) return;
+    const t = this.settings().pointer.trigger;
+    if (t !== "hold" && t !== "both") return;
+    if (phase === "down") {
+      this.holding = true;
+      debug("ptt down");
+      // Stay armed for the whole hold; follow-up timer must not idle mid-hold.
+      this.armedUntil = Date.now() + 120_000;
+      this.armedBare = false;
+      this.followUp = false;
+      this.mode("hearing", "Hold ⌃⌥ — speak…");
+      this.armTimer();
+      return;
+    }
+    this.holding = false;
+    const sent = this.listen?.flush() ?? false;
+    debug(`ptt up sent=${sent}`);
+    if (!sent) {
+      // Empty tap: don't sit on "listening" with the mic gated off.
+      this.armedUntil = 0;
+      this.mode("warn", "Hold ⌃⌥ while you speak, then release");
+      return;
+    }
+    this.mode("working", "Got it…");
+    // Keep armed until heard() runs the transcript.
+    this.armedUntil = Date.now() + 30_000;
+    this.armTimer();
+  }
+
+  /** Hold mode: drop the armed window and go idle (mic is gated unless keys are down). */
+  private holdIdle() {
+    if (this.settings().pointer.trigger !== "hold" || this.holding) return;
+    this.armedUntil = 0;
+    this.mode("idle");
+  }
+
   /** Woken ("Hey Peguin", "Hey", the shortcut): the next line is the request, for the owner's few seconds (Settings). */
   private async arm(bare = false) {
     this.armedUntil = Date.now() + this.settings().pointer.listenS * 1000;
@@ -336,6 +423,7 @@ export class VoiceControl {
   private armTimer() {
     if (this.armCheck) clearTimeout(this.armCheck);
     this.armCheck = setTimeout(() => {
+      if (this.holding) { this.armedUntil = Math.max(this.armedUntil, Date.now() + 1000); this.armTimer(); return; }
       if (!this.armedUntil || this.followUp) return;
       if (Date.now() < this.armedUntil) { this.armTimer(); return; }
       this.armedUntil = 0;
@@ -345,6 +433,8 @@ export class VoiceControl {
 
   /** After a request, follow-ups for the owner's few seconds without the wake word. */
   private listenOn() {
+    // Hold-to-talk: the next command is another Control+Option hold, not ambient follow-ups.
+    if (this.settings().pointer.trigger === "hold") return;
     const s = this.settings().pointer.followS;
     if (!s) return;
     this.armedUntil = Date.now() + s * 1000;
@@ -375,13 +465,9 @@ export class VoiceControl {
       win.setIgnoreMouseEvents(true);
       if (this.page.url) void win.loadURL(`${this.page.url}#pointer`);
       else void win.loadFile(this.page.file!, { hash: "pointer" });
-      // Only the primary display's window listens to the mic.
+      // Seed once loaded; the overlay also asks again via pointer:ready (React can bind late).
       win.webContents.once("did-finish-load", () => {
-        const { bar, notchW } = topOf(d);
-        win.webContents.send("pointer:event", { kind: "origin", x: b.x, y: b.y, mic: d.id === primary, island: d.id === primary, notch: notchW > 0, bar, notchW } satisfies OverlayEvent);
-        const p = this.settings().pointer;
-        win.webContents.send("pointer:event", { kind: "style", cursor: p.cursor, island: p.island } satisfies OverlayEvent);
-        win.webContents.send("pointer:event", { kind: "agent", ...this.agent, ring: null, animate: false, docked: this.docked } satisfies OverlayEvent);
+        this.seedOverlay(win, d, primary);
         win.showInactive();
       });
       this.overlays.set(d.id, win);
@@ -391,9 +477,33 @@ export class VoiceControl {
       ipcMain.on(channel, h);
       this.detach.push(() => ipcMain.removeListener(channel, h));
     };
-    on("pointer:pcm", (_e, buf: ArrayBuffer) => { this.chunks++; this.listen?.(buf); });
+    on("pointer:ready", (e) => {
+      const entry = [...this.overlays.entries()].find(([, w]) => w.webContents === e.sender);
+      if (!entry) return;
+      const [id, win] = entry;
+      const d = screen.getAllDisplays().find((x) => x.id === id) ?? screen.getPrimaryDisplay();
+      this.seedOverlay(win, d, screen.getPrimaryDisplay().id);
+      debug(`overlay ready: display ${id} mic=${id === screen.getPrimaryDisplay().id}`);
+    });
+    on("pointer:pcm", (_e, buf: ArrayBuffer) => {
+      this.chunks++;
+      // Hold-only: ignore the room until Control+Option is down (Clicky).
+      if (this.settings().pointer.trigger === "hold" && !this.holding) return;
+      this.listen?.(buf);
+    });
     on("pointer:mic-error", (_e, why: string) => { debug(`mic error: ${why}`); this.update({ error: `Can't hear your microphone (${String(why)}).` }); });
     on("pointer:pen-done", () => this.penOff());
+  }
+
+  /** Origin, style and cursor for one overlay. `mic` only on the primary display. */
+  private seedOverlay(win: BrowserWindow, d: Electron.Display, primaryId: number) {
+    if (win.isDestroyed()) return;
+    const b = d.bounds;
+    const { bar, notchW } = topOf(d);
+    win.webContents.send("pointer:event", { kind: "origin", x: b.x, y: b.y, mic: d.id === primaryId, island: d.id === primaryId, notch: notchW > 0, bar, notchW } satisfies OverlayEvent);
+    const p = this.settings().pointer;
+    win.webContents.send("pointer:event", { kind: "style", cursor: p.cursor, island: p.island } satisfies OverlayEvent);
+    win.webContents.send("pointer:event", { kind: "agent", ...this.agent, ring: null, animate: false, docked: this.docked } satisfies OverlayEvent);
   }
 
   private closeOverlays() {
@@ -442,29 +552,32 @@ export class VoiceControl {
 
   // MARK: hearing
 
-  private heard(text: string, pcm?: Buffer) {
+  private heard(raw: string, pcm?: Buffer) {
+    const text = softenSpeech(raw);
     const p = this.settings().pointer;
     // "Hey" alone wakes Peguin only when the owner chose it, and never in a meeting, where "Hey" is for people.
     const hey = p.wake === "hey" && !this.copilotLive();
-    debug(`heard: ${JSON.stringify(text)} (wake: ${JSON.stringify(wake(text, p.wakeWords, hey))})`);
+    debug(`heard: ${JSON.stringify(text)}${text !== raw ? ` (was ${JSON.stringify(raw)})` : ""} (wake: ${JSON.stringify(wake(text, p.wakeWords, hey))})`);
     if (!this.running) return;
     const now = Date.now();
     const armed = now < this.armedUntil;
     const names = p.wakeWords;
-    if (isFiller(text, names[0])) return;
     const h = wake(text, names, hey);
     // The answer to a question Peguin just asked: back to the same task, with the answer.
     // Only a short answer counts: a TV or a video in the room talks in long sentences.
+    // Checked before isFiller so "hello" / "hi" still count as the message to send.
     const asked = this.asked && now < this.asked.until && !h && text.trim().split(/\s+/).length <= ANSWER_WORDS ? this.asked : null;
     if (asked) {
       this.asked = null;
       this.armedUntil = 0;
-      const goal = `${asked.goal}\n(You asked “${asked.question}” and heard: “${text.trim()}”. If that doesn't make sense as the owner's reply, it was probably someone else talking or a TV: stop and say you didn't catch the answer.)`;
+      // Speech may garble short words; the drive prompt already softens aye/I → hi. Keep going unless the reply is clearly off-topic.
+      const goal = `${asked.goal}\n(You asked “${asked.question}” and the owner answered: “${text.trim()}”. Use the most likely reading — short garbles like “aye”/“I” often mean “hi” — and continue the task. Only stop if the reply is clearly about something else.)`;
       debug(`answer: ${JSON.stringify(text)}`);
       this.mode("hearing");
       this.queue = this.queue.then(async () => { if (await this.drive(goal)) this.listenOn(); }).catch((e) => { debug(`failed: ${message(e)}`); void this.caption(message(e), "warn"); });
       return;
     }
+    if (isFiller(text, names[0])) { this.holdIdle(); return; }
     if (h && "armed" in h) { void this.arm(!!h.bare); return; }
     const command = h ? h.command : armed ? text : null;
     const followUp = !h && armed && this.followUp;
@@ -475,6 +588,7 @@ export class VoiceControl {
       // Not for Peguin: dropped, unless Learn my voice keeps it as a clip for the owner to review.
       // Never during a call, when the mic can pick up the meeting from the speakers.
       if (pcm && !this.copilotLive()) this.talk?.(pcm, MIC_RATE, text);
+      this.holdIdle();
       return;
     }
     let action = parse(command);
@@ -483,7 +597,8 @@ export class VoiceControl {
     // A bare "Peguin ..." only counts when it's a known command.
     if (action.kind === "unknown" && h && !h.called && !armed) return;
     // A cut-off scrap ("Hey Peguin, I'm...", "So") isn't the request yet: keep listening for it (talking stretches the wait).
-    if (action.kind === "unknown" && fragment(command)) {
+    // Hold-to-talk already released: nothing more is coming, so don't wait with the mic gated off.
+    if (action.kind === "unknown" && fragment(command) && !(p.trigger === "hold" && !this.holding)) {
       debug(`fragment: ${JSON.stringify(command)}`);
       if (h) void this.arm(!!h.bare);
       else if (armed && !followUp) { this.armedUntil = Math.max(this.armedUntil, now + p.listenS * 1000); this.armTimer(); }
@@ -511,7 +626,12 @@ export class VoiceControl {
       // Addressed to Peguin but not understood: ask the owner's AI what they meant (the words only).
       if (action.kind === "unknown" && (h?.called || (armed && !followUp)) && this.interpret && this.settings().pointer.askAi) {
         this.mode("working", "Working out what you meant…");
-        const guess = await this.interpret(command).catch((e) => { debug(`ai failed: ${message(e)}`); return null; });
+        const guess = await this.interpret(command).catch((e) => {
+          const msg = message(e);
+          debug(`ai failed: ${msg}`);
+          if (/out of uses|session limit|rate.?limit/i.test(msg)) throw e; // show under the cursor
+          return null;
+        });
         debug(`ai: ${JSON.stringify(command)} -> ${JSON.stringify(guess)}`);
         const better = guess ? parse(guess) : null;
         if (better && better.kind !== "unknown") action = better;
@@ -531,7 +651,7 @@ export class VoiceControl {
   async run(a: Action, heard = "") {
     const did = describe(a);
     this.update({ last: { heard, did, at: Date.now() }, error: undefined });
-    const needsHands = !["open-url", "search", "clear", "stop", "unknown", "draw"].includes(a.kind) || (a.kind === "draw" && a.target.by !== "cursor");
+    const needsHands = !["open-url", "search", "clear", "stop", "unknown", "draw", "screenshot"].includes(a.kind) || (a.kind === "draw" && a.target.by !== "cursor");
     if (needsHands && !(await this.status()).trusted) {
       await this.caption("Peguin needs Accessibility to do that. Turn it on in Settings > Voice control.", "warn");
       return;
@@ -592,6 +712,7 @@ export class VoiceControl {
         return;
       }
       case "clear": this.all({ kind: "clear" }); this.numbered = []; return;
+      case "screenshot": await this.takeScreenshot(a.of, did); return;
       case "stop": this.penOff(); this.numbersOff(); this.armedUntil = 0; await this.caption(did); return;
       case "unknown": await this.caption(`${did}. Try “click …”, “scroll down”, “open …”, “show numbers” or “draw a circle”.`, "warn"); return;
     }
@@ -669,6 +790,11 @@ export class VoiceControl {
         if (o.quiet && !acted && (step.action === "stop" || step.action === "ask")) { outcome = "not a request"; this.mode("idle"); return acted; }
         if (step.action === "stop") { outcome = `stopped: ${step.say}`; await this.caption(step.say, "warn"); return acted; }
         if (step.action === "ask") {
+          // One ask per goal. After the owner has already answered, keep going instead of looping.
+          if (/the owner answered:/i.test(goal) || history.some((h) => h.startsWith("asked"))) {
+            history.push("(already asked once; act on the best reading instead of asking again)");
+            continue;
+          }
           // Wait for the answer without "Hey Peguin"; it comes back to this same task.
           outcome = `asked “${step.question}”`;
           this.asked = { goal, question: step.question, until: Date.now() + ASK_MS };
@@ -710,6 +836,24 @@ export class VoiceControl {
     }
   }
 
+  /**
+   * Save a PNG on the Desktop via macOS `screencapture` (what you see on the main
+   * display). Needs Screen Recording for Electron/Peguin on recent macOS; the file
+   * stays on this Mac only. `of` is kept for the AI's wording; capture is the screen.
+   */
+  private async takeScreenshot(_of: "screen" | "window", say: string) {
+    await this.caption(say || "Taking a screenshot…");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const file = path.join(app.getPath("desktop"), `Peguin ${stamp}.png`);
+    await new Promise<void>((resolve, reject) => {
+      execFile("screencapture", ["-x", "-m", file], { timeout: 15000 }, (e) => {
+        if (e) reject(new Error("Couldn't take a screenshot. Allow Screen Recording for Electron (or Peguin) in System Settings > Privacy & Security, then try again."));
+        else resolve();
+      });
+    });
+    await this.caption(`Saved on your Desktop as Peguin ${stamp}.png`);
+  }
+
   /** One planned step, done visibly: Peguin's cursor goes there first. */
   private async doStep(s: Exclude<Step, { action: "done" | "stop" | "ask" }>, byId: Map<number, Seen>, tabs: Map<string, Tab>, seen: Seen[]) {
     const say = s.why || stepLine(s, byId, tabs);
@@ -731,6 +875,7 @@ export class VoiceControl {
         return;
       }
       case "open_url": await this.caption(say); await shell.openExternal(s.url); return;
+      case "screenshot": await this.takeScreenshot(s.of ?? "screen", say); return;
       case "wait": await this.caption(say); return;
       case "open_app": return this.openApp(s.name, say);
       case "quit_app": return this.quitApp(s.name, say);

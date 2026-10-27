@@ -119,7 +119,9 @@ export function createListener(opts: {
   /** Called once per utterance, as soon as someone has spoken for `sustainedMs` (talk-over detection). */
   onSustainedSpeech?: () => void;
   sustainedMs?: number;
-}): (chunk: ArrayBuffer) => void {
+  /** When false, don't end on silence / max length (push-to-talk holds open until flush). */
+  canAutoFinish?: () => boolean;
+}): ((chunk: ArrayBuffer) => void) & { flush: () => boolean } {
   let chunks: Buffer[] = [], preroll: Buffer[] = [];
   let speaking = false, speechMs = 0, silentMs = 0, totalMs = 0, sustained = false;
   let queue = Promise.resolve();
@@ -153,7 +155,7 @@ export function createListener(opts: {
     void mine.text.then((text) => { if (early === mine && /\?\s*$/.test(text)) finish(); }, () => {});
   };
 
-  return (arrayBuffer) => {
+  const feed = ((arrayBuffer: ArrayBuffer) => {
     const chunk = Buffer.from(arrayBuffer);
     const samples = new Int16Array(arrayBuffer);
     let sum = 0;
@@ -172,7 +174,18 @@ export function createListener(opts: {
     totalMs += ms;
     if (voiced) { speechMs += ms; silentMs = 0; early = null; } else silentMs += ms;
     if (!sustained && opts.onSustainedSpeech && speechMs >= (opts.sustainedMs ?? Infinity)) { sustained = true; opts.onSustainedSpeech(); }
-    if (silentMs >= endSilence || totalMs >= MAX_UTTERANCE_MS) finish();
-    else if (!early && silentMs >= earlyMs && speechMs >= MIN_SPEECH_MS) startEarly();
+    const auto = opts.canAutoFinish?.() ?? true;
+    if (auto && (silentMs >= endSilence || totalMs >= MAX_UTTERANCE_MS)) finish();
+    else if (auto && !early && silentMs >= earlyMs && speechMs >= MIN_SPEECH_MS) startEarly();
+  }) as ((chunk: ArrayBuffer) => void) & { flush: () => boolean };
+  /** End the current utterance now (push-to-talk release). True if there was enough speech to send. */
+  feed.flush = () => {
+    if (!(speaking || chunks.length) || speechMs < MIN_SPEECH_MS) {
+      chunks = []; speaking = false; sustained = false; speechMs = silentMs = totalMs = 0; early = null; preroll = [];
+      return false;
+    }
+    finish();
+    return true;
   };
+  return feed;
 }

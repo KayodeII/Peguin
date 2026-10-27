@@ -25,6 +25,7 @@ export type Action =
   | { kind: "numbers"; on: boolean }
   | { kind: "draw"; shape: Shape | "pen"; target: Target }
   | { kind: "clear" }
+  | { kind: "screenshot"; of: "screen" | "window" }
   | { kind: "stop" }
   | { kind: "unknown"; text: string };
 
@@ -81,7 +82,19 @@ function wakeNamed(text: string, names: string[]): Heard {
  * them. On loud noise whisper repeats its prompt, so the example must do
  * nothing: "hello there" isn't a command, and an exact copy is dropped anyway.
  */
-export const commandPrompt = (name: string) => `Hey ${name}, hello there.`;
+export const commandPrompt = (name: string) => `Hey ${name}, open WhatsApp and send hi. Hello there.`;
+
+/**
+ * Whisper often turns a spoken "hi" into "aye", "I", "eye" or "high". Soften those
+ * when they sit where a short message would (pure).
+ */
+export function softenSpeech(text: string): string {
+  let t = text.replace(/\b(send|sent|say)\s+(aye|eye|i|high|hai)\b/gi, "$1 hi");
+  t = t.replace(/\bsay\s+(aye|eye|i|high|hai)\s+to\b/gi, "say hi to");
+  t = t.replace(/\bsaying\s+(aye|eye|i|high|hai)\b/gi, "saying hi");
+  if (/^(aye|eye|i|high|hai)\.?$/i.test(t.trim())) return "hi";
+  return t;
+}
 
 /**
  * A scrap rather than a request (pure): trailing off ("I'm...") or a single word
@@ -268,6 +281,12 @@ function parseOne(command: string): Action {
 
   if (/^(stop|cancel|never mind|nevermind|abort|halt|that's all|done|exit)$/.test(t)) return { kind: "stop" };
   if (/^(clear|erase|wipe|remove)( (it|that|the|my|all|everything))*( (drawings?|ink|annotations?|marks?|screen))?$/.test(t)) return { kind: "clear" };
+  // Screenshot / snap / capture the screen or the front window (saved on the Desktop).
+  if (/^(take\s+(a\s+)?)?(screen\s*shot|screenshot|screen\s*capture|capture)(\s+(of\s+)?(the\s+)?(screen|display|desktop|window|front( window)?|app( in front)?|.+))?$/.test(t)
+    || /^(snap|grab)( (a )?(picture|photo|image))?( of .+)?$/.test(t)) {
+    const of = /\b(window|app|whatsapp|front)\b/i.test(t) ? "window" as const : "screen" as const;
+    return { kind: "screenshot", of };
+  }
   if (/^(show|display) (the )?(numbers|labels|hints)$|^number (everything|things)$/.test(t)) return { kind: "numbers", on: true };
   if (/^(hide|remove|clear) (the )?(numbers|labels|hints)$/.test(t)) return { kind: "numbers", on: false };
 
@@ -394,6 +413,7 @@ export function describe(a: Action): string {
     case "numbers": return a.on ? "Say “click” and a number" : "Numbers hidden";
     case "draw": return a.shape === "pen" ? "Draw with your mouse. Say “Hey Peguin, done” when you're finished" : `Drawing a ${a.shape}`;
     case "clear": return "Cleared";
+    case "screenshot": return a.of === "window" ? "Screenshot of the front window" : "Screenshot";
     case "stop": return "Stopped";
     case "unknown": return `I don't know “${a.text}” yet`;
   }

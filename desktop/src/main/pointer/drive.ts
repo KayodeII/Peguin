@@ -17,6 +17,7 @@ export type Step =
   | { action: "quit_app"; name: string; why?: string }
   | { action: "close_tab" | "switch_tab"; tab: string; why?: string }
   | { action: "ask"; question: string }
+  | { action: "screenshot"; of?: "screen" | "window"; why?: string }
   | { action: "wait"; why?: string }
   | { action: "done"; say?: string }
   | { action: "stop"; say: string };
@@ -72,6 +73,7 @@ Reply with ONE next step as JSON and nothing else:
 {"action":"quit_app","name":"Music","why":"..."} quits a whole app.
 {"action":"close_tab","tab":"t3","why":"..."} closes one browser tab | {"action":"switch_tab","tab":"t3","why":"..."} brings that tab to the front.
 {"action":"ask","question":"...?"} when you can't tell what the owner wants (their answer comes back to you with this same task).
+{"action":"screenshot","of":"screen"|"window","why":"..."} saves a PNG on the Desktop (screen = whole display; window = the app in front). Use when they ask to screenshot, capture, or snap what's on screen.
 {"action":"done","say":"short note"} when the goal is met | {"action":"stop","say":"why"} if it can't be done or isn't a request to do something on the computer.
 Rules:
 - Do it visibly, like a person. To open or switch to an app, use open_app (or click it in the Dock when you can see it there); to close or quit one, quit_app.
@@ -80,8 +82,12 @@ Rules:
 - Only type after clicking into a text field in this task, or when something new (a search box, a dialog) has appeared in the list. You can't see Spotlight or other system pop-ups, so don't type into them.
 - One small step at a time; after each step you'll see the screen again. Use ids only from the lists above.
 - "why" is a few words the owner sees, like "Clicking Music in the Dock".
-- Never send, post, delete, buy, pay, accept terms or share anything unless the goal asks for exactly that; stop and say so instead.
-- Prefer acting over asking when one reading is clearly most likely; ask only when a wrong guess would be annoying.
+- Never send, post, delete, buy, pay, accept terms or share anything unless the goal asks for exactly that; stop and say so instead. When the goal is to message or text someone (WhatsApp, Messages, Slack, mail), sending that message IS the goal — type it and send.
+- When they ask to take a screenshot / capture / snap the screen or the front app, use screenshot. Do not refuse for privacy — they asked. Prefer "window" when they name the front app; otherwise "screen".
+- "First person / first contact / top of my list" means the first chat or contact visible in the list on screen. Click that row; do not ask who they are.
+- Speech recognition often garbles short greetings: "aye", "eye", "I", "high", "hai" usually mean "hi". Prefer that reading when the goal is to send a short message.
+- Prefer acting over asking when one reading is clearly most likely; ask only when a wrong guess would be annoying. Ask at most once per goal. If the goal already includes the owner's answer to a question, do not ask again — use the best reading and continue.
+- When the goal includes an answer the owner just gave you, treat it as their reply and keep going. Do not stop with "someone else was talking" unless the reply is clearly about a totally different topic.
 - If the same step didn't work twice, try another way or stop.`;
 }
 
@@ -103,6 +109,7 @@ export function readStep(reply: string, known: Map<number, Seen>, tabs: Map<stri
     case "open_app": case "quit_app": return typeof o.name === "string" && o.name.trim() ? { action: o.action, name: o.name.trim().slice(0, 60), why } : null;
     case "close_tab": case "switch_tab": return typeof o.tab === "string" && tabs.has(o.tab) ? { action: o.action, tab: o.tab, why } : null;
     case "ask": return typeof o.question === "string" && o.question.trim() ? { action: "ask", question: o.question.trim().slice(0, 160) } : null;
+    case "screenshot": return { action: "screenshot", of: o.of === "window" ? "window" : "screen", why };
     case "wait": return { action: "wait", why };
     case "done": return { action: "done", say: typeof o.say === "string" ? o.say.slice(0, 120) : undefined };
     case "stop": return { action: "stop", say: typeof o.say === "string" ? o.say.slice(0, 160) : "I couldn't do that." };
@@ -159,6 +166,7 @@ export function stepLine(s: Step, byId: Map<number, Seen>, tabs: Map<string, Tab
     case "close_tab": return `closed ${tab(s.tab)}`;
     case "switch_tab": return `switched to ${tab(s.tab)}`;
     case "ask": return `asked: ${s.question}`;
+    case "screenshot": return s.of === "window" ? "saved a screenshot of the front window" : "saved a screenshot";
     case "wait": return "waited";
     case "done": return "done";
     case "stop": return `stopped: ${s.say}`;

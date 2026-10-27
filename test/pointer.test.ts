@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { centre, commandPrompt, describe as caption, isFiller, labelScore, matchTarget, parse, searchUrl, spokenNumber, spokenUrl, wake, type Element } from "../desktop/src/main/pointer/commands.js";
+import { centre, commandPrompt, describe as caption, isFiller, labelScore, matchTarget, parse, searchUrl, softenSpeech, spokenNumber, spokenUrl, wake, type Element } from "../desktop/src/main/pointer/commands.js";
 
 describe("wake", () => {
   it("hears the wake phrase and keeps the command as said", () => {
@@ -139,9 +139,10 @@ describe("matchTarget", () => {
 
 describe("whisper on the owner's mic", () => {
   it("the prompt's own words do nothing, and noise words are fillers", () => {
-    expect(wake(commandPrompt("Peguin"))).toEqual({ command: "hello there.", called: true });
+    const primed = commandPrompt("Peguin");
+    expect(wake(primed)).toEqual({ command: "open WhatsApp and send hi. Hello there.", called: true });
     expect(parse("hello there.")).toMatchObject({ kind: "unknown" });
-    expect(isFiller("Hey Peguin, hello there.")).toBe(true);
+    expect(isFiller(primed)).toBe(true);
     expect(isFiller("Thank you.")).toBe(true);
     expect(isFiller(" . ")).toBe(true);
     expect(isFiller("Hey Peguin, scroll down.")).toBe(false);
@@ -249,8 +250,35 @@ describe("Smart drive", () => {
     expect(p).toMatch(/click it in the Dock/);
     expect(p).toMatch(/Never send, post, delete, buy/);
     expect(p).toMatch(/1\. clicked “Finder”/);
+    expect(p).toMatch(/first chat or contact/i);
+    expect(p).toMatch(/aye.*hi/i);
+    expect(p).toMatch(/Ask at most once/);
     expect(MAX_STEPS).toBe(12);
   });
+
+describe("softenSpeech", () => {
+  it("turns common whisper garbles of hi into hi", () => {
+    expect(softenSpeech("Send aye.")).toBe("Send hi.");
+    expect(softenSpeech("Send I to Basao")).toBe("Send hi to Basao");
+    expect(softenSpeech("Say I to her")).toBe("Say hi to her");
+    expect(softenSpeech("message saying I")).toBe("message saying hi");
+    expect(softenSpeech("aye")).toBe("hi");
+    expect(softenSpeech("open WhatsApp")).toBe("open WhatsApp");
+  });
+});
+
+describe("screenshot command", () => {
+  it("parses take a screenshot without going through the AI", () => {
+    expect(parse("take a screenshot")).toEqual({ kind: "screenshot", of: "screen" });
+    expect(parse("screenshot of WhatsApp")).toEqual({ kind: "screenshot", of: "window" });
+    expect(parse("capture the screen")).toEqual({ kind: "screenshot", of: "screen" });
+  });
+  it("reads the AI screenshot step", () => {
+    expect(readStep('{"action":"screenshot","of":"window","why":"Capturing WhatsApp"}', new Map())).toEqual({
+      action: "screenshot", of: "window", why: "Capturing WhatsApp",
+    });
+  });
+});
   it("reads the AI's step leniently but only with ids it was shown", () => {
     const { byId } = observe(seen);
     expect(readStep('```json\n{"action":"click","id":1,"why":"Clicking Music in the Dock"}\n```', byId)).toEqual({ action: "click", id: 1, why: "Clicking Music in the Dock" });

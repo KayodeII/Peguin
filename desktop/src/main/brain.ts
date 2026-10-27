@@ -1,8 +1,10 @@
 // Drafts the update, answers follow-ups, suggests copilot answers and summarises
 // recaps, always with the owner's own AI: their Claude Code sign-in, their Codex
 // CLI sign-in, or their xAI key (Settings > AI). Peguin's server never pays for it.
+// When the chosen AI hits a session/rate limit, the next available one is tried;
+// if none are left, callers get a clear "out of uses" error for the voice-control caption.
 import { app } from "electron";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -13,6 +15,137 @@ import { workLogActivity } from "./watch/index.js";
 import { wantsCues, type Settings } from "./settings.js";
 import { grokChat, grokChatStream, grokSearch, loadXai } from "./xai.js";
 import { claudeStream } from "./claude.js";
+
+type AiKind = Settings["ai"];
+const AI_ORDER: AiKind[] = ["claude", "codex", "grok"];
+/** AIs that hit a session/rate limit this run, until the time they said they reset (or one hour). */
+const exhausted = new Map<AiKind, number>();
+
+/** Session / rate / quota limits — worth trying another of the owner's AIs. */
+export function isQuotaError(msg: string): boolean {
+  return /session limit|rate.?limit|usage.?limit|quota|too many requests|\b429\b|resets\s+\d|hit your limit|capacity|overloaded|tokens? (?:per|limit)|usage_limit|billing|insufficient_quota/i.test(msg);
+}
+
+/**
+ * Turn Codex CLI stderr into a short owner-facing line. Skips the version banner
+ * and JSON noise so we don't show "Codex CLI failed: OpenAI Codex v0.160.1".
+ */
+export function interpretCodexError(stderr: string, code: number | null, hasReply = false): string {
+  const raw = stderr.replace(/\r/g, "").trim();
+  // Nested JSON: ERROR: {"error":{"message":"..."}} or "message":"..."
+  for (const m of raw.matchAll(/"message"\s*:\s*"((?:\\.|[^"\\])*)"/g)) {
+    const text = m[1]!.replace(/\\n/g, " ").replace(/\\"/g, '"').trim();
+    if (text && !/^openai codex\b/i.test(text)) {
+      if (/not supported when using Codex with a ChatGPT account|model_not_found/i.test(text)) {
+        return "Codex's model isn't available on your ChatGPT plan. Pick another model in Codex, or switch Peguin to Claude or Grok in Settings → AI.";
+      }
+      if (/auth|login|unauthorized|401|forbidden|403/i.test(text)) {
+        return "Codex isn't signed in. Run `codex login` in Terminal, or switch Peguin to Claude or Grok in Settings → AI.";
+      }
+      if (isQuotaError(text)) return `Codex is out of uses: ${text.slice(0, 180)}`;
+      return `Codex: ${text.slice(0, 220)}`;
+    }
+  }
+  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+  const useful = lines.find((l) => {
+    if (!l || /^openai codex\b/i.test(l)) return false;
+    if (/^-{3,}$/.test(l)) return false;
+    if (/^(workdir|model|provider|approval|sandbox|reasoning|session id|tokens used|user|codex):?\s/i.test(l)) return false;
+    if (/^warning:/i.test(l)) return false;
+    return /error|fail|limit|denied|unauthorized|login|sign in|quota|rate|billing|unsupported|not found|invalid/i.test(l);
+  });
+  if (useful) {
+    const cleaned = useful.replace(/^ERROR:\s*/i, "").replace(/^\S+Z\s+(ERROR|WARN)\s+\S+:\s*/, "").slice(0, 220);
+    if (isQuotaError(cleaned)) return `Codex is out of uses: ${cleaned}`;
+    if (/login|sign in|unauthorized/i.test(cleaned)) {
+      return "Codex isn't signed in. Run `codex login` in Terminal, or switch Peguin to Claude or Grok in Settings → AI.";
+    }
+    return `Codex: ${cleaned}`;
+  }
+  if (hasReply) return `Codex exited with code ${code ?? "?"} after writing a reply.`;
+  // SIGTERM / SIGKILL (timeout) often leaves only the version banner on stderr.
+  if (code === 143 || code === 137 || code === 15 || code === null) {
+    return "Codex took too long to reply. Try again, or switch Peguin to Claude or Grok in Settings → AI.";
+  }
+  return "Codex didn't answer. Check you're signed in (`codex login`) or switch Peguin to Claude or Grok in Settings → AI.";
+}
+
+/** Failures where another of the owner's AIs should be tried (not a hard stop). */
+export function isFallbackAiError(msg: string): boolean {
+  if (isQuotaError(msg)) return true;
+  return /couldn't run|not found|ENOENT|no xAI|API key|sign in|isn't signed in|didn't answer|isn't available on your ChatGPT|out of uses|took too long|couldn't reach|overloaded|capacity/i.test(msg);
+}
+
+/** When the limit lifts, from errors like "resets 9pm (Africa/Lagos)". */
+export function parseResetAt(msg: string, now = new Date()): number | null {
+  const m = msg.match(/resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (!m) return null;
+  let h = Number(m[1]);
+  const min = Number(m[2] ?? 0);
+  const ap = (m[3] ?? "").toLowerCase();
+  if (ap === "pm" && h < 12) h += 12;
+  if (ap === "am" && h === 12) h = 0;
+  const at = new Date(now);
+  at.setSeconds(0, 0);
+  at.setHours(h, min, 0, 0);
+  if (at.getTime() <= now.getTime()) at.setDate(at.getDate() + 1);
+  return at.getTime();
+}
+
+/** Tests only: clear the in-memory "this AI is at its limit" map. */
+export function clearAiExhaustion() { exhausted.clear(); }
+
+function markExhausted(ai: AiKind, msg: string) {
+  exhausted.set(ai, parseResetAt(msg) ?? Date.now() + 60 * 60_000);
+}
+
+function stillExhausted(ai: AiKind, now = Date.now()): boolean {
+  const until = exhausted.get(ai);
+  if (until == null) return false;
+  if (now >= until) { exhausted.delete(ai); return false; }
+  return true;
+}
+
+function hasBin(name: string): boolean {
+  try { execFileSync("which", [name], { stdio: "ignore" }); return true; } catch { return false; }
+}
+
+/** Which of the owner's AIs look usable on this Mac right now (binary / key present). */
+export function availableAis(): AiKind[] {
+  const out: AiKind[] = [];
+  if (hasBin("claude")) out.push("claude");
+  if (hasBin("codex")) out.push("codex");
+  if (loadXai()) out.push("grok");
+  return out;
+}
+
+/** Preferred first, then other installed AIs that aren't sitting out a limit. */
+export function aiCandidates(preferred: AiKind, avail = availableAis()): AiKind[] {
+  const rest = AI_ORDER.filter((a) => a !== preferred && avail.includes(a));
+  return [preferred, ...rest].filter((a, i, xs) => xs.indexOf(a) === i && avail.includes(a) && !stillExhausted(a));
+}
+
+/** Short line for the voice-control caption under the cursor. */
+export function outOfQuotaMessage(tried: AiKind[], err?: Error | null): string {
+  const reset = err?.message.match(/resets\s+([^.·\n]+)/i)?.[1]?.trim().replace(/\s*\([^)]*\)\s*$/, "").trim();
+  const when = reset ? ` Resets ${reset}.` : "";
+  if (tried.length <= 1) {
+    return `Your AI is out of uses for now.${when} Add Codex or Grok in Settings → AI, or try again later.`;
+  }
+  return `Every AI you have set up is out of uses for now.${when} Try again later.`;
+}
+
+async function* generateStreamOne(ai: AiKind, s: Settings, prompt: string, timeoutMs: number): AsyncGenerator<string> {
+  if (ai === "codex") { yield await codex(prompt, timeoutMs); return; }
+  if (ai === "grok") { const g = grok(s); yield* grokChatStream(g.key, g.model, prompt, timeoutMs); return; }
+  yield* claudeStream(prompt, timeoutMs);
+}
+
+async function generateOne(ai: AiKind, s: Settings, prompt: string, timeoutMs: number, web: boolean): Promise<string> {
+  if (ai === "codex") return codex(prompt, timeoutMs, web);
+  if (ai === "grok") { const g = grok(s); return web ? grokSearch(g.key, g.model, prompt, timeoutMs) : grokChat(g.key, g.model, prompt, timeoutMs); }
+  return claude(prompt, timeoutMs, web);
+}
 
 export type Draft = {
   script: string;
@@ -55,17 +188,41 @@ function codex(prompt: string, timeoutMs: number, web = false): Promise<string> 
     const out = path.join(dir, "reply.txt");
     const child = spawn("codex", [...(web ? ["--search"] : []), "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "-C", dir,
       "-c", 'model_reasoning_effort="low"', "-o", out, "-"], { cwd: dir, env: process.env });
-    let err = "";
-    const done = (f: () => void) => { clearTimeout(timer); f(); rmSync(dir, { recursive: true, force: true }); };
-    const timer = setTimeout(() => { child.kill(); done(() => reject(new Error("Codex took too long to reply"))); }, timeoutMs);
+    let err = "", stdout = "";
+    let settled = false;
+    const finish = (f: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+      f();
+    };
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      // Give it a moment to exit; close handler publishes the message.
+      setTimeout(() => {
+        finish(() => reject(new Error("Codex took too long to reply. Try again, or switch Peguin to Claude or Grok in Settings → AI.")));
+      }, 400);
+    }, timeoutMs);
     child.stderr.on("data", (d) => (err += d));
-    child.on("error", (e) => done(() => reject(new Error(`Couldn't run the Codex CLI (${e.message}). Install it and sign in with \`codex login\`, or switch the copilot back to Claude in Settings.`))));
-    child.on("close", (code) => done(() => {
+    child.stdout.on("data", (d) => (stdout += d));
+    child.on("error", (e) => finish(() => reject(new Error(`Couldn't run the Codex CLI (${e.message}). Install it and sign in with \`codex login\`, or switch to Claude or Grok in Settings → AI.`))));
+    child.on("close", (code) => finish(() => {
       let text = "";
       try { text = readFileSync(out, "utf8").trim(); } catch { /* no reply written */ }
-      if (code === 0 && text) resolve(text);
-      else if (/connection failed|error sending request|network|dns|timed out/i.test(err)) reject(new Error("Codex couldn't reach OpenAI. Check your internet connection and try again."));
-      else reject(new Error(`Codex CLI failed: ${(err.match(/"message":"([^"]+)"/)?.[1] ?? err.split("\n").map((l) => l.replace(/^\S+Z\s+(ERROR|WARN)\s+\S+:\s*/, "")).find((l) => l.trim()) ?? `exit ${code}`).slice(0, 300)}`));
+      if (!text) text = stdout.trim();
+      if (text && (code === 0 || !/ERROR:/i.test(err))) { resolve(text); return; }
+      if (timedOut) {
+        reject(new Error("Codex took too long to reply. Try again, or switch Peguin to Claude or Grok in Settings → AI."));
+        return;
+      }
+      if (/connection failed|error sending request|network|dns|timed out/i.test(err)) {
+        reject(new Error("Codex couldn't reach OpenAI. Check your internet connection and try again."));
+        return;
+      }
+      reject(new Error(interpretCodexError(err || stdout, code, !!text)));
     }));
     child.stdin.end(prompt);
   });
@@ -77,18 +234,44 @@ const grok = (s: Settings) => {
   return { key: x.apiKey, model: s.grokModel && x.models.includes(s.grokModel) ? s.grokModel : x.models[0]! };
 };
 
-/** One prompt to the owner's chosen AI; `web` lets it search the web first (much slower). */
-async function generate(s: Settings, prompt: string, timeoutMs: number, web = false): Promise<string> {
-  if (s.ai === "codex") return codex(prompt, timeoutMs, web);
-  if (s.ai === "grok") { const g = grok(s); return web ? grokSearch(g.key, g.model, prompt, timeoutMs) : grokChat(g.key, g.model, prompt, timeoutMs); }
-  return claude(prompt, timeoutMs, web);
+/**
+ * One prompt to the owner's chosen AI; on a session/rate limit, the next available
+ * AI on this Mac is tried. `web` lets it search first (much slower; no cross-AI retry for web).
+ */
+async function generate(s: Settings, prompt: string, timeoutMs: number, web = false): Promise<{ text: string; via: AiKind }> {
+  if (web) return { text: await generateOne(s.ai, s, prompt, timeoutMs, true), via: s.ai };
+  const tried: AiKind[] = [];
+  let last: Error | null = null;
+  for (const ai of aiCandidates(s.ai)) {
+    tried.push(ai);
+    try { return { text: await generateOne(ai, s, prompt, timeoutMs, false), via: ai }; }
+    catch (e) {
+      last = e instanceof Error ? e : new Error(String(e));
+      if (isQuotaError(last.message)) markExhausted(ai, last.message);
+      if (isFallbackAiError(last.message)) continue;
+      throw last;
+    }
+  }
+  throw new Error(last && !isQuotaError(last.message) ? last.message : outOfQuotaMessage(tried.length ? tried : [s.ai], last));
 }
 
-/** The same, streamed as it's written: Claude and Grok stream; Codex comes in one piece. Uses the warm Claude CLI in meetings. */
+/** The same, streamed: Claude and Grok stream; Codex comes in one piece. Session-limit falls back like `generate`. */
 async function* generateStream(s: Settings, prompt: string, timeoutMs: number): AsyncGenerator<string> {
-  if (s.ai === "codex") { yield await codex(prompt, timeoutMs); return; }
-  if (s.ai === "grok") { const g = grok(s); yield* grokChatStream(g.key, g.model, prompt, timeoutMs); return; }
-  yield* claudeStream(prompt, timeoutMs);
+  const tried: AiKind[] = [];
+  let last: Error | null = null;
+  for (const ai of aiCandidates(s.ai)) {
+    tried.push(ai);
+    try {
+      yield* generateStreamOne(ai, s, prompt, timeoutMs);
+      return;
+    } catch (e) {
+      last = e instanceof Error ? e : new Error(String(e));
+      if (isQuotaError(last.message)) markExhausted(ai, last.message);
+      if (isFallbackAiError(last.message)) continue;
+      throw last;
+    }
+  }
+  throw new Error(last && !isQuotaError(last.message) ? last.message : outOfQuotaMessage(tried.length ? tried : [s.ai], last));
 }
 
 const collect = async (pieces: AsyncIterable<string>) => { let out = ""; for await (const p of pieces) out += p; return out.trim(); };
@@ -128,8 +311,8 @@ export async function prepareDraft(s: Settings): Promise<Draft> {
   // Only titles, statuses and times leave the machine; never code.
   const activity = ctx.activity.map(({ source, kind, title, status, at }) => ({ source, kind, title, status, at }));
   const cues = wantsCues(s);
-  const { script, facts } = parseDraft(await generate(s, `${draftSystem(s.displayName, { cues })}\n\n${draftUser(s.displayName, activity, "", ctx.failed)}`, 120000));
-  const via = s.ai;
+  const { text, via } = await generate(s, `${draftSystem(s.displayName, { cues })}\n\n${draftUser(s.displayName, activity, "", ctx.failed)}`, 120000);
+  const { script, facts } = parseDraft(text);
   const draft: Draft = {
     script, facts, generatedAt: new Date().toISOString(), since: ctx.since, reports: ctx.reports,
     activityCount: ctx.activity.length, via,
@@ -153,9 +336,17 @@ export async function suggestAnswer(s: Settings, draft: Draft | null, question: 
 
 /** A general-knowledge suggestion checked on the web: the answer, and the site it came from. */
 export async function checkOnline(s: Settings, question: string, quick: string, recent: string[]): Promise<{ answer: string; source?: string }> {
-  const reply = plainSpoken(await generate(s, `${copilotWebSystem(s.displayName, s.copilot.mode)}\n\nRecent conversation:\n${recent.join("\n")}\n\nQuestion: ${question}\n\nQuick answer from memory: ${quick}`, 75000, true));
+  const { text } = await generate(s, `${copilotWebSystem(s.displayName, s.copilot.mode)}\n\nRecent conversation:\n${recent.join("\n")}\n\nQuestion: ${question}\n\nQuick answer from memory: ${quick}`, 75000, true);
+  const reply = plainSpoken(text);
   const m = reply.match(/\n?\s*Source:\s*(.+)\s*$/i);
   return m ? { answer: reply.slice(0, m.index).trim(), source: m[1]!.trim() } : { answer: reply };
+}
+
+/** Summary and extra follow-ups for a meeting, from its transcript only. `copilot`: the owner was there themselves. */
+export async function summarizeMeeting(s: Settings, lines: string[], copilot = false): Promise<{ summary: string; followUps: string[] }> {
+  const system = copilot ? copilotRecapSystem(s.displayName) : recapSystem(s.displayName);
+  const { text } = await generate(s, `${system}\n\n${recapUser(lines)}`, 60000);
+  return parseRecap(text);
 }
 
 /** Is this draft from today (in the user's timezone)? */
@@ -163,10 +354,4 @@ export function isFresh(d: Draft | null, timezone: string, now = new Date()): bo
   if (!d) return false;
   const day = (x: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(x);
   return day(new Date(d.generatedAt)) === day(now);
-}
-
-/** Summary and extra follow-ups for a meeting, from its transcript only. `copilot`: the owner was there themselves. */
-export async function summarizeMeeting(s: Settings, lines: string[], copilot = false): Promise<{ summary: string; followUps: string[] }> {
-  const system = copilot ? copilotRecapSystem(s.displayName) : recapSystem(s.displayName);
-  return parseRecap(await generate(s, `${system}\n\n${recapUser(lines)}`, 60000));
 }

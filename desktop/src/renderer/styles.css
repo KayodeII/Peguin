@@ -159,6 +159,19 @@ label input, label select { text-transform: none; font-weight: 400; letter-spaci
 .row-card { display: flex; align-items: center; gap: 16px; padding: 12px 14px; margin-bottom: 8px; background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius); }
 .row-card.compact { padding: 10px 12px; }
 .row-card.muted { opacity: .7; }
+.sources-lead { margin: 0 0 16px; }
+.sources-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 720px) { .sources-grid { grid-template-columns: 1fr; } }
+.source-box { background: var(--side); border: 1px solid var(--line); border-radius: 10px; padding: 14px 14px 8px; min-width: 0; }
+.source-box.wide { grid-column: 1 / -1; }
+.source-box .section-label { margin: 0 0 10px; }
+.source-box > .hint { margin: -4px 0 12px; }
+.source-apps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 560px) { .source-apps { grid-template-columns: 1fr; } }
+.source-app { display: flex; flex-direction: column; gap: 10px; padding: 12px; margin-bottom: 0; background: var(--main); border: 1px solid var(--line); border-radius: var(--radius); }
+.source-app .row-head { display: flex; align-items: center; gap: 12px; }
+.source-box .row-card.column, .source-box .source-app { background: var(--main); }
+.source-box:not(.wide) .source-app { margin-bottom: 8px; }
 .row-main { flex: 1; min-width: 0; }
 .row-main strong { color: var(--ink-strong); font-weight: 500; }
 .row-main p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
