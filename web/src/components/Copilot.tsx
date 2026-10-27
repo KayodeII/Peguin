@@ -28,14 +28,14 @@ export function Copilot() {
     <div className="gl-wrap">
       <div className="section-head">
         <p className="eyebrow" data-reveal>Join as me · Pro</p>
-        <h2 data-reveal>When you're in the meeting yourself, Peguin helps quietly</h2>
-        <p className="section-lead" data-reveal>Open the call in Peguin's window. It hears the other people, suggests what you could say, and gives you a recap. Everyone is told you're using an AI assistant.</p>
+        <h2 data-reveal>Your quiet partner in every meeting you join</h2>
+        <p className="section-lead" data-reveal>Take the call in Peguin's window. It keeps up with the conversation, has an answer ready when you're asked, and hands you a recap after. Everyone is told an AI assistant is there.</p>
       </div>
 
       <div className="gl-grid two">
-        <article className="gl-card blue" data-reveal>
-          <h3>It <span className="gl-chip light"><span className="gl-mini-bars" aria-hidden><i /><i /><i /></span>hears</span> the room, not you</h3>
-          <p>Peguin follows what the other people say, never your microphone, and notices when a question is meant for you.</p>
+        <article className="gl-card brand" data-reveal>
+          <h3>Peguin <span className="gl-chip light"><span className="gl-mini-bars" aria-hidden><i /><i /><i /></span>listens</span> in on the room</h3>
+          <p>It follows the conversation as it happens, never your own mic, so it knows the moment a question lands on you.</p>
           <div className="gl-captions">
             <div className="gl-cap-head"><span className="gl-rec"><span />Live</span><Timer /></div>
             {LINES.map((l) => (
@@ -46,8 +46,8 @@ export function Copilot() {
         </article>
 
         <article className="gl-card" data-reveal>
-          <h3>Then it <span className="gl-chip">✦ whispers</span> an answer</h3>
-          <p>A short line that only you can see, labelled with where it came from. Your own work comes only from your notes.</p>
+          <h3>When you're on the spot, Peguin <span className="gl-chip">✦ whispers</span> the answer</h3>
+          <p>A short line appears that only you can see, drawn from your own notes and marked with where it came from.</p>
           <div className="gl-panel dark">
             <div className="gl-panel-top"><Logo size={18} /><span>Peguin</span><span className="gl-only">Only you</span><span className="gl-hide">Hide</span></div>
             <p className="gl-asked">Tomi asked: when does the billing export ship?</p>
@@ -70,8 +70,8 @@ export function Copilot() {
               <div className="gl-note"><b>✦ Suggestion</b><p>Say the retry fix is merged; the rollout is Friday.</p></div>
             </div>
           </div>
-          <h3>Your notes are yours. The notice is everyone's.</h3>
-          <p>Peguin posts the AI notice in the chat first. Only then do your notes stay out of screen shares.</p>
+          <h3>Private to you, honest with everyone</h3>
+          <p>Peguin tells the room first, in the chat. Only then do your notes stay out of screen shares.</p>
         </article>
 
         <article className="gl-card soft" data-reveal>
@@ -84,8 +84,8 @@ export function Copilot() {
               <li>Check the staging alert</li>
             </ul>
           </div>
-          <h3>A recap when it ends</h3>
-          <p>What was asked of you, what was decided, and the questions your notes didn't cover. Never your own voice. Encrypted on your Mac.</p>
+          <h3>A recap the moment you hang up</h3>
+          <p>What was asked of you, what was decided, and what to follow up on. Never your own voice, and kept encrypted on your Mac.</p>
         </article>
 
         <article className="gl-card soft" data-reveal>
@@ -94,8 +94,8 @@ export function Copilot() {
             <p className="gl-a"><b>General knowledge:</b> An index makes lookups faster at the cost of slower writes.</p>
             <p className="gl-src">✓ Checked online · postgresql.org</p>
           </div>
-          <h3>Work or interview, checked online</h3>
-          <p>Answers suited to a team meeting or a job interview, and general answers can be checked on the web.</p>
+          <h3>Ready for standups and interviews</h3>
+          <p>Switch between work and interview answers, and have general questions double-checked on the web.</p>
         </article>
       </div>
     </div>
