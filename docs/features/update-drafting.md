@@ -2,7 +2,7 @@
 
 Before the meeting Peguin gathers what the owner worked on since the previous workday and drafts a short spoken update plus a list of facts. Follow-up answers in the meeting may only use those facts.
 
-Desktop sources need no extra logins: local git commits, PRs through the GitHub CLI's existing login, (opt-in) the owner's own prompts from Claude Code sessions, and (opt-in, off by default) the work log "On this Mac": every few minutes the app in front and its window title, encrypted on the Mac, summarised into time per window. The draft prompt treats those lines as where time went, never as facts or finished work. The server stack has GitHub, Linear and Jira sources.
+Desktop sources: local git commits, PRs through the GitHub CLI's existing login, issues assigned to the owner in Linear and Jira (once connected in Sources with their own API key, sealed in the Keychain), (opt-in) the owner's own prompts from Claude Code sessions, and (opt-in, off by default) the work log "On this Mac": every few minutes the app in front and its window title, encrypted on the Mac, summarised into time per window. The draft prompt treats those lines as where time went, never as facts or finished work. The server stack has GitHub, Linear and Jira sources.
 
 ## Decisions
 
@@ -11,6 +11,7 @@ Desktop sources need no extra logins: local git commits, PRs through the GitHub 
 - 2026-10-08: Speaking in the owner's own voice (prompts write for the ear)
 - 2026-10-10: Every user's own AI
 - 2026-10-20: Work log and Learn my voice (opt-in, reviewed by the owner)
+- 2026-10-26: Linear and Jira on the desktop with the owner's own API keys
 
 ## Files
 
@@ -20,6 +21,9 @@ Desktop sources need no extra logins: local git commits, PRs through the GitHub 
 | `desktop/src/main/context/git.ts` | Commits by the owner across local repos |
 | `desktop/src/main/context/github.ts` | PRs opened or reviewed, via `gh` |
 | `desktop/src/main/context/claudeCode.ts` | The owner's prompts from Claude Code session files (opt-in) |
+| `desktop/src/main/context/trackers.ts` | Linear and Jira issues (reusing `src/core/sources/linear.ts`, `jira.ts`), key checks, Jira site address |
+| `desktop/src/main/trackerKeys.ts` | The sealed keys (`trackers.sealed`) and which tracker sources are on |
+| `desktop/src/renderer/trackers.tsx` | Sources > Linear and Jira |
 | `desktop/src/main/context/exec.ts`, `types.ts` | Helpers and types |
 | `desktop/src/main/watch/summary.ts` | Work log (pure): title clean-up, skip list, time per window, pruning |
 | `desktop/src/main/watch/index.ts` | `WorkLog` (a glance every few minutes through `pointer-helper front`), the encrypted log, the `mac` source |
@@ -31,4 +35,4 @@ Desktop sources need no extra logins: local git commits, PRs through the GitHub 
 
 ## Tests
 
-`test/desktop.test.ts` ("Claude Code sessions"), `test/worklog.test.ts` ("work log"), `test/core.test.ts` (`previousWorkdayStart`).
+`test/desktop.test.ts` ("Claude Code sessions"), `test/trackers.test.ts` (Linear and Jira), `test/worklog.test.ts` ("work log"), `test/core.test.ts` (`previousWorkdayStart`).

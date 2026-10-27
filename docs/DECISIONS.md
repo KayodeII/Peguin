@@ -2,6 +2,10 @@
 
 Newest first. Add an entry when you make a choice a future agent might otherwise undo.
 
+## 2026-10-26: Linear and Jira on the desktop with the owner's own API keys
+
+The desktop update only read git, GitHub and Claude Code, though the product promises Linear and Jira. The owner pastes a Linear personal API key, or a Jira site, email and Atlassian API token, in Sources. Each is checked (Linear's `viewer`, Jira's `/myself`), sealed with the Keychain in `trackers.sealed` and sent only to Linear or that Jira site. The fetches reuse the server stack's `src/core/sources/linear.ts` and `jira.ts`: issues assigned to the owner, updated since the previous workday; titles, statuses and times only. OAuth apps through the Worker (like calendars) would be one click, but need app registrations, a callback and token refresh on our side, and send the tokens through our server; personal keys need none of that and match "the owner's own" pattern of the xAI and ElevenLabs keys. OAuth can be added later as a second way to connect. A key that stops working shows as a source warning with how to fix it; it never fails the draft.
+
 ## 2026-10-24: Recaps for copilot meetings
 
 The owner chose this as the next feature. Copilot meetings now get a recap in `#recaps`, from the same `MeetingLog` with `kind: "copilot"`, so one list, one retention setting and one summary path serve both. Differences, because the owner was there themselves: suggestions are stored on the question, not as something Peguin said; only "Not in your notes." questions become follow-ups ("Follow up on: ..."); questions with no suggestion in time are "skipped", not follow-ups; the summary prompt says the owner's words are missing and must not be guessed. It's on by default like Peguin's own recaps, with its own switch in Settings > Recaps, since it keeps other people's words from meetings Peguin didn't join; the Privacy Policy says so.

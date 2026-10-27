@@ -27,6 +27,8 @@ import { devEnv, fixPath, outDir, resource } from "./paths.js";
 import { ensureModel } from "./speech/model.js";
 import { standardSample, synthesize } from "./speech/tts.js";
 import { checkXaiKey, clearXai, loadXai, saveXai } from "./xai.js";
+import { checkJira, checkLinear, jiraSite } from "./context/trackers.js";
+import { loadTrackers, saveTrackers, trackerStatus } from "./trackerKeys.js";
 import {
   CONSENT_SENTENCE, deleteSample, deleteVoiceModel, ensureVoiceModel, forgetVoice, ownVoiceStatus, saveSample,
   clipWav, deleteClips, learnFrom, reviewClips, useClips, engineReady, speakInOwnVoice, usingOwnVoice, VOICE_MODEL_BYTES,
@@ -582,6 +584,28 @@ handle("xai:disconnect", () => {
   const s = loadSettings();
   saveSettings({ ...s, ai: s.ai === "grok" ? "claude" : s.ai, voice: { ...s.voice, standard: "mac" } });
   return xaiStatus();
+});
+// The owner's Linear and Jira keys (Sources): checked before they're kept.
+handle("trackers:status", () => trackerStatus());
+handle("trackers:connect", async (_e, kind: "linear" | "jira", input: { apiKey?: string; site?: string; email?: string; token?: string }) => {
+  const k = loadTrackers();
+  if (kind === "linear") {
+    const apiKey = String(input?.apiKey ?? "").trim();
+    if (!apiKey) throw new Error("Paste your Linear API key.");
+    k.linear = { apiKey, who: await checkLinear(apiKey) };
+  } else if (kind === "jira") {
+    const site = jiraSite(String(input?.site ?? "")), email = String(input?.email ?? "").trim(), token = String(input?.token ?? "").trim();
+    if (!email || !token) throw new Error("Enter the email you sign in to Jira with and an API token.");
+    k.jira = { site, email, token, who: await checkJira(site, email, token) };
+  } else throw new Error("Unknown source.");
+  saveTrackers(k);
+  return trackerStatus(k);
+});
+handle("trackers:disconnect", (_e, kind: "linear" | "jira") => {
+  const k = loadTrackers();
+  if (kind === "linear") delete k.linear; else if (kind === "jira") delete k.jira;
+  saveTrackers(k);
+  return trackerStatus(k);
 });
 handle("voice:standard-sample", () => standardSample(loadSettings(), "Hi, I'm Peguin, an AI assistant. This is how I'll sound in your meetings."));
 handle("update:get", () => update);

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ContextBank } from "../main/contextBank";
 import { BrandIcon, Icon, message } from "./ui";
 
-const SOURCE: Record<string, string> = { git: "Git", github: "GitHub", claude_code: "Claude Code", mac: "On this Mac" };
+const SOURCE: Record<string, string> = { git: "Git", github: "GitHub", claude_code: "Claude Code", linear: "Linear", jira: "Jira", mac: "On this Mac" };
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const day = (iso: string) => {
   const d = new Date(iso), t = new Date(); t.setHours(0, 0, 0, 0);
