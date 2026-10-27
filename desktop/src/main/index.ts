@@ -445,7 +445,12 @@ async function applyVoiceControl(before: ReturnType<typeof loadSettings>["pointe
   if (!s.pointer.enabled) { if (before?.enabled) await voice.stop(); return; }
   if (!before?.enabled) await voice.start();
   else if (before.trigger !== s.pointer.trigger || before.shortcut !== s.pointer.shortcut) await voice.bindTrigger();
-  if (before?.enabled && (JSON.stringify(before.cursor) !== JSON.stringify(s.pointer.cursor) || before.island !== s.pointer.island)) voice.restyle();
+  if (before?.enabled && (
+    JSON.stringify(before.cursor) !== JSON.stringify(s.pointer.cursor)
+    || before.island !== s.pointer.island
+    || before.trigger !== s.pointer.trigger
+    || JSON.stringify(before.wakeWords) !== JSON.stringify(s.pointer.wakeWords)
+  )) voice.restyle(); // tip under the cursor + look
 }
 handle("pointer:status", () => voice.status());
 handle("worklog:status", () => workLog.status());

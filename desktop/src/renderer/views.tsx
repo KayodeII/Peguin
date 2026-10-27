@@ -16,7 +16,7 @@ import { WorkLogSource } from "./worklog";
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
-function ChannelHeader({ name, topic, children }: { name: string; topic?: string; children?: React.ReactNode }) {
+export function ChannelHeader({ name, topic, children }: { name: string; topic?: string; children?: React.ReactNode }) {
   return (
     <header className="channel-head">
       <Icon name="hash" size={22} /><h1>{name}</h1>
@@ -250,7 +250,7 @@ export function SourcesView({ settings, draft, save, prepare }: { settings: Sett
 
 /* ---------------------------------------------------------------- Settings */
 
-export function SettingsView({ settings, save, preview, account }: { settings: Settings; save: (s: Settings) => Promise<Settings>; preview: (n: string) => string; account: Account | null }) {
+export function SettingsView({ settings, save, preview, account, goCursor }: { settings: Settings; save: (s: Settings) => Promise<Settings>; preview: (n: string) => string; account: Account | null; goCursor: () => void }) {
   const [s, setS] = useState(settings);
   const [aliases, setAliases] = useState(settings.aliases.join(", "));
   const [error, setError] = useState("");
@@ -355,7 +355,7 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
 
                 </>}
         {sec === "voice-control" && <>
-                <VoiceControlSettings s={s} setS={setS} settings={settings} save={save} />
+                <VoiceControlSettings s={s} setS={setS} settings={settings} goCursor={goCursor} />
 
                 </>}
         {sec === "ai" && <>
@@ -399,7 +399,7 @@ export function SettingsView({ settings, save, preview, account }: { settings: S
   );
 }
 
-type SectionId = "general" | "standup" | "voice" | "voice-control" | "ai" | "recaps";
+export type SectionId = "general" | "standup" | "voice" | "voice-control" | "ai" | "recaps";
 const SECTIONS: { id: SectionId; label: string; icon: string }[] = [
   { id: "general", label: "General", icon: "settings" },
   { id: "standup", label: "Standup", icon: "calendar" },
@@ -414,7 +414,12 @@ function useSection(): [SectionId, (id: SectionId) => void] {
   const [sec, setSec] = useState<SectionId>(() => {
     try { const v = localStorage.getItem("settings-section"); return SECTIONS.some((x) => x.id === v) ? (v as SectionId) : "general"; } catch { return "general"; }
   });
-  return [sec, (id) => { setSec(id); try { localStorage.setItem("settings-section", id); } catch { /* not kept */ } }];
+  return [sec, (id) => { setSec(id); rememberSection(id); }];
+}
+
+/** Open Settings on this page next time it shows. */
+export function rememberSection(id: SectionId) {
+  try { localStorage.setItem("settings-section", id); } catch { /* not kept */ }
 }
 
 const THEMES: { id: Settings["appearance"]["theme"]; label: string; vars: Record<string, string> }[] = [

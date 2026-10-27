@@ -1,6 +1,7 @@
-// Settings > Voice control: "Hey Peguin, ..." from the owner's own mic moves
-// the mouse, clicks, types and draws. The switch saves at once (it asks macOS
-// for the mic); wake words, shortcut and search address save with the page.
+// Voice control: the owner's own mic moves the mouse, clicks, types and draws
+// with Peguin's own cursor. The #cursor channel has the switch, the cursor and
+// things to try (each saves at once); Settings > Voice control keeps how to talk
+// to it, Smart or Quick and the search address, which save with the page.
 import { useEffect, useState } from "react";
 import type { PointerStatus } from "../main/pointer/index";
 import type { Settings } from "../main/settings";
@@ -20,14 +21,9 @@ const SAY: [string, string][] = [
   ["Stop", "Hides numbers and ends drawing"],
 ];
 
-export function VoiceControlSettings({ s, setS, settings, save }: { s: Settings; setS: (s: Settings) => void; settings: Settings; save: (s: Settings) => Promise<Settings> }) {
+/** Voice control's live status from the main process: microphone, Accessibility, the last command. */
+function usePointerStatus(enabled: boolean): [PointerStatus | null, (s: PointerStatus) => void] {
   const [status, setStatus] = useState<PointerStatus | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [words, setWords] = useState(s.pointer.wakeWords.join(", "));
-  const [tryText, setTryText] = useState("");
-  const p = s.pointer;
-
   useEffect(() => {
     void window.penguin.pointerStatus().then(setStatus);
     const off = window.penguin.onEvent((e: any) => { if (e?.kind === "pointer") setStatus(e.status); });
@@ -35,33 +31,63 @@ export function VoiceControlSettings({ s, setS, settings, save }: { s: Settings;
   }, []);
   // While Accessibility is off, check again every few seconds (it's switched on in System Settings).
   useEffect(() => {
-    if (!p.enabled || status?.trusted !== false) return;
+    if (!enabled || status?.trusted !== false) return;
     const t = setInterval(() => void window.penguin.pointerStatus().then(setStatus), 3000);
     return () => clearInterval(t);
-  }, [p.enabled, status?.trusted]);
+  }, [enabled, status?.trusted]);
+  return [status, setStatus];
+}
 
-  const setPointer = (patch: Partial<Settings["pointer"]>) => setS({ ...s, pointer: { ...p, ...patch } });
+/** How to talk to it right now, in one line. */
+export const howToTalk = (p: Settings["pointer"]) => p.trigger === "hold"
+  ? "Hold Control+Option, say what you want, then let go."
+  : p.trigger === "both"
+    ? `Hold Control+Option and speak, or say “Hey ${p.wakeWords[0] ?? "Peguin"}” and a command.`
+    : `Say “Hey ${p.wakeWords[0] ?? "Peguin"}” and a command.`;
+
+/**
+ * The on/off switch, what it hears, and the permissions it needs. Saves at once
+ * (turning it on asks macOS for the mic). With `hero`, the switch sits in that
+ * banner (art, title and text) instead of the plain row.
+ */
+export function VoiceControlSwitch({ settings, save, hero }: {
+  settings: Settings; save: (s: Settings) => Promise<Settings>;
+  hero?: { art: React.ReactNode; title: string; text: string };
+}) {
+  const p = settings.pointer;
+  const [status, setStatus] = usePointerStatus(p.enabled);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const toggle = (on: boolean) => {
     setBusy(true); setError("");
-    save({ ...settings, pointer: { ...settings.pointer, enabled: on } })
-      .then((saved) => { setS({ ...s, pointer: { ...p, enabled: saved.pointer.enabled } }); return window.penguin.pointerStatus().then(setStatus); })
+    save({ ...settings, pointer: { ...p, enabled: on } })
+      .then(() => window.penguin.pointerStatus().then(setStatus))
       .catch((e) => setError(message(e)))
       .finally(() => setBusy(false));
   };
 
   return (
     <>
-      <div className="row-card">
+      {hero ? (
+        <section className={`cursor-hero ${p.enabled ? "on" : ""}`}>
+          <div className="cursor-hero-art" aria-hidden>{hero.art}</div>
+          <div className="cursor-hero-main">
+            <h2>{hero.title}</h2>
+            <p>{hero.text}</p>
+          </div>
+          <Toggle on={p.enabled} onChange={(v) => !busy && toggle(v)} label="Voice control" />
+        </section>
+      ) : <div className="row-card">
         <div className="row-main">
           <strong>Voice control</strong>
           <p>{p.trigger === "hold"
             ? "Hold Control+Option, say what you want, release — Peguin moves the mouse, clicks, types and draws. Only your own microphone, heard on this Mac."
             : "Say “Hey Peguin” and a command, and Peguin moves the mouse, clicks, types and draws for you. Only your own microphone, heard on this Mac."}
-            {" "}Lines that aren't for Peguin are dropped and never sent anywhere{s.voice.learn.enabled ? ", except clean clips of you that Learn my voice keeps for you to review (Settings > Voice)" : ""}. With Smart on, a follow-up{p.wake === "hey" ? " or a line starting with “Hey”" : ""} goes to your AI as words (never audio) to tell whether it's a request.</p>
+            {" "}Lines that aren't for Peguin are dropped and never sent anywhere{settings.voice.learn.enabled ? ", except clean clips of you that Learn my voice keeps for you to review (Settings > Voice)" : ""}. With Smart on, a follow-up{p.wake === "hey" ? " or a line starting with “Hey”" : ""} goes to your AI as words (never audio) to tell whether it's a request.</p>
         </div>
-        <Toggle on={settings.pointer.enabled} onChange={(v) => !busy && toggle(v)} label="Voice control" />
-      </div>
-      {settings.pointer.enabled && status && (
+        <Toggle on={p.enabled} onChange={(v) => !busy && toggle(v)} label="Voice control" />
+      </div>}
+      {p.enabled && status && (
         <div className="row-card column">
           <PermissionRow ok={status.mic === "granted"} name="Microphone" detail={p.trigger === "hold" ? "To hear you while Control+Option is held." : "To hear “Hey Peguin”."} fix={status.mic === "granted" ? undefined : "Open System Settings > Privacy & Security > Microphone and switch Peguin on."} />
           <PermissionRow ok={status.trusted} name="Accessibility" detail="To click, type, read button names, and watch Control+Option."
@@ -72,6 +98,46 @@ export function VoiceControlSettings({ s, setS, settings, save }: { s: Settings;
         </div>
       )}
       {error && <div className="notice error">{error}</div>}
+    </>
+  );
+}
+
+/** Things to say, and a box to try one by typing. */
+export function TryVoiceControl({ settings }: { settings: Settings }) {
+  const [tryText, setTryText] = useState("");
+  const [error, setError] = useState("");
+  return (
+    <>
+      <details className="say-list" open>
+        <summary>Things to say</summary>
+        <dl>{SAY.map(([say, what]) => <div key={say}><dt>{say}</dt><dd>{what}</dd></div>)}</dl>
+      </details>
+      {settings.pointer.enabled && (
+        <form className="inline-form" onSubmit={(e) => { e.preventDefault(); const t = tryText; setTryText(""); setError(""); window.penguin.pointerTry(t).catch((err: unknown) => setError(message(err))); }}>
+          <input value={tryText} placeholder="Try a command: show numbers" onChange={(e) => setTryText(e.target.value)} />
+          <button className="btn ghost" disabled={!tryText.trim()}>Try it</button>
+        </form>
+      )}
+      {error && <div className="notice error">{error}</div>}
+    </>
+  );
+}
+
+/** Settings > Voice control: how to talk to it, Smart or Quick, the search address. Saves with the page. */
+export function VoiceControlSettings({ s, setS, settings, goCursor }: { s: Settings; setS: (s: Settings) => void; settings: Settings; goCursor: () => void }) {
+  const [words, setWords] = useState(s.pointer.wakeWords.join(", "));
+  const p = s.pointer;
+  const setPointer = (patch: Partial<Settings["pointer"]>) => setS({ ...s, pointer: { ...p, ...patch } });
+
+  return (
+    <>
+      <div className="row-card">
+        <div className="row-main">
+          <strong>Voice control is {settings.pointer.enabled ? "on" : "off"}</strong>
+          <p>Turn it on, try it, and choose how Peguin's cursor looks in #cursor.</p>
+        </div>
+        <button className="btn ghost" onClick={goCursor}>Open #cursor</button>
+      </div>
       <div className="row-card column">
         <div className="row-main">
           <strong>How to talk to it</strong>
@@ -145,17 +211,6 @@ export function VoiceControlSettings({ s, setS, settings, save }: { s: Settings;
         <div className="row-main"><strong>Ask my AI when it doesn't understand</strong><p>When you say “Hey Peguin” and the rest isn't a command it knows (a misheard word, a long way of asking), Peguin sends just the words of that line, never audio, to your AI (Settings, AI) to work out what you meant.</p></div>
         <Toggle on={p.askAi} onChange={(v) => setPointer({ askAi: v })} label="Ask my AI when it doesn't understand" />
       </div>
-      <CursorSettings settings={settings} save={save} />
-      <details className="say-list">
-        <summary>Things to say</summary>
-        <dl>{SAY.map(([say, what]) => <div key={say}><dt>{say}</dt><dd>{what}</dd></div>)}</dl>
-      </details>
-      {settings.pointer.enabled && (
-        <form className="inline-form" onSubmit={(e) => { e.preventDefault(); const t = tryText; setTryText(""); window.penguin.pointerTry(t).catch((err: unknown) => setError(message(err))); }}>
-          <input value={tryText} placeholder="Try a command: show numbers" onChange={(e) => setTryText(e.target.value)} />
-          <button className="btn ghost" disabled={!tryText.trim()}>Try it</button>
-        </form>
-      )}
     </>
   );
 }
@@ -178,7 +233,7 @@ function PermissionRow({ ok, name, detail, fix, action }: { ok: boolean; name: s
 
 type Cursor = Settings["pointer"]["cursor"];
 /** How Peguin's own cursor looks, moves and rests. Saves as it changes, and the cursor on screen follows. */
-function CursorSettings({ settings, save }: { settings: Settings; save: (s: Settings) => Promise<Settings> }) {
+export function CursorSettings({ settings, save }: { settings: Settings; save: (s: Settings) => Promise<Settings> }) {
   const p = settings.pointer;
   const [c, setC] = useState(p.cursor);
   useEffect(() => setC(p.cursor), [p.cursor]);
@@ -186,7 +241,6 @@ function CursorSettings({ settings, save }: { settings: Settings; save: (s: Sett
 
   return (
     <>
-      <h3 className="section-label">Peguin's cursor</h3>
       <div className="row-card cursor-card">
         <div className="cursor-preview" aria-hidden>
           <span className="mini-island"><i />Peguin</span>

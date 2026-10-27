@@ -110,8 +110,8 @@ export type OverlayEvent =
   | { kind: "origin"; x: number; y: number; mic: boolean; island: boolean; notch: boolean; bar: number; notchW: number }
   /** Peguin's own cursor, in global points; every display draws it when it's on that display. */
   | { kind: "agent"; x: number; y: number; ring: Rect | null; animate: boolean; docked: boolean; ms?: number }
-  /** How Peguin's cursor looks and moves, and whether the island shows (from Settings). */
-  | { kind: "style"; cursor: Settings["pointer"]["cursor"]; island: boolean }
+  /** How Peguin's cursor looks and moves, whether the island shows, and the idle tip under the cursor. */
+  | { kind: "style"; cursor: Settings["pointer"]["cursor"]; island: boolean; tip: string }
   /** The owner's mouse (global points), for the penguin's eye to follow while it rests. */
   | { kind: "look"; x: number; y: number }
   /** What the island and Peguin's cursor show: idle, hearing (its name was heard: a waveform), working or warn (with what it's doing). */
@@ -502,8 +502,9 @@ export class VoiceControl {
     const { bar, notchW } = topOf(d);
     win.webContents.send("pointer:event", { kind: "origin", x: b.x, y: b.y, mic: d.id === primaryId, island: d.id === primaryId, notch: notchW > 0, bar, notchW } satisfies OverlayEvent);
     const p = this.settings().pointer;
-    win.webContents.send("pointer:event", { kind: "style", cursor: p.cursor, island: p.island } satisfies OverlayEvent);
+    win.webContents.send("pointer:event", { kind: "style", cursor: p.cursor, island: p.island, tip: this.idleTip() } satisfies OverlayEvent);
     win.webContents.send("pointer:event", { kind: "agent", ...this.agent, ring: null, animate: false, docked: this.docked } satisfies OverlayEvent);
+    win.webContents.send("pointer:event", { kind: "mode", mode: "idle", text: this.idleTip() } satisfies OverlayEvent);
   }
 
   private closeOverlays() {
@@ -530,10 +531,20 @@ export class VoiceControl {
     return this.helper.call<{ x: number; y: number }>("cursor").catch(() => screen.getCursorScreenPoint());
   }
 
+  /** Idle tip under the cursor: how to talk to Peguin (⌃⌥ = Control–Option). */
+  private idleTip(): string {
+    const p = this.settings().pointer;
+    const name = p.wakeWords[0] ?? "Peguin";
+    if (p.trigger === "hold") return "Hold ⌃⌥ to talk";
+    if (p.trigger === "both") return `Hold ⌃⌥ or say “Hey ${name}”`;
+    return `Say “Hey ${name}”`;
+  }
+
   /** The island and Peguin's cursor; working and warn go back to idle by themselves. */
   private mode(mode: Mode, text?: string) {
     if (mode !== "idle") this.modeAt = Date.now();
-    this.all({ kind: "mode", mode, text });
+    // Idle always shows how to wake Peguin under the cursor.
+    this.all({ kind: "mode", mode, text: mode === "idle" ? (text ?? this.idleTip()) : text });
     if (process.env.PENGUIN_OVERLAY_SNAP && !app.isPackaged) setTimeout(() => void this.snapTop(mode), 700);
   }
 
@@ -1026,7 +1037,8 @@ export class VoiceControl {
   restyle() {
     if (!this.running) return;
     const p = this.settings().pointer;
-    this.all({ kind: "style", cursor: p.cursor, island: p.island });
+    this.all({ kind: "style", cursor: p.cursor, island: p.island, tip: this.idleTip() });
+    this.mode("idle"); // refresh the tip under the cursor (trigger / wake words)
     if (p.cursor.home === "island") this.moveAgent(homePoint(), null, true);
     else if (this.docked) { const w = screen.getPrimaryDisplay().workArea; this.moveAgent({ x: w.x + w.width / 2, y: w.y + w.height / 2 }, null, false); }
     else if (this.homeTimer) clearTimeout(this.homeTimer);

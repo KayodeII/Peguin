@@ -100,14 +100,15 @@ export function PointerOverlay() {
   const [agent, setAgent] = useState<{ x: number; y: number; animate: boolean; docked: boolean; ms?: number; ring: Rect | null; key: number } | null>(null);
   const [gaze, setGaze] = useState({ x: -0.6, y: -0.6 });
   const looking = useRef({ until: 0, agent: { x: 0, y: 0 } });
-  const [style, setStyle] = useState<{ cursor: CursorStyle; island: boolean }>({ cursor: { shape: "penguin", color: "tomato", size: 1, glideMs: 450, home: "roam", returnAfterS: 6 }, island: true });
-  const [mode, setMode] = useState<{ mode: Mode; text?: string; key: number }>({ mode: "idle", key: 0 });
+  const [style, setStyle] = useState<{ cursor: CursorStyle; island: boolean; tip: string }>({ cursor: { shape: "penguin", color: "tomato", size: 1, glideMs: 450, home: "roam", returnAfterS: 6 }, island: true, tip: "Hold ⌃⌥ to talk" });
+  const [mode, setMode] = useState<{ mode: Mode; text?: string; key: number }>({ mode: "idle", text: "Hold ⌃⌥ to talk", key: 0 });
   const [numbers, setNumbers] = useState<(Rect & { n: number })[]>([]);
   const [marks, setMarks] = useState<Mark[]>([]);
   const [pen, setPen] = useState(false);
   const stroke = useRef<Mark | null>(null);
   const ids = useRef(0);
   const timer = useRef<number | undefined>(undefined);
+  const tip = useRef("Hold ⌃⌥ to talk");
 
   useEffect(() => {
     document.documentElement.classList.add("pointer-overlay");
@@ -134,15 +135,21 @@ export function PointerOverlay() {
           return;
         }
         case "look": if (Date.now() > looking.current.until) setGaze(towards(looking.current.agent, local(e))); return;
-        case "style": setStyle({ cursor: e.cursor, island: e.island }); return;
+        case "style":
+          tip.current = e.tip || tip.current;
+          setStyle({ cursor: e.cursor, island: e.island, tip: tip.current });
+          return;
         case "mode":
           window.clearTimeout(timer.current);
-          setMode({ mode: e.mode, text: e.text, key: ++ids.current });
-          // Working and warn fade back to idle; hearing waits for the command (main ends it).
-          // Quota / long warn lines stay long enough to read under the cursor.
+          setMode({ mode: e.mode, text: e.mode === "idle" ? (e.text || tip.current) : e.text, key: ++ids.current });
+          // Working and warn fade back to idle (with the tip); hearing waits for the command (main ends it).
           const warnMs = e.mode === "warn" ? Math.max(CAPTION_MS * 3, Math.min(12000, 40 * (e.text?.length ?? 0))) : CAPTION_MS;
-          if (e.mode === "working" || e.mode === "warn") timer.current = window.setTimeout(() => setMode({ mode: "idle", key: ++ids.current }), warnMs);
-          if (e.mode === "hearing") timer.current = window.setTimeout(() => setMode({ mode: "idle", key: ++ids.current }), 12000);
+          if (e.mode === "working" || e.mode === "warn") {
+            timer.current = window.setTimeout(() => setMode({ mode: "idle", text: tip.current, key: ++ids.current }), warnMs);
+          }
+          if (e.mode === "hearing") {
+            timer.current = window.setTimeout(() => setMode({ mode: "idle", text: tip.current, key: ++ids.current }), 12000);
+          }
           return;
         case "numbers": setNumbers(e.items.map((i) => ({ ...i, ...local(i) }))); return;
         case "shape": setMarks((ms) => [...ms, { id: ++ids.current, shape: e.shape, rect: localRect(e.rect) }]); return;
@@ -192,8 +199,8 @@ export function PointerOverlay() {
           <svg className="arrow" width="34" height="34" viewBox="0 0 34 34" aria-hidden><CursorArt shape={c.shape} color={c.color} gaze={gaze} wide={hearing} /></svg>
           {c.shape === "penguin" ? <span className="bubble"><Wave /></span> : <span className="blob"><Wave /></span>}
           {agent.animate && <span key={agent.key} className="pulse" />}
-          {(m === "working" || m === "warn") && mode.text && (
-            <div key={mode.key} className={`callout ${m}`} role="status">
+          {mode.text && (m === "idle" || m === "working" || m === "warn" || m === "hearing") && (
+            <div key={mode.key} className={`callout ${m === "idle" ? "hint" : m}`} role="status">
               <span className="callout-caret" aria-hidden />
               <p className="callout-body">{mode.text}</p>
             </div>
@@ -273,6 +280,9 @@ html.pointer-overlay, html.pointer-overlay body, html.pointer-overlay #root { ba
 .callout.warn::before { background: #ff5a36; }
 .callout.warn .callout-caret { background: #2a1410; filter: drop-shadow(0 -1px 0 rgba(255, 120, 90, .35)); }
 .callout.warn .callout-body { color: #ffe8e0; }
+.callout.hint { background: rgba(22, 22, 22, .88); border-color: rgba(255, 255, 255, .1); opacity: .92; }
+.callout.hint .callout-body { font-weight: 600; color: rgba(255, 255, 255, .88); white-space: nowrap; }
+.callout.hearing { background: #1a1a1a; }
 @keyframes callout-in { from { opacity: 0; transform: translateY(-4px) scale(.96); } to { opacity: 1; transform: none; } }
 .wave { display: inline-flex; gap: 2.5px; align-items: center; height: 18px; }
 .wave i { width: 3px; border-radius: 2px; background: #fff; height: calc(3px + var(--b) * (3px + var(--lvl, 0) * 26px)); animation: wobble .8s ease-in-out infinite alternate; }

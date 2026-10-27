@@ -6,21 +6,23 @@ import { botName } from "../main/meeting/platform";
 import type { MeetingEvent, MeetingStatus } from "../main/meeting/runner";
 import type { Settings } from "../main/settings";
 import { Avatar, Icon, Logo, message } from "./ui";
-import { LiveView, SettingsView, SourcesView, TodayView } from "./views";
+import { LiveView, rememberSection, SettingsView, SourcesView, TodayView, type SectionId } from "./views";
 import { Onboarding } from "./onboarding";
 import { RecapsView } from "./recaps";
 import { ContextBankView } from "./contextbank";
+import { CursorView } from "./cursor";
 import type { MeetingRecord } from "../main/meeting/record";
 
-export type View = "today" | "live" | "recaps" | "context" | "sources" | "settings";
+export type View = "today" | "live" | "recaps" | "context" | "sources" | "cursor" | "settings";
 const NAV: { id: View; label: string; icon: string; channel: string }[] = [
   { id: "today", label: "Today", icon: "today", channel: "today" },
   { id: "live", label: "Live meeting", icon: "live", channel: "live-meeting" },
   { id: "recaps", label: "Recaps", icon: "recaps", channel: "recaps" },
   { id: "context", label: "Context bank", icon: "bank", channel: "context-bank" },
   { id: "sources", label: "Sources", icon: "sources", channel: "sources" },
+  { id: "cursor", label: "Peguin's cursor", icon: "pointer", channel: "cursor" },
 ];
-const VIEWS: View[] = ["today", "live", "recaps", "context", "sources", "settings"];
+const VIEWS: View[] = ["today", "live", "recaps", "context", "sources", "cursor", "settings"];
 
 export type DraftState = { draft: Draft | null; preparing: boolean; error?: string };
 export type LiveState = { status: MeetingStatus; detail?: string; events: MeetingEvent[] };
@@ -40,6 +42,7 @@ export function App() {
   const [update, setUpdate] = useState<Update | null>(null);
   const [updateState, setUpdateState] = useState<{ version: string; status: "downloading" | "ready" | "failed"; progress: number; error?: string } | null>(null);
 
+  const openSettings = (sec: SectionId) => { rememberSection(sec); setView("settings"); };
   const refreshNext = useCallback(() => { void window.penguin.nextStandup().then(setNext); }, []);
 
   useEffect(() => {
@@ -124,6 +127,7 @@ export function App() {
               <Icon name="hash" size={18} />{n.channel}
               {n.id === "recaps" && openFollowUps > 0 && <span className="count">{openFollowUps}</span>}
               {n.id === "live" && inCall && <span className="live-pill">LIVE</span>}
+              {n.id === "cursor" && <span className={`state-pill ${settings.pointer.enabled ? "on" : ""}`}>{settings.pointer.enabled ? "ON" : "OFF"}</span>}
             </button>
           ))}
           {update && (
@@ -180,7 +184,8 @@ export function App() {
         {view === "context" && <ContextBankView goSources={() => setView("sources")} goSettings={() => setView("settings")} />}
         {view === "sources" && <SourcesView settings={settings} draft={draft.draft} save={save} prepare={prepare} />}
         {view === "recaps" && <RecapsView meetings={meetings} reload={reloadMeetings} keepDays={settings.recap.keepDays} />}
-        {view === "settings" && <SettingsView settings={settings} save={save} preview={(n) => botName(n, "google_meet")} account={account} />}
+        {view === "cursor" && <CursorView settings={settings} save={save} goSettings={() => openSettings("voice-control")} />}
+        {view === "settings" && <SettingsView settings={settings} save={save} preview={(n) => botName(n, "google_meet")} account={account} goCursor={() => setView("cursor")} />}
       </main>
 
       {!settings.onboarded && <Onboarding settings={settings} save={save} model={model} account={account} done={() => { void prepare(); setView("today"); }} />}
