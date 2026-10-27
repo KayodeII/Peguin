@@ -10,6 +10,11 @@ function Timer() {
   return <div className="gl-timer">{String(Math.floor(s / 60)).padStart(2, "0")}:{String(s % 60).padStart(2, "0")}</div>;
 }
 
+const LINES = [
+  { who: "Sarah", text: "Payments look stable since Tuesday." },
+  { who: "Tomi", text: "Ada, when does the billing export ship?", ask: true },
+];
+
 function Bars({ n = 44 }: { n?: number }) {
   return (
     <div className="gl-bars" aria-hidden>
@@ -29,20 +34,24 @@ export function Copilot() {
 
       <div className="gl-grid two">
         <article className="gl-card blue" data-reveal>
-          <h3>Peguin <span className="gl-chip light"><span className="gl-mini-bars" aria-hidden><i /><i /><i /></span>listens</span> to the others</h3>
-          <p>It hears the people in the call, never your microphone, and picks out the questions that are meant for you.</p>
-          <Timer />
-          <p className="gl-rec"><span />Listening</p>
-          <Bars />
+          <h3>It <span className="gl-chip light"><span className="gl-mini-bars" aria-hidden><i /><i /><i /></span>hears</span> the room, not you</h3>
+          <p>Peguin follows what the other people say, never your microphone, and notices when a question is meant for you.</p>
+          <div className="gl-captions">
+            <div className="gl-cap-head"><span className="gl-rec"><span />Live</span><Timer /></div>
+            {LINES.map((l) => (
+              <p key={l.text} className={l.ask ? "ask" : ""}><b>{l.who}</b>{l.text}{l.ask && <em>Question for you</em>}</p>
+            ))}
+            <Bars n={36} />
+          </div>
         </article>
 
         <article className="gl-card" data-reveal>
-          <h3>When you're asked, it <span className="gl-chip">✦ suggests</span> what to say</h3>
-          <p>A short answer that only you can see, labelled with where it came from. Your own work comes only from your notes.</p>
-          <div className="gl-pillbar"><span className="gl-pill-logo"><Logo size={20} /></span><span className="gl-pill-btn">⌄ Hide</span><span className="gl-pill-btn">Pop out</span></div>
+          <h3>Then it <span className="gl-chip">✦ whispers</span> an answer</h3>
+          <p>A short line that only you can see, labelled with where it came from. Your own work comes only from your notes.</p>
           <div className="gl-panel dark">
-            <p className="gl-q">“When does the billing export ship?”</p>
-            <p className="gl-a"><b>From your notes:</b> It merged on Monday and goes out with Friday's release.</p>
+            <div className="gl-panel-top"><Logo size={18} /><span>Peguin</span><span className="gl-only">Only you</span><span className="gl-hide">Hide</span></div>
+            <p className="gl-asked">Tomi asked: when does the billing export ship?</p>
+            <p className="gl-a"><span className="gl-src-tag">From your notes</span>It merged on Monday and goes out with Friday's release.</p>
             <div className="gl-labels"><span>From your notes</span><span>General knowledge</span><span>Not in your notes</span></div>
           </div>
         </article>
@@ -50,14 +59,15 @@ export function Copilot() {
 
       <div className="gl-grid three">
         <article className="gl-card soft" data-reveal>
-          <div className="gl-split">
-            <div className="gl-side mine">
-              <span className="gl-tag">Visible to you</span>
-              <div className="gl-note"><b>✦ Suggestion</b><p>Say the retry fix is merged; the rollout is Friday.</p></div>
+          <div className="gl-pair">
+            <div className="gl-win">
+              <span className="gl-win-bar"><i /><i /><i />1 · Meeting chat</span>
+              <div className="gl-chat"><b>Ada · to everyone</b><p>Heads-up: I'm using Peguin, an AI assistant, in this call.</p></div>
             </div>
-            <div className="gl-side theirs">
-              <span className="gl-tag">What everyone sees</span>
-              <div className="gl-chat"><b>Meeting chat</b><p>Heads-up: I'm using Peguin, an AI assistant, in this call.</p></div>
+            <span className="gl-first" aria-hidden>→</span>
+            <div className="gl-win">
+              <span className="gl-win-bar"><i /><i /><i />2 · Your screen</span>
+              <div className="gl-note"><b>✦ Suggestion</b><p>Say the retry fix is merged; the rollout is Friday.</p></div>
             </div>
           </div>
           <h3>Your notes are yours. The notice is everyone's.</h3>
