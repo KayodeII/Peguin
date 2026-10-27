@@ -1,6 +1,6 @@
 # Website, help chat and emails
 
-www.peguin.co: a React + Vite site served by the same Worker as the API. Light-only, Notion neutrals with a tomato accent, motion-led, no invented social proof. The help penguin opens a chat that answers from the FAQ (Claude when available, otherwise the closest FAQ entry) and hands off to the team. Emails share one inline-styled layout.
+www.peguin.co: a React + Vite site served by the same Worker as the API. Light-only, Notion neutrals with a tomato accent, frosted-glass surfaces over a soft periwinkle aurora, motion-led, no invented social proof. The help penguin opens a chat that answers from the FAQ (Claude when available, otherwise the closest FAQ entry) and hands off to the team. Emails share one inline-styled layout.
 
 ## Decisions
 
@@ -12,6 +12,7 @@ www.peguin.co: a React + Vite site served by the same Worker as the API. Light-o
 - 2026-10-07: Reduced motion means calmer, not off
 - 2026-10-07: Help penguin, help chat and designed emails
 - 2026-10-09: Work without server-side AI (help chat fallback)
+- 2026-10-27: Glass website, and Join as me shown honestly
 - `AGENTS.md` "Privacy Policy and Terms"
 
 ## Files
@@ -19,7 +20,8 @@ www.peguin.co: a React + Vite site served by the same Worker as the API. Light-o
 | Path | Role |
 |---|---|
 | `web/src/main.tsx`, `web/src/pages/Home.tsx` | Routing and the home page |
-| `web/src/components/` | Hero, sections, scenes, demos (`AppDemo.tsx`, `MeetingDemo.tsx`), backgrounds, `HelpPenguin.tsx` |
+| `web/src/components/` | Hero, sections, scenes, demos (`AppDemo.tsx`, `MeetingDemo.tsx`), backgrounds, `HelpPenguin.tsx`, the Join as me cards (`Copilot.tsx`) |
+| `web/src/styles.css` (end, "Glass") | Glass tokens, the aurora behind the page, frosted cards, the Join as me bento |
 | `web/src/ui.tsx` | Shared UI, `useBackgroundFlow` |
 | `web/src/faq.ts` | FAQ, shared with the help chat |
 | `web/src/pages/Legal.tsx` | Privacy Policy and Terms (must match what the code does) |

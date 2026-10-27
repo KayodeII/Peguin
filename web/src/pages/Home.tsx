@@ -3,6 +3,7 @@ import { Waveforms } from "../components/Backgrounds";
 import { Hero, Marquee } from "../components/Hero";
 import { MeetingDemo } from "../components/MeetingDemo";
 import { Morning } from "../components/Morning";
+import { Copilot } from "../components/Copilot";
 import { ExpandingPhoto, PeopleRail } from "../components/Scenes";
 import { Faq, PricingTable, TRIAL_DAYS } from "../components/Sections";
 import { FeatureRows, Tiles } from "../components/Showcase";
@@ -12,7 +13,7 @@ import { Icon, Img, Link, Rise, useBackgroundFlow } from "../ui";
 
 // The page background glides through these as you scroll (see useBackgroundFlow).
 const BG = {
-  white: "#ffffff", sky: "#e9f2fd", butter: "#fff6d8", mint: "#e7f5ec", lilac: "#f1ecfc", peach: "#ffefe8", ice: "#eef6fb",
+  white: "#eef0f9", sky: "#e2e7f7", butter: "#f6f1ea", mint: "#e5f1f0", lilac: "#ebe7f8", peach: "#f7ebe8", ice: "#e6ecf8", peri: "#dde2f4",
 };
 
 const KEPT = [
@@ -44,6 +45,8 @@ export function Home() {
       <section id="features" data-bg={BG.butter}><Transform /></section>
 
       <AppShowcase />
+
+      <section id="copilot" data-bg={BG.peri}><Copilot /></section>
 
       <section className="section" data-bg={BG.white}><FeatureRows /></section>
 

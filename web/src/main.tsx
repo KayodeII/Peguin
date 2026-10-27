@@ -36,6 +36,7 @@ function App() {
   const bare = path === "/signin" || path === "/connected" || path === "/waitlist";
   return (
     <>
+      <div className="aurora" aria-hidden><i /><i /><i /><i /></div>
       {!bare && <Nav />}
       <main className={bare ? "bare" : ""}><Page /></main>
       {!bare && <Footer />}
