@@ -1,92 +1,73 @@
-// "Join as me" in glass cards: the private copilot in the owner's own meeting.
-// Every card shows something the app does today, including the AI notice
-// everyone in the call sees; nothing here is hidden from the other people.
+// "Join as me" under a polar night: the owner's own call in a glass window,
+// Peguin's private notes floating over it, and the AI notice everyone sees in
+// the chat. Every part shows something the app does today.
 import { useEffect, useState } from "react";
 import { Logo } from "../ui";
 
-function Timer() {
-  const [s, setS] = useState(10);
-  useEffect(() => { const t = setInterval(() => setS((v) => (v + 1) % 3600), 1000); return () => clearInterval(t); }, []);
-  return <div className="gl-timer">{String(Math.floor(s / 60)).padStart(2, "0")}:{String(s % 60).padStart(2, "0")}</div>;
-}
+const PEOPLE = [{ i: "T", name: "Tomi", talking: true }, { i: "S", name: "Sarah" }, { i: "A", name: "Ada (you)" }];
 
-function Bars({ n = 44 }: { n?: number }) {
-  return (
-    <div className="gl-bars" aria-hidden>
-      {Array.from({ length: n }, (_, i) => <i key={i} style={{ animationDelay: `${(i % 11) * 0.09}s`, height: i < 12 ? "100%" : "28%" }} />)}
-    </div>
-  );
+const STEPS = [
+  { tone: "mint", title: "It hears the others", body: "Never your microphone. It picks out the questions that are meant for you." },
+  { tone: "tomato", title: "It suggests, only to you", body: "A short answer labelled with where it came from. Your own work comes only from your notes." },
+  { tone: "butter", title: "It recaps when you hang up", body: "What was asked of you, what was decided, and what your notes didn't cover." },
+];
+
+function useClock(start = 754) {
+  const [s, setS] = useState(start);
+  useEffect(() => { const t = setInterval(() => setS((v) => v + 1), 1000); return () => clearInterval(t); }, []);
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
 export function Copilot() {
+  const clock = useClock();
   return (
-    <div className="gl-wrap">
-      <div className="section-head">
-        <p className="eyebrow" data-reveal>Join as me · Pro</p>
-        <h2 data-reveal>When you're in the meeting yourself, Peguin helps quietly</h2>
-        <p className="section-lead" data-reveal>Open the call in Peguin's window. It hears the other people, suggests what you could say, and gives you a recap. Everyone is told you're using an AI assistant.</p>
-      </div>
+    <div className="pn">
+      <div className="pn-sky" aria-hidden><i /><i /><i /></div>
+      <div className="pn-inner">
+        <div className="pn-head">
+          <p className="pn-eyebrow" data-reveal>Join as me · Pro</p>
+          <h2 data-reveal>In your own meetings, a second brain that only you can read</h2>
+          <p className="pn-lead" data-reveal>Open the call in Peguin's window and talk as you always do. Peguin listens to the room, whispers an answer when you're asked, and tells everyone it's there.</p>
+        </div>
 
-      <div className="gl-grid two">
-        <article className="gl-card blue" data-reveal>
-          <h3>Peguin <span className="gl-chip light"><span className="gl-mini-bars" aria-hidden><i /><i /><i /></span>listens</span> to the others</h3>
-          <p>It hears the people in the call, never your microphone, and picks out the questions that are meant for you.</p>
-          <Timer />
-          <p className="gl-rec"><span />Listening</p>
-          <Bars />
-        </article>
-
-        <article className="gl-card" data-reveal>
-          <h3>When you're asked, it <span className="gl-chip">✦ suggests</span> what to say</h3>
-          <p>A short answer that only you can see, labelled with where it came from. Your own work comes only from your notes.</p>
-          <div className="gl-pillbar"><span className="gl-pill-logo"><Logo size={20} /></span><span className="gl-pill-btn">⌄ Hide</span><span className="gl-pill-btn">Pop out</span></div>
-          <div className="gl-panel dark">
-            <p className="gl-q">“When does the billing export ship?”</p>
-            <p className="gl-a"><b>From your notes:</b> It merged on Monday and goes out with Friday's release.</p>
-            <div className="gl-labels"><span>From your notes</span><span>General knowledge</span><span>Not in your notes</span></div>
-          </div>
-        </article>
-      </div>
-
-      <div className="gl-grid three">
-        <article className="gl-card soft" data-reveal>
-          <div className="gl-split">
-            <div className="gl-side mine">
-              <span className="gl-tag">Visible to you</span>
-              <div className="gl-note"><b>✦ Suggestion</b><p>Say the retry fix is merged; the rollout is Friday.</p></div>
+        <div className="pn-stage">
+          <div className="pn-scene" data-reveal>
+            <div className="pn-call">
+              <div className="pn-bar"><span className="pn-dots"><i /><i /><i /></span>Weekly sync<span className="pn-clock">{clock}</span></div>
+              <div className="pn-tiles">
+                {PEOPLE.map((p) => (
+                  <div key={p.name} className={`pn-tile ${p.talking ? "talking" : ""}`}>
+                    <span className="pn-face">{p.i}</span><span className="pn-name">{p.name}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="pn-caption"><b>Tomi:</b> Ada, when does the billing export ship?</p>
+              <div className="pn-chat">
+                <span className="pn-chat-who">Ada · to everyone</span>
+                Heads-up: I'm using Peguin, an AI assistant, in this call.
+              </div>
             </div>
-            <div className="gl-side theirs">
-              <span className="gl-tag">What everyone sees</span>
-              <div className="gl-chat"><b>Meeting chat</b><p>Heads-up: I'm using Peguin, an AI assistant, in this call.</p></div>
-            </div>
+            <aside className="pn-notes">
+              <div className="pn-notes-top"><Logo size={18} /><span>Only you see this</span><span className="pn-live" /></div>
+              <p className="pn-label">From your notes</p>
+              <p className="pn-answer">It merged on Monday. It goes out with Friday's release.</p>
+              <div className="pn-chips"><span>Hide</span><span>Pop out</span><span>Check online</span></div>
+            </aside>
           </div>
-          <h3>Your notes are yours. The notice is everyone's.</h3>
-          <p>Peguin posts the AI notice in the chat first. Only then do your notes stay out of screen shares.</p>
-        </article>
 
-        <article className="gl-card soft" data-reveal>
-          <div className="gl-panel">
-            <p className="gl-small">Weekly sync · today</p>
-            <div className="gl-tabs"><span className="on">Follow-ups</span><span>Summary</span><span>Transcript</span></div>
-            <ul className="gl-list">
-              <li>Follow up on: “When does the billing export ship?”</li>
-              <li>Send Tomi the retry numbers</li>
-              <li>Check the staging alert</li>
-            </ul>
-          </div>
-          <h3>A recap when it ends</h3>
-          <p>What was asked of you, what was decided, and the questions your notes didn't cover. Never your own voice. Encrypted on your Mac.</p>
-        </article>
-
-        <article className="gl-card soft" data-reveal>
-          <div className="gl-panel">
-            <div className="gl-seg"><span className="on">Work</span><span>Interview</span></div>
-            <p className="gl-a"><b>General knowledge:</b> An index makes lookups faster at the cost of slower writes.</p>
-            <p className="gl-src">✓ Checked online · postgresql.org</p>
-          </div>
-          <h3>Work or interview, checked online</h3>
-          <p>Answers suited to a team meeting or a job interview, and general answers can be checked on the web.</p>
-        </article>
+          <ol className="pn-steps">
+            {STEPS.map((s, n) => (
+              <li key={s.title} className={`pn-step ${s.tone}`} data-reveal>
+                <span className="pn-num">{n + 1}</span>
+                <div><h3>{s.title}</h3><p>{s.body}</p></div>
+              </li>
+            ))}
+            <li className="pn-step note" data-reveal>
+              <span className="pn-num">✓</span>
+              <div><h3>Notice first, then private</h3><p>The AI notice goes in the chat before your notes leave screen shares. Work or interview mode, and web checks for general questions.</p></div>
+            </li>
+          </ol>
+        </div>
       </div>
     </div>
   );
